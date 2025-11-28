@@ -1,0 +1,237 @@
+import { useState, useRef } from 'react';
+import FileUpload from './components/FileUpload';
+import PDFViewer from './components/PDFViewer';
+import TabNavigation from './components/TabNavigation';
+import ParseResults from './components/ParseResults';
+import ExtractPanel from './components/ExtractPanel';
+import ChatPanel from './components/ChatPanel';
+import type { ParseResponse, Chunk, TabType } from './types/ade';
+
+function App() {
+  const [file, setFile] = useState<File | null>(null);
+  const [parseResult, setParseResult] = useState<ParseResponse | null>(null);
+  const [highlightedChunk, setHighlightedChunk] = useState<Chunk | null>(null);
+  const [popupChunk, setPopupChunk] = useState<Chunk | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>('parse');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [isPdfReady, setIsPdfReady] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleFileSelect = (uploadedFile: File) => {
+    // Cancel any ongoing processing
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setFile(uploadedFile);
+    setError(null);
+    setParseResult(null);
+    setHighlightedChunk(null);
+    setPopupChunk(null);
+    setIsPdfReady(false);
+    setIsLoading(false);
+  };
+
+  const handlePdfReady = () => {
+    setIsPdfReady(true);
+  };
+
+  const handleCancel = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+    setError(null);
+  };
+
+  const handleProcess = async () => {
+    if (!file) return;
+
+    // Create new abort controller for this request
+    abortControllerRef.current = new AbortController();
+
+    setIsLoading(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('http://localhost:8000/api/parse', {
+        method: 'POST',
+        body: formData,
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || 'Parse failed');
+      }
+
+      const result = await response.json();
+      setParseResult(result);
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        // Request was cancelled, don't show error
+        return;
+      }
+      console.error('Error parsing document:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  // Handle clicking chunk on PDF - only highlight, no popup
+  const handleChunkClick = (chunk: Chunk) => {
+    setHighlightedChunk(highlightedChunk?.id === chunk.id ? null : chunk);
+    // Switch to parse tab to show chunk in list
+    if (activeTab !== 'parse') {
+      setActiveTab('parse');
+    }
+  };
+
+  return (
+    <div className="h-screen flex flex-col bg-gray-100">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-semibold text-gray-800">
+              CompliCheckAI™ Doc Scan Studio
+            </h1>
+          </div>
+          <div className="flex items-center gap-4">
+            {file && (
+              <span className="text-sm text-gray-500">
+                {file.name}
+              </span>
+            )}
+            <FileUpload onUpload={handleFileSelect} isLoading={isLoading} />
+            {file && !parseResult && !isLoading && (
+              <button
+                onClick={handleProcess}
+                disabled={!isPdfReady}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Process
+              </button>
+            )}
+            {isLoading && (
+              <button
+                onClick={handleCancel}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+              >
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                <span>Cancel</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Error Banner */}
+      {error && (
+        <div className="bg-red-50 border-b border-red-200 px-6 py-3">
+          <div className="flex items-center gap-2 text-red-700">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-sm">{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-500 hover:text-red-700"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel - PDF Viewer */}
+        <div className="w-1/2 border-r bg-gray-50 overflow-hidden">
+          {file ? (
+            <PDFViewer
+              file={file}
+              chunks={parseResult?.chunks || []}
+              selectedChunk={highlightedChunk}
+              onChunkClick={handleChunkClick}
+              onPdfReady={handlePdfReady}
+            />
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center text-gray-400">
+              <svg className="w-20 h-20 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <p className="text-lg font-medium mb-2">Upload a document</p>
+              <p className="text-sm">Supported formats: PDF, PNG, JPG, TIFF, BMP</p>
+            </div>
+          )}
+        </div>
+
+        {/* Right Panel - Results */}
+        <div className="w-1/2 flex flex-col overflow-hidden">
+          <TabNavigation
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            disabled={!parseResult}
+          />
+
+          <div className="flex-1 overflow-auto p-4">
+            {activeTab === 'parse' && (
+              <ParseResults
+                result={parseResult}
+                highlightedChunk={highlightedChunk}
+                popupChunk={popupChunk}
+                onPopupOpen={setPopupChunk}
+                isLoading={isLoading}
+              />
+            )}
+            {activeTab === 'extract' && (
+              <ExtractPanel
+                markdown={parseResult?.markdown || ''}
+                disabled={!parseResult}
+              />
+            )}
+            {activeTab === 'chat' && (
+              <ChatPanel
+                markdown={parseResult?.markdown || ''}
+                chunks={parseResult?.chunks || []}
+                disabled={!parseResult}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="bg-white border-t px-6 py-2 text-xs text-gray-500 flex items-center justify-between">
+        <span>Powered by CompliCheckAI™ from UrbanCompass</span>
+        {parseResult && (
+          <span>
+            {parseResult.chunks.length} chunks extracted
+            {parseResult.metadata.page_count && ` from ${parseResult.metadata.page_count} pages`}
+          </span>
+        )}
+      </footer>
+    </div>
+  );
+}
+
+export default App;
