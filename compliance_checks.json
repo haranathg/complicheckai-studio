@@ -1,0 +1,217 @@
+{
+  "version": "1.0",
+  "description": "Compliance and completeness checks for building consent site plans and building plans",
+  "completeness_checks": [
+    {
+      "id": "comp_001",
+      "name": "Site Address",
+      "description": "Document contains the full site/property address",
+      "category": "identification",
+      "required": true,
+      "search_terms": ["address", "road", "street", "location", "site"],
+      "example_pass": "841 Makerua Road Tokomaru"
+    },
+    {
+      "id": "comp_002",
+      "name": "Legal Description",
+      "description": "Legal lot and DP/plan reference is specified",
+      "category": "identification",
+      "required": true,
+      "search_terms": ["lot", "DP", "deposited plan", "CT", "certificate of title"],
+      "example_pass": "Lot 1 DP 89645"
+    },
+    {
+      "id": "comp_003",
+      "name": "Scale Indicated",
+      "description": "Drawing scale is clearly stated",
+      "category": "drawing_standards",
+      "required": true,
+      "search_terms": ["scale", "1:", "1 :"],
+      "example_pass": "Scale 1:200"
+    },
+    {
+      "id": "comp_004",
+      "name": "North Arrow",
+      "description": "North direction indicator is present",
+      "category": "drawing_standards",
+      "required": true,
+      "search_terms": ["north", "N", "compass"],
+      "example_pass": "North arrow symbol present"
+    },
+    {
+      "id": "comp_005",
+      "name": "Site Area",
+      "description": "Total site/land area is specified",
+      "category": "site_information",
+      "required": true,
+      "search_terms": ["site area", "land area", "total area", "m2", "m²", "sqm"],
+      "example_pass": "Site Area 2856 m2"
+    },
+    {
+      "id": "comp_006",
+      "name": "Site Coverage",
+      "description": "Building coverage/footprint area is calculated",
+      "category": "site_information",
+      "required": true,
+      "search_terms": ["site cover", "coverage", "footprint", "building area", "%"],
+      "example_pass": "Total Cover 188.4 m2 being 6.5%"
+    },
+    {
+      "id": "comp_007",
+      "name": "Drawn By / Author",
+      "description": "Name of person/company who prepared the drawing",
+      "category": "identification",
+      "required": true,
+      "search_terms": ["drawn by", "prepared by", "author", "designer", "architect"],
+      "example_pass": "Drawn by: Ross Judd"
+    },
+    {
+      "id": "comp_008",
+      "name": "Date",
+      "description": "Drawing date or revision date is shown",
+      "category": "identification",
+      "required": true,
+      "search_terms": ["date", "dated", "revision", "rev", "2024", "2025", "2023"],
+      "example_pass": "April 2017"
+    },
+    {
+      "id": "comp_009",
+      "name": "Existing Buildings Shown",
+      "description": "Existing structures on site are indicated",
+      "category": "site_information",
+      "required": true,
+      "search_terms": ["existing", "dwelling", "house", "building", "structure"],
+      "example_pass": "Existing Dwelling marked on plan"
+    },
+    {
+      "id": "comp_010",
+      "name": "Proposed Works Shown",
+      "description": "Proposed building/structure is clearly indicated",
+      "category": "site_information",
+      "required": true,
+      "search_terms": ["proposed", "new", "garage", "addition", "extension"],
+      "example_pass": "Proposed Garage shown"
+    }
+  ],
+  "compliance_checks": [
+    {
+      "id": "comply_001",
+      "name": "Site Coverage Limit",
+      "description": "Site coverage does not exceed maximum allowed (typically 35-40% residential)",
+      "category": "zoning",
+      "rule_reference": "District Plan - Site Coverage",
+      "threshold": {
+        "max_percentage": 40,
+        "typical_residential": 35
+      },
+      "search_terms": ["coverage", "site cover", "%"],
+      "validation": "percentage_check"
+    },
+    {
+      "id": "comply_002",
+      "name": "Boundary Setbacks",
+      "description": "Buildings maintain required setback distances from boundaries",
+      "category": "zoning",
+      "rule_reference": "District Plan - Yard Requirements",
+      "threshold": {
+        "front_yard_min_m": 4.5,
+        "side_yard_min_m": 1.5,
+        "rear_yard_min_m": 3.0
+      },
+      "search_terms": ["setback", "boundary", "yard", "distance", "m from"],
+      "validation": "distance_check"
+    },
+    {
+      "id": "comply_003",
+      "name": "Height Restriction",
+      "description": "Building height within permitted maximum",
+      "category": "zoning",
+      "rule_reference": "District Plan - Height Limits",
+      "threshold": {
+        "max_height_m": 8.0,
+        "typical_residential": 8.0
+      },
+      "search_terms": ["height", "m high", "elevation", "RL"],
+      "validation": "height_check"
+    },
+    {
+      "id": "comply_004",
+      "name": "Stormwater Management",
+      "description": "Stormwater disposal method is indicated",
+      "category": "services",
+      "rule_reference": "Building Code E1 - Surface Water",
+      "search_terms": ["stormwater", "storm water", "drainage", "soakpit", "soak pit", "rain"],
+      "validation": "presence_check"
+    },
+    {
+      "id": "comply_005",
+      "name": "Vehicle Access",
+      "description": "Vehicle access/driveway to the site is shown",
+      "category": "access",
+      "rule_reference": "District Plan - Access Requirements",
+      "search_terms": ["access", "driveway", "entrance", "vehicle crossing", "road"],
+      "validation": "presence_check"
+    },
+    {
+      "id": "comply_006",
+      "name": "Council Approval Stamp",
+      "description": "Evidence of council review/approval present",
+      "category": "approval",
+      "rule_reference": "Building Act 2004",
+      "search_terms": ["approved", "consent", "council", "BCA", "building consent"],
+      "validation": "presence_check"
+    },
+    {
+      "id": "comply_007",
+      "name": "Fire Safety Separation",
+      "description": "Fire separation distances to boundaries are adequate (typically 1m minimum for outbuildings)",
+      "category": "fire_safety",
+      "rule_reference": "Building Code C - Fire Safety",
+      "threshold": {
+        "min_separation_m": 1.0
+      },
+      "search_terms": ["fire", "separation", "boundary", "distance"],
+      "validation": "distance_check"
+    },
+    {
+      "id": "comply_008",
+      "name": "Easements Shown",
+      "description": "Any easements or rights of way are indicated if present",
+      "category": "legal",
+      "rule_reference": "Property Law",
+      "search_terms": ["easement", "right of way", "ROW", "covenant", "restriction"],
+      "validation": "presence_check"
+    },
+    {
+      "id": "comply_009",
+      "name": "Utility Connections",
+      "description": "Connection points for utilities (power, water, sewer) indicated",
+      "category": "services",
+      "rule_reference": "Building Code G12/G13",
+      "search_terms": ["power", "water", "sewer", "utility", "connection", "supply", "meter"],
+      "validation": "presence_check"
+    },
+    {
+      "id": "comply_010",
+      "name": "Recession Planes/Daylight",
+      "description": "Building complies with height in relation to boundary (recession planes)",
+      "category": "zoning",
+      "rule_reference": "District Plan - Daylight Controls",
+      "threshold": {
+        "angle_degrees": 45,
+        "start_height_m": 2.5
+      },
+      "search_terms": ["recession", "daylight", "height in relation", "plane", "shadow"],
+      "validation": "recession_check"
+    }
+  ],
+  "check_result_schema": {
+    "check_id": "string",
+    "status": "pass | fail | warning | not_found",
+    "confidence": "number (0-100)",
+    "found_value": "string | null",
+    "expected": "string | null",
+    "location": "chunk reference or page number",
+    "notes": "string"
+  }
+}

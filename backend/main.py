@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
-from routers import parse, extract, chat
+from routers import parse, extract, chat, compliance
 import os
 
 load_dotenv()
@@ -22,6 +22,7 @@ app.add_middleware(
 app.include_router(parse.router, prefix="/api/parse", tags=["parse"])
 app.include_router(extract.router, prefix="/api/extract", tags=["extract"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(compliance.router, prefix="/api/compliance", tags=["compliance"])
 
 @app.get("/health")
 def health_check():

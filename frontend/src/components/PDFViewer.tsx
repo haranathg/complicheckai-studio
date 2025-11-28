@@ -29,7 +29,7 @@ export default function PDFViewer({
   const [containerWidth, setContainerWidth] = useState(0);
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
   const [pdfError, setPdfError] = useState<string | null>(null);
-  const [isPageLoading, setIsPageLoading] = useState(true);
+  const [, setIsPageLoading] = useState(true);
   const [fileKey, setFileKey] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 

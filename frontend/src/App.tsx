@@ -5,6 +5,7 @@ import TabNavigation from './components/TabNavigation';
 import ParseResults from './components/ParseResults';
 import ExtractPanel from './components/ExtractPanel';
 import ChatPanel from './components/ChatPanel';
+import CompliancePanel from './components/CompliancePanel';
 import type { ParseResponse, Chunk, TabType } from './types/ade';
 import { API_URL } from './config';
 
@@ -215,6 +216,19 @@ function App() {
                 markdown={parseResult?.markdown || ''}
                 chunks={parseResult?.chunks || []}
                 disabled={!parseResult}
+              />
+            )}
+            {activeTab === 'compliance' && (
+              <CompliancePanel
+                markdown={parseResult?.markdown || ''}
+                chunks={parseResult?.chunks || []}
+                disabled={!parseResult}
+                onChunkSelect={(chunkIds) => {
+                  const chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
+                  if (chunk) {
+                    setHighlightedChunk(chunk);
+                  }
+                }}
               />
             )}
           </div>

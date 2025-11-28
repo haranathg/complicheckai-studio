@@ -45,4 +45,4 @@ export interface ChatResponse {
   };
 }
 
-export type TabType = 'parse' | 'extract' | 'chat';
+export type TabType = 'parse' | 'extract' | 'chat' | 'compliance';
