@@ -6,12 +6,15 @@ import ParseResults from './components/ParseResults';
 import ExtractPanel from './components/ExtractPanel';
 import ChatPanel from './components/ChatPanel';
 import CompliancePanel from './components/CompliancePanel';
+import LoginPage from './components/LoginPage';
 import type { ParseResponse, Chunk, TabType } from './types/ade';
 import type { ComplianceReport } from './types/compliance';
 import { API_URL } from './config';
+import { isAuthenticated, logout } from './utils/auth';
 import bundabergLogo from './assets/bundaberg.jpeg';
 
 function App() {
+  const [authenticated, setAuthenticated] = useState(isAuthenticated());
   const [file, setFile] = useState<File | null>(null);
   const [parseResult, setParseResult] = useState<ParseResponse | null>(null);
   const [highlightedChunk, setHighlightedChunk] = useState<Chunk | null>(null);
@@ -102,6 +105,16 @@ function App() {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    setAuthenticated(false);
+  };
+
+  // Show login page if not authenticated
+  if (!authenticated) {
+    return <LoginPage onAuthenticated={() => setAuthenticated(true)} />;
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gray-100">
       {/* Header */}
@@ -149,6 +162,15 @@ function App() {
                 <span>Cancel</span>
               </button>
             )}
+            <button
+              onClick={handleLogout}
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              title="Logout"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
           </div>
         </div>
       </header>
