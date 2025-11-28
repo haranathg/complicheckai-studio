@@ -12,7 +12,7 @@ const VALID_KEY_HASHES = [
   'b2d5a8c9e1f3b7d4a6c8e0f2b4d6a8c0',
   // Key: "docscan-beta-2024" -> hash below
   'c4e6f8a0b2d4e6f8a0b2d4e6f8a0b2d4',
-  // Key: "hari-test-key" -> hash below
+  // Key: "cog-test-key" -> hash below
   'd5f7a9b1c3e5f7a9b1c3e5f7a9b1c3e5',
 ];
 
@@ -47,7 +47,7 @@ const KEY_HASH_MAP: Record<string, boolean> = {
   [simpleHash('complicheck-demo')]: true,
   [simpleHash('urbancompass-preview')]: true,
   [simpleHash('docscan-beta-2024')]: true,
-  [simpleHash('hari-test-key')]: true,
+  [simpleHash('cog-test-key')]: true,
 };
 
 export function validateAccessKey(key: string): boolean {
@@ -92,5 +92,5 @@ export const ACCESS_KEYS = [
   'complicheck-demo',
   'urbancompass-preview',
   'docscan-beta-2024',
-  'hari-test-key',
+  'cog-test-key',
 ];
