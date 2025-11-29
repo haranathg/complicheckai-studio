@@ -49,10 +49,9 @@ export function calculateCost(inputTokens: number, outputTokens: number, model?:
 }
 
 export function formatCost(cost: number): string {
-  if (cost < 0.01) {
-    return `$${cost.toFixed(4)}`;
-  }
-  return `$${cost.toFixed(2)}`;
+  // Round up to nearest cent (minimum $0.01)
+  const roundedCost = cost < 0.01 ? 0.01 : Math.ceil(cost * 100) / 100;
+  return `$${roundedCost.toFixed(2)}`;
 }
 
 export function formatTokensWithCost(inputTokens: number, outputTokens: number, model?: string): string {
