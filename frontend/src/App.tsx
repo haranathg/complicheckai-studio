@@ -7,7 +7,7 @@ import ExtractPanel from './components/ExtractPanel';
 import ChatPanel from './components/ChatPanel';
 import CompliancePanel from './components/CompliancePanel';
 import LoginPage from './components/LoginPage';
-import type { ParseResponse, Chunk, TabType } from './types/ade';
+import type { ParseResponse, Chunk, TabType, ChatMessage } from './types/ade';
 import type { ComplianceReport } from './types/compliance';
 import { API_URL } from './config';
 import { isAuthenticated, logout } from './utils/auth';
@@ -24,6 +24,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
   const [targetPage, setTargetPage] = useState<number | undefined>(undefined);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   const [isPdfReady, setIsPdfReady] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -42,6 +43,7 @@ function App() {
     setIsLoading(false);
     setComplianceReport(null);
     setTargetPage(undefined);
+    setChatMessages([]);
   };
 
   const handlePdfReady = () => {
@@ -255,6 +257,8 @@ function App() {
                 markdown={parseResult?.markdown || ''}
                 chunks={parseResult?.chunks || []}
                 disabled={!parseResult}
+                messages={chatMessages}
+                onMessagesChange={setChatMessages}
                 onChunkSelect={(chunkIds, pageNumber) => {
                   const chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
                   if (chunk) {

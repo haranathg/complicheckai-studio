@@ -35,6 +35,7 @@ export interface ExtractResponse {
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  chunk_ids?: string[];
 }
 
 export interface ChatResponse {

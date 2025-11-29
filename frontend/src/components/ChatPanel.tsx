@@ -3,19 +3,16 @@ import ReactMarkdown from 'react-markdown';
 import type { Chunk, ChatMessage } from '../types/ade';
 import { API_URL } from '../config';
 
-interface ExtendedChatMessage extends ChatMessage {
-  chunk_ids?: string[];
-}
-
 interface ChatPanelProps {
   markdown: string;
   chunks: Chunk[];
   disabled: boolean;
   onChunkSelect: (chunkIds: string[], pageNumber?: number) => void;
+  messages: ChatMessage[];
+  onMessagesChange: (messages: ChatMessage[]) => void;
 }
 
-export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect }: ChatPanelProps) {
-  const [messages, setMessages] = useState<ExtendedChatMessage[]>([]);
+export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, messages, onMessagesChange }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,8 +29,9 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect }:
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
-    const userMessage: ExtendedChatMessage = { role: 'user', content: input };
-    setMessages((prev) => [...prev, userMessage]);
+    const userMessage: ChatMessage = { role: 'user', content: input };
+    const updatedMessages = [...messages, userMessage];
+    onMessagesChange(updatedMessages);
     setInput('');
     setIsLoading(true);
     setError(null);
@@ -56,16 +54,16 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect }:
       }
 
       const data = await response.json();
-      const assistantMessage: ExtendedChatMessage = {
+      const assistantMessage: ChatMessage = {
         role: 'assistant',
         content: data.answer,
         chunk_ids: data.chunk_ids || []
       };
-      setMessages((prev) => [...prev, assistantMessage]);
+      onMessagesChange([...updatedMessages, assistantMessage]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       // Remove the user message if there was an error
-      setMessages((prev) => prev.slice(0, -1));
+      onMessagesChange(messages);
     } finally {
       setIsLoading(false);
     }
@@ -79,7 +77,7 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect }:
   };
 
   const clearChat = () => {
-    setMessages([]);
+    onMessagesChange([]);
     setError(null);
   };
 
