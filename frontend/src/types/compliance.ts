@@ -43,6 +43,10 @@ export interface ComplianceReport {
     needs_review: number;
     na: number;
   };
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+  };
 }
 
 export interface ComplianceConfig {

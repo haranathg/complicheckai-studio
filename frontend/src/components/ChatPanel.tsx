@@ -57,7 +57,8 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
       const assistantMessage: ChatMessage = {
         role: 'assistant',
         content: data.answer,
-        chunk_ids: data.chunk_ids || []
+        chunk_ids: data.chunk_ids || [],
+        usage: data.usage
       };
       onMessagesChange([...updatedMessages, assistantMessage]);
     } catch (err) {
@@ -69,12 +70,20 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
   };
+
+  // Calculate cumulative token usage from all assistant messages
+  const totalTokens = messages.reduce((acc, msg) => {
+    if (msg.usage) {
+      return acc + msg.usage.input_tokens + msg.usage.output_tokens;
+    }
+    return acc;
+  }, 0);
 
   const clearChat = () => {
     onMessagesChange([]);
@@ -215,7 +224,7 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyDown}
           placeholder="Ask a question about the document..."
           rows={1}
           className="flex-1 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
@@ -230,6 +239,13 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
           </svg>
         </button>
       </div>
+
+      {/* Token usage footer */}
+      {totalTokens > 0 && (
+        <div className="mt-2 text-xs text-gray-400 text-right">
+          Chat tokens: {totalTokens.toLocaleString()}
+        </div>
+      )}
     </div>
   );
 }

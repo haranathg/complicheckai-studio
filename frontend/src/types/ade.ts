@@ -36,6 +36,10 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   chunk_ids?: string[];
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+  };
 }
 
 export interface ChatResponse {

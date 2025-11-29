@@ -204,6 +204,10 @@ Respond ONLY with valid JSON in this exact format:
                 "failed": failed,
                 "needs_review": needs_review,
                 "na": na,
+            },
+            "usage": {
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
             }
         }
 

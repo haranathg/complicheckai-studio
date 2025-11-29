@@ -488,17 +488,24 @@ export default function CompliancePanel({
       {/* Footer */}
       {report && (
         <div className="mt-3 pt-3 border-t flex items-center justify-between">
-          <p className="text-xs text-gray-500">
-            {statusFilter !== 'all' && (
-              <button
-                onClick={() => setStatusFilter('all')}
-                className="text-blue-500 hover:text-blue-600 mr-2"
-              >
-                Clear filter
-              </button>
+          <div className="flex items-center gap-4">
+            <p className="text-xs text-gray-500">
+              {statusFilter !== 'all' && (
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className="text-blue-500 hover:text-blue-600 mr-2"
+                >
+                  Clear filter
+                </button>
+              )}
+              Click on a row to see details
+            </p>
+            {report.usage && (
+              <span className="text-xs text-gray-400">
+                Tokens: {(report.usage.input_tokens + report.usage.output_tokens).toLocaleString()}
+              </span>
             )}
-            Click on a row to see details and highlight in PDF
-          </p>
+          </div>
           <button
             onClick={() => {
               const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
