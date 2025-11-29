@@ -11,9 +11,10 @@ interface ChatPanelProps {
   onChunkSelect: (chunkIds: string[], pageNumber?: number) => void;
   messages: ChatMessage[];
   onMessagesChange: (messages: ChatMessage[]) => void;
+  selectedModel: string;
 }
 
-export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, messages, onMessagesChange }: ChatPanelProps) {
+export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, messages, onMessagesChange, selectedModel }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
           markdown,
           chunks,
           history: messages,
+          model: selectedModel,
         }),
       });
 

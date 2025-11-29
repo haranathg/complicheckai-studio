@@ -19,6 +19,7 @@ class ChatRequest(BaseModel):
     markdown: str
     chunks: List[dict]
     history: Optional[List[ChatMessage]] = []
+    model: Optional[str] = "claude-sonnet-4-20250514"
 
 
 @router.post("")
@@ -70,7 +71,7 @@ When answering:
     messages = [{"role": msg.role, "content": msg.content} for msg in request.history]
     messages.append({"role": "user", "content": request.question})
 
-    model_name = "claude-sonnet-4-20250514"
+    model_name = request.model or "claude-sonnet-4-20250514"
 
     try:
         response = client.messages.create(

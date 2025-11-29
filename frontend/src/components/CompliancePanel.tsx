@@ -13,6 +13,7 @@ interface CompliancePanelProps {
   report: ComplianceReport | null;
   onReportChange: (report: ComplianceReport | null) => void;
   onChunkSelect: (chunkIds: string[], pageNumber?: number) => void;
+  selectedModel: string;
 }
 
 type StatusFilter = 'all' | 'pass' | 'fail' | 'needs_review' | 'na';
@@ -83,6 +84,7 @@ export default function CompliancePanel({
   report,
   onReportChange,
   onChunkSelect,
+  selectedModel,
 }: CompliancePanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'completeness' | 'compliance'>('completeness');
@@ -116,6 +118,7 @@ export default function CompliancePanel({
           chunks,
           completeness_checks: complianceConfig.completeness_checks,
           compliance_checks: complianceConfig.compliance_checks,
+          model: selectedModel,
         }),
       });
 

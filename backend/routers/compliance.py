@@ -22,6 +22,7 @@ class ComplianceRequest(BaseModel):
     chunks: List[dict]
     completeness_checks: List[ComplianceCheck]
     compliance_checks: List[ComplianceCheck]
+    model: Optional[str] = "claude-sonnet-4-20250514"
 
 @router.post("/check")
 async def run_compliance_checks(request: ComplianceRequest):
@@ -93,7 +94,7 @@ Respond ONLY with valid JSON in this exact format:
   ]
 }}"""
 
-    model_name = "claude-sonnet-4-20250514"
+    model_name = request.model or "claude-sonnet-4-20250514"
 
     try:
         response = client.messages.create(

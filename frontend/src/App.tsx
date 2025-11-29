@@ -7,11 +7,15 @@ import ExtractPanel from './components/ExtractPanel';
 import ChatPanel from './components/ChatPanel';
 import CompliancePanel from './components/CompliancePanel';
 import LoginPage from './components/LoginPage';
+import ModelSelector from './components/ModelSelector';
 import type { ParseResponse, Chunk, TabType, ChatMessage } from './types/ade';
 import type { ComplianceReport } from './types/compliance';
 import { API_URL } from './config';
 import { isAuthenticated, logout } from './utils/auth';
 import bundabergLogo from './assets/bundaberg.jpeg';
+
+// Default model
+const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
 
 function App() {
   const [authenticated, setAuthenticated] = useState(isAuthenticated());
@@ -25,6 +29,7 @@ function App() {
   const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
   const [targetPage, setTargetPage] = useState<number | undefined>(undefined);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
 
   const [isPdfReady, setIsPdfReady] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -136,6 +141,10 @@ function App() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <ModelSelector
+              selectedModel={selectedModel}
+              onModelChange={setSelectedModel}
+            />
             {file && (
               <span className="text-sm text-gray-500">
                 {file.name}
@@ -259,6 +268,7 @@ function App() {
                 disabled={!parseResult}
                 messages={chatMessages}
                 onMessagesChange={setChatMessages}
+                selectedModel={selectedModel}
                 onChunkSelect={(chunkIds, pageNumber) => {
                   const chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
                   if (chunk) {
@@ -277,6 +287,7 @@ function App() {
                 disabled={!parseResult}
                 report={complianceReport}
                 onReportChange={setComplianceReport}
+                selectedModel={selectedModel}
                 onChunkSelect={(chunkIds, pageNumber) => {
                   const chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
                   if (chunk) {
