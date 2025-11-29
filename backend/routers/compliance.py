@@ -93,9 +93,11 @@ Respond ONLY with valid JSON in this exact format:
   ]
 }}"""
 
+    model_name = "claude-sonnet-4-20250514"
+
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=model_name,
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -208,6 +210,7 @@ Respond ONLY with valid JSON in this exact format:
             "usage": {
                 "input_tokens": response.usage.input_tokens,
                 "output_tokens": response.usage.output_tokens,
+                "model": model_name,
             }
         }
 

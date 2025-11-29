@@ -39,6 +39,7 @@ export interface ChatMessage {
   usage?: {
     input_tokens: number;
     output_tokens: number;
+    model?: string;
   };
 }
 
@@ -47,6 +48,7 @@ export interface ChatResponse {
   usage: {
     input_tokens: number;
     output_tokens: number;
+    model?: string;
   };
 }
 

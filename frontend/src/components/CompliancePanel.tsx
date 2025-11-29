@@ -4,6 +4,7 @@ import type { CheckResult, ComplianceReport, ComplianceCheck } from '../types/co
 import complianceConfig from '../config/complianceChecks.json';
 import { API_URL } from '../config';
 import { getMarkdownPreview } from '../utils/cleanMarkdown';
+import { formatTokensWithCost } from '../utils/tokenCost';
 
 interface CompliancePanelProps {
   markdown: string;
@@ -502,8 +503,14 @@ export default function CompliancePanel({
               Click on a row to see details
             </p>
             {report.usage && (
-              <span className="text-xs text-gray-400">
-                {report.usage.input_tokens.toLocaleString()} in / {report.usage.output_tokens.toLocaleString()} out
+              <span className="text-xs text-gray-400 flex items-center gap-2">
+                <span>{formatTokensWithCost(report.usage.input_tokens, report.usage.output_tokens, report.usage.model)}</span>
+                {report.usage.model && (
+                  <>
+                    <span className="text-gray-300">•</span>
+                    <span>{report.usage.model.replace('claude-', '').replace('-20250514', '')}</span>
+                  </>
+                )}
               </span>
             )}
           </div>

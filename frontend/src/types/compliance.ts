@@ -46,6 +46,7 @@ export interface ComplianceReport {
   usage?: {
     input_tokens: number;
     output_tokens: number;
+    model?: string;
   };
 }
 

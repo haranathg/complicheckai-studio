@@ -70,9 +70,11 @@ When answering:
     messages = [{"role": msg.role, "content": msg.content} for msg in request.history]
     messages.append({"role": "user", "content": request.question})
 
+    model_name = "claude-sonnet-4-20250514"
+
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=model_name,
             max_tokens=1024,
             system=system_prompt,
             messages=messages
@@ -96,7 +98,8 @@ When answering:
             "chunk_ids": chunk_ids,
             "usage": {
                 "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens
+                "output_tokens": response.usage.output_tokens,
+                "model": model_name
             }
         }
     except Exception as e:
