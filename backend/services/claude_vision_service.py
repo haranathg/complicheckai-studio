@@ -9,12 +9,122 @@ from anthropic import Anthropic
 import fitz  # PyMuPDF for PDF handling
 
 
+# Load prompts from config file
+PROMPTS_CONFIG_PATH = Path(__file__).parent.parent / "config" / "claude_vision_prompts.json"
+
+
+def load_prompts_config() -> Dict[str, Any]:
+    """Load prompts configuration from JSON file."""
+    if PROMPTS_CONFIG_PATH.exists():
+        with open(PROMPTS_CONFIG_PATH, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def build_system_prompt(config: Dict[str, Any]) -> str:
+    """Build the system prompt from config."""
+    if not config or "system_prompt" not in config:
+        return ""
+
+    sp = config["system_prompt"]
+    parts = []
+
+    # Intro
+    parts.append(sp.get("intro", ""))
+    parts.append("")
+
+    # Coordinate system
+    cs = sp.get("coordinate_system", {})
+    parts.append(cs.get("description", ""))
+    for rule in cs.get("rules", []):
+        parts.append(f"- {rule}")
+    parts.append("")
+
+    # Visual estimation
+    ve = sp.get("visual_estimation", {})
+    parts.append(ve.get("description", ""))
+    for i, step in enumerate(ve.get("steps", []), 1):
+        parts.append(f"{i}. {step}")
+    parts.append("")
+
+    # Common layouts
+    cl = sp.get("common_layouts", {})
+    parts.append(cl.get("description", ""))
+    for layout in cl.get("layouts", []):
+        parts.append(f"- {layout}")
+    parts.append("")
+
+    # Architectural drawings
+    ad = sp.get("architectural_drawings", {})
+    parts.append(ad.get("description", ""))
+    for rule in ad.get("rules", []):
+        parts.append(f"- {rule}")
+    parts.append("")
+
+    # Output format
+    of = sp.get("output_format", {})
+    parts.append(of.get("description", ""))
+    for inst in of.get("instructions", []):
+        parts.append(f"- {inst}")
+    parts.append("")
+    parts.append("```components")
+    parts.append(json.dumps(of.get("example", []), indent=2))
+    parts.append("```")
+    parts.append("")
+
+    # Critical rules
+    cr = sp.get("critical_rules", {})
+    parts.append(cr.get("description", ""))
+    for i, rule in enumerate(cr.get("rules", []), 1):
+        parts.append(f"{i}. {rule}")
+    parts.append("")
+
+    # Component types
+    types = sp.get("component_types", [])
+    if types:
+        parts.append(f"Types: {', '.join(types)}")
+
+    return "\n".join(parts)
+
+
+def build_user_prompt(config: Dict[str, Any]) -> str:
+    """Build the user prompt from config."""
+    if not config or "user_prompt" not in config:
+        return ""
+
+    up = config["user_prompt"]
+    parts = []
+
+    # Intro
+    parts.append(up.get("intro", ""))
+    parts.append("")
+
+    # Steps
+    for step in up.get("steps", []):
+        parts.append(f"STEP {step['step']}: {step['title']}")
+        for inst in step.get("instructions", []):
+            parts.append(f"- {inst}")
+        parts.append("")
+
+    # Reminders
+    parts.append("Remember:")
+    for reminder in up.get("reminders", []):
+        parts.append(f"- {reminder}")
+
+    return "\n".join(parts)
+
+
 class ClaudeVisionService:
     def __init__(self):
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
         self.client = Anthropic(api_key=api_key)
+
+        # Load prompts from config
+        self.prompts_config = load_prompts_config()
+        self.system_prompt = build_system_prompt(self.prompts_config)
+        self.user_prompt = build_user_prompt(self.prompts_config)
 
     def _pdf_to_images(self, pdf_bytes: bytes, dpi: int = 150) -> List[tuple]:
         """Convert PDF pages to images. Returns list of (page_num, base64_image, media_type)."""
@@ -127,62 +237,10 @@ class ClaudeVisionService:
     ) -> Dict[str, Any]:
         """Process a single page with Claude vision."""
 
-        system_prompt = """You are a precise document parser. Your task is to extract content AND accurately locate each element on the page.
-
-COORDINATE SYSTEM - READ CAREFULLY:
-- Coordinates are NORMALIZED values from 0.0 to 1.0
-- (0.0, 0.0) is the TOP-LEFT corner of the page
-- (1.0, 1.0) is the BOTTOM-RIGHT corner of the page
-- left=0.0 means the left edge of the page
-- left=0.5 means the horizontal center of the page
-- left=1.0 means the right edge of the page
-- top=0.0 means the top edge of the page
-- top=0.5 means the vertical center of the page
-- top=1.0 means the bottom edge of the page
-
-VISUAL ESTIMATION TECHNIQUE:
-1. Mentally divide the page into a 10x10 grid (each cell is 0.1 x 0.1)
-2. For each text element, identify which grid cell(s) it occupies
-3. Estimate coordinates based on grid position
-
-COMMON PAGE LAYOUTS:
-- Standard document: Text spans left=0.05 to right=0.95 with margins
-- Two-column: Left column (0.05-0.48), Right column (0.52-0.95)
-- Site plans/drawings with title block: Drawing area (0.0-0.75), Title block (0.75-1.0)
-- Title blocks are usually on the RIGHT side of the page
-
-FOR ARCHITECTURAL/ENGINEERING DRAWINGS:
-- The main drawing/map typically occupies the LEFT 70-80% of the page
-- The title block with text information is on the RIGHT 20-30% of the page
-- Title block elements have left coordinates around 0.75-0.80 and right around 0.98-1.0
-- Do NOT place text overlays on the drawing area unless there is actual text there
-
-OUTPUT FORMAT:
-1. First, extract all readable text content as markdown
-2. Then provide a ```components``` JSON block with bounding boxes
-
-```components
-[
-  {"type": "figure", "content": "Site plan drawing", "top": 0.0, "left": 0.0, "bottom": 1.0, "right": 0.75},
-  {"type": "header", "content": "Company Name", "top": 0.0, "left": 0.75, "bottom": 0.08, "right": 1.0},
-  {"type": "text", "content": "Site Address: 123 Main St", "top": 0.5, "left": 0.75, "bottom": 0.55, "right": 1.0}
-]
-```
-
-CRITICAL RULES:
-1. LOOK at where text ACTUALLY appears on the page before assigning coordinates
-2. Text in title blocks (right side) should have left >= 0.70
-3. Single lines of text are about 0.02-0.04 in height
-4. Tables/forms with multiple rows need proportionally larger height
-5. DO NOT guess - only include elements you can clearly see
-6. If unsure about exact position, estimate conservatively
-
-Types: heading, paragraph, table, figure, list, form_field, caption, footer, header, text, image, logo"""
-
         response = self.client.messages.create(
             model=model,
             max_tokens=4096,
-            system=system_prompt,
+            system=self.system_prompt,
             messages=[
                 {
                     "role": "user",
@@ -197,25 +255,7 @@ Types: heading, paragraph, table, figure, list, form_field, caption, footer, hea
                         },
                         {
                             "type": "text",
-                            "text": """Analyze this document page and extract content with precise locations.
-
-STEP 1: Identify the page layout
-- Is this a standard text document OR an architectural/engineering drawing with a title block?
-- If it has a title block, note that text content is typically on the RIGHT side (left >= 0.70)
-
-STEP 2: For each text element you can see:
-- What percentage from the LEFT edge does it start? (0.0 = left edge, 1.0 = right edge)
-- What percentage from the TOP does it start? (0.0 = top, 1.0 = bottom)
-- How wide and tall is it?
-
-STEP 3: Extract all text as markdown
-
-STEP 4: Create the ```components``` JSON with coordinates
-
-Remember:
-- Coordinates are 0.0 to 1.0 (normalized)
-- Text on the right side of the page has left >= 0.5 or higher
-- Be accurate - check each element's actual position visually"""
+                            "text": self.user_prompt
                         }
                     ],
                 }
