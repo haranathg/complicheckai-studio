@@ -46,6 +46,14 @@ def build_system_prompt(config: Dict[str, Any]) -> str:
             parts.append(f"- {item}")
         parts.append("")
 
+    # Region strategy (new)
+    rs = sp.get("region_strategy", {})
+    if rs:
+        parts.append(rs.get("description", ""))
+        for rule in rs.get("rules", []):
+            parts.append(f"- {rule}")
+        parts.append("")
+
     # Coordinate system
     cs = sp.get("coordinate_system", {})
     parts.append(cs.get("description", ""))

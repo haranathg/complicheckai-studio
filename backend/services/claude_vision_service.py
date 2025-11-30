@@ -33,12 +33,20 @@ def build_system_prompt(config: Dict[str, Any]) -> str:
     parts.append(sp.get("intro", ""))
     parts.append("")
 
-    # Task description (new)
+    # Task description
     td = sp.get("task_description", {})
     if td:
         parts.append(td.get("description", ""))
         for item in td.get("items", []):
             parts.append(f"- {item}")
+        parts.append("")
+
+    # Region strategy
+    rs = sp.get("region_strategy", {})
+    if rs:
+        parts.append(rs.get("description", ""))
+        for rule in rs.get("rules", []):
+            parts.append(f"- {rule}")
         parts.append("")
 
     # Coordinate system
