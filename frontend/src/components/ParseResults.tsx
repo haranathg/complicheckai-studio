@@ -77,7 +77,7 @@ export default function ParseResults({
       {/* Header with metadata */}
       <div className="bg-gray-50 rounded-lg p-4 mb-4">
         <h3 className="font-semibold text-gray-800 mb-2">Document Info</h3>
-        <div className="grid grid-cols-3 gap-4 text-sm">
+        <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="text-gray-500">Pages:</span>
             <span className="ml-2 font-medium">{result.metadata.page_count || 'N/A'}</span>
@@ -85,10 +85,6 @@ export default function ParseResults({
           <div>
             <span className="text-gray-500">Components:</span>
             <span className="ml-2 font-medium">{result.chunks.length}</span>
-          </div>
-          <div>
-            <span className="text-gray-500">Credits:</span>
-            <span className="ml-2 font-medium">{result.metadata.credit_usage || 'N/A'}</span>
           </div>
         </div>
       </div>

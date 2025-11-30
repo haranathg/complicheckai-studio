@@ -274,6 +274,7 @@ function App() {
                   output_tokens: complianceReport.usage.output_tokens,
                   model: complianceReport.usage.model,
                 } : undefined}
+                parseCredits={parseResult?.metadata.credit_usage}
               />
             )}
             {activeTab === 'chat' && (
