@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { Chunk } from '../types/ade';
 import type { CheckResult, ComplianceReport, ComplianceCheck } from '../types/compliance';
-import complianceConfig from '../config/complianceChecks.json';
 import { API_URL } from '../config';
 import { getMarkdownPreview } from '../utils/cleanMarkdown';
 
@@ -13,6 +12,8 @@ interface CompliancePanelProps {
   onReportChange: (report: ComplianceReport | null) => void;
   onChunkSelect: (chunkIds: string[], pageNumber?: number) => void;
   selectedModel: string;
+  completenessChecks: ComplianceCheck[];
+  complianceChecks: ComplianceCheck[];
 }
 
 type StatusFilter = 'all' | 'pass' | 'fail' | 'needs_review' | 'na';
@@ -84,6 +85,8 @@ export default function CompliancePanel({
   onReportChange,
   onChunkSelect,
   selectedModel,
+  completenessChecks,
+  complianceChecks,
 }: CompliancePanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'completeness' | 'compliance'>('completeness');
@@ -91,14 +94,14 @@ export default function CompliancePanel({
   const [selectedResult, setSelectedResult] = useState<CheckResult | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  // Pre-populated check lists from config
+  // Pre-populated check lists from props
   const pendingCompletenessResults = useMemo(() =>
-    createPendingResults(complianceConfig.completeness_checks as ComplianceCheck[], 'completeness'),
-    []
+    createPendingResults(completenessChecks, 'completeness'),
+    [completenessChecks]
   );
   const pendingComplianceResults = useMemo(() =>
-    createPendingResults(complianceConfig.compliance_checks as ComplianceCheck[], 'compliance'),
-    []
+    createPendingResults(complianceChecks, 'compliance'),
+    [complianceChecks]
   );
 
   const runChecks = async () => {
@@ -115,8 +118,8 @@ export default function CompliancePanel({
         body: JSON.stringify({
           markdown,
           chunks,
-          completeness_checks: complianceConfig.completeness_checks,
-          compliance_checks: complianceConfig.compliance_checks,
+          completeness_checks: completenessChecks,
+          compliance_checks: complianceChecks,
           model: selectedModel,
         }),
       });
@@ -457,7 +460,7 @@ export default function CompliancePanel({
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          Completeness ({report ? report.completeness_results.length : complianceConfig.completeness_checks.length})
+          Completeness ({report ? report.completeness_results.length : completenessChecks.length})
         </button>
         <button
           onClick={() => { setActiveTab('compliance'); setSelectedResult(null); }}
@@ -467,7 +470,7 @@ export default function CompliancePanel({
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          Compliance ({report ? report.compliance_results.length : complianceConfig.compliance_checks.length})
+          Compliance ({report ? report.compliance_results.length : complianceChecks.length})
         </button>
       </div>
 

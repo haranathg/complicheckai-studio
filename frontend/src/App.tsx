@@ -6,12 +6,14 @@ import ParseResults from './components/ParseResults';
 import ExtractPanel from './components/ExtractPanel';
 import ChatPanel from './components/ChatPanel';
 import CompliancePanel from './components/CompliancePanel';
+import ComplianceChecksManager from './components/ComplianceChecksManager';
 import LoginPage from './components/LoginPage';
 import type { ParseResponse, Chunk, TabType, ChatMessage } from './types/ade';
-import type { ComplianceReport } from './types/compliance';
+import type { ComplianceReport, ComplianceCheck } from './types/compliance';
 import { API_URL } from './config';
 import { isAuthenticated, logout } from './utils/auth';
 import bundabergLogo from './assets/bundaberg.jpeg';
+import complianceConfig from './config/complianceChecks.json';
 
 // Default model
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
@@ -29,6 +31,12 @@ function App() {
   const [targetPage, setTargetPage] = useState<number | undefined>(undefined);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
+  const [completenessChecks, setCompletenessChecks] = useState<ComplianceCheck[]>(
+    complianceConfig.completeness_checks as ComplianceCheck[]
+  );
+  const [complianceChecks, setComplianceChecks] = useState<ComplianceCheck[]>(
+    complianceConfig.compliance_checks as ComplianceCheck[]
+  );
 
   const [isPdfReady, setIsPdfReady] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -277,6 +285,16 @@ function App() {
                 parseCredits={parseResult?.metadata.credit_usage}
               />
             )}
+            {activeTab === 'checks' && (
+              <div className="h-full">
+                <ComplianceChecksManager
+                  completenessChecks={completenessChecks}
+                  complianceChecks={complianceChecks}
+                  onCompletenessChecksChange={setCompletenessChecks}
+                  onComplianceChecksChange={setComplianceChecks}
+                />
+              </div>
+            )}
             {activeTab === 'chat' && (
               <ChatPanel
                 markdown={parseResult?.markdown || ''}
@@ -304,6 +322,8 @@ function App() {
                 report={complianceReport}
                 onReportChange={setComplianceReport}
                 selectedModel={selectedModel}
+                completenessChecks={completenessChecks}
+                complianceChecks={complianceChecks}
                 onChunkSelect={(chunkIds, pageNumber) => {
                   const chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
                   if (chunk) {
