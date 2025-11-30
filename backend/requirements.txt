@@ -6,3 +6,4 @@ landingai-ade
 pydantic
 anthropic
 pymupdf
+google-generativeai

@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse
 from typing import Optional
 from services.ade_service import ade_service
 from services.claude_vision_service import claude_vision_service
+from services.gemini_vision_service import gemini_vision_service
 import tempfile
 import os
 from pathlib import Path
@@ -23,8 +24,8 @@ async def parse_document(
 
     Args:
         file: The document to parse
-        parser: Parser to use - "landing_ai" or "claude_vision"
-        model: For claude_vision, the model to use (defaults to claude-sonnet-4-20250514)
+        parser: Parser to use - "landing_ai", "claude_vision", or "gemini_vision"
+        model: For vision parsers, the model to use
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
@@ -54,6 +55,13 @@ async def parse_document(
         if parser == "claude_vision":
             vision_model = model or "claude-sonnet-4-20250514"
             result = await claude_vision_service.parse_document(
+                content,
+                file.filename,
+                vision_model
+            )
+        elif parser == "gemini_vision":
+            vision_model = model or "gemini-2.0-flash"
+            result = await gemini_vision_service.parse_document(
                 content,
                 file.filename,
                 vision_model

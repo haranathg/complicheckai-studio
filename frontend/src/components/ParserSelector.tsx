@@ -15,6 +15,11 @@ const PARSERS: ParserOption[] = [
     name: 'Claude Vision',
     description: 'Vision-based document parsing',
   },
+  {
+    id: 'gemini_vision',
+    name: 'Gemini Vision',
+    description: 'Google Gemini vision-based parsing',
+  },
 ];
 
 interface ParserSelectorProps {
