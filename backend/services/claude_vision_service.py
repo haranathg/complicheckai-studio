@@ -33,6 +33,14 @@ def build_system_prompt(config: Dict[str, Any]) -> str:
     parts.append(sp.get("intro", ""))
     parts.append("")
 
+    # Task description (new)
+    td = sp.get("task_description", {})
+    if td:
+        parts.append(td.get("description", ""))
+        for item in td.get("items", []):
+            parts.append(f"- {item}")
+        parts.append("")
+
     # Coordinate system
     cs = sp.get("coordinate_system", {})
     parts.append(cs.get("description", ""))
@@ -67,6 +75,9 @@ def build_system_prompt(config: Dict[str, Any]) -> str:
     for inst in of.get("instructions", []):
         parts.append(f"- {inst}")
     parts.append("")
+    if of.get("json_structure"):
+        parts.append(of.get("json_structure"))
+        parts.append("")
     parts.append("```components")
     parts.append(json.dumps(of.get("example", []), indent=2))
     parts.append("```")
@@ -300,14 +311,31 @@ class ClaudeVisionService:
                     chunk_content = comp.get("content", "")
                     chunk_type = comp.get("type", "text")
 
-                    # Debug: print raw coordinates from Claude
-                    print(f"  [{idx}] {chunk_type}: top={comp.get('top')}, left={comp.get('left')}, bottom={comp.get('bottom')}, right={comp.get('right')}")
+                    # Check which coordinate format Claude returned
+                    # New format: x, y, width, height (0-100 percentage scale)
+                    # Old format: left, top, right, bottom (0-1 normalized scale)
+                    if "x" in comp and "width" in comp:
+                        # New format: x/y/width/height (0-100)
+                        x = float(comp.get("x", 0))
+                        y = float(comp.get("y", 0))
+                        width = float(comp.get("width", 100))
+                        height = float(comp.get("height", 100))
 
-                    # Ensure coordinates are valid floats between 0 and 1
-                    left = max(0.0, min(1.0, float(comp.get("left", 0.0))))
-                    top = max(0.0, min(1.0, float(comp.get("top", 0.0))))
-                    right = max(0.0, min(1.0, float(comp.get("right", 1.0))))
-                    bottom = max(0.0, min(1.0, float(comp.get("bottom", 1.0))))
+                        # Convert from 0-100 percentage to 0-1 normalized
+                        left = max(0.0, min(1.0, x / 100.0))
+                        top = max(0.0, min(1.0, y / 100.0))
+                        right = max(0.0, min(1.0, (x + width) / 100.0))
+                        bottom = max(0.0, min(1.0, (y + height) / 100.0))
+
+                        print(f"  [{idx}] {chunk_type}: x={x}, y={y}, w={width}, h={height} -> left={left:.3f}, top={top:.3f}, right={right:.3f}, bottom={bottom:.3f}")
+                    else:
+                        # Old format: left/top/right/bottom (0-1)
+                        left = max(0.0, min(1.0, float(comp.get("left", 0.0))))
+                        top = max(0.0, min(1.0, float(comp.get("top", 0.0))))
+                        right = max(0.0, min(1.0, float(comp.get("right", 1.0))))
+                        bottom = max(0.0, min(1.0, float(comp.get("bottom", 1.0))))
+
+                        print(f"  [{idx}] {chunk_type}: left={left:.3f}, top={top:.3f}, right={right:.3f}, bottom={bottom:.3f}")
 
                     chunks.append({
                         "id": chunk_id,
