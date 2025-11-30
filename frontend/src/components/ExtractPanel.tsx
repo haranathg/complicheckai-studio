@@ -27,25 +27,33 @@ interface ExtractPanelProps {
 }
 
 const PRESET_SCHEMAS = {
-  invoice: [
-    { name: 'invoice_number', type: 'string' as const, description: 'Invoice number or ID', required: true },
-    { name: 'date', type: 'string' as const, description: 'Invoice date', required: true },
-    { name: 'vendor', type: 'string' as const, description: 'Vendor or company name', required: true },
-    { name: 'total', type: 'number' as const, description: 'Total amount', required: true },
-    { name: 'line_items', type: 'array' as const, description: 'List of line items', required: false },
+  'project info': [
+    { name: 'project_name', type: 'string' as const, description: 'Name or title of the project', required: true },
+    { name: 'project_type', type: 'string' as const, description: 'Type of work (new build, alteration, addition)', required: true },
+    { name: 'consent_number', type: 'string' as const, description: 'Building consent or application number', required: false },
+    { name: 'date', type: 'string' as const, description: 'Date of plans or submission', required: true },
+    { name: 'revision', type: 'string' as const, description: 'Drawing revision number', required: false },
   ],
-  receipt: [
-    { name: 'store_name', type: 'string' as const, description: 'Store or merchant name', required: true },
-    { name: 'date', type: 'string' as const, description: 'Transaction date', required: true },
-    { name: 'total', type: 'number' as const, description: 'Total amount', required: true },
-    { name: 'payment_method', type: 'string' as const, description: 'Payment method used', required: false },
+  'applicant': [
+    { name: 'applicant_name', type: 'string' as const, description: 'Name of applicant or owner', required: true },
+    { name: 'contact_phone', type: 'string' as const, description: 'Contact phone number', required: false },
+    { name: 'contact_email', type: 'string' as const, description: 'Contact email address', required: false },
+    { name: 'designer_name', type: 'string' as const, description: 'Name of designer or architect', required: false },
+    { name: 'designer_company', type: 'string' as const, description: 'Design company name', required: false },
   ],
-  resume: [
-    { name: 'name', type: 'string' as const, description: 'Candidate full name', required: true },
-    { name: 'email', type: 'string' as const, description: 'Email address', required: true },
-    { name: 'phone', type: 'string' as const, description: 'Phone number', required: false },
-    { name: 'skills', type: 'array' as const, description: 'List of skills', required: false },
-    { name: 'experience_years', type: 'number' as const, description: 'Years of experience', required: false },
+  'site details': [
+    { name: 'site_address', type: 'string' as const, description: 'Full street address of the site', required: true },
+    { name: 'legal_description', type: 'string' as const, description: 'Legal lot and DP reference', required: true },
+    { name: 'site_area_sqm', type: 'number' as const, description: 'Total site area in square meters', required: true },
+    { name: 'site_coverage_percent', type: 'number' as const, description: 'Building coverage percentage', required: false },
+    { name: 'zone', type: 'string' as const, description: 'District plan zone (residential, rural, etc)', required: false },
+  ],
+  'building': [
+    { name: 'building_area_sqm', type: 'number' as const, description: 'Gross floor area of building', required: true },
+    { name: 'building_height_m', type: 'number' as const, description: 'Maximum building height in meters', required: false },
+    { name: 'num_storeys', type: 'number' as const, description: 'Number of storeys', required: false },
+    { name: 'construction_type', type: 'string' as const, description: 'Construction materials (timber, steel, etc)', required: false },
+    { name: 'setbacks', type: 'array' as const, description: 'Boundary setback distances', required: false },
   ],
 };
 
