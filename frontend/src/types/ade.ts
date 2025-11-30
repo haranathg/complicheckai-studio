@@ -23,6 +23,13 @@ export interface ParseResponse {
   metadata: {
     page_count: number | null;
     credit_usage: number | null;
+    parser?: string;
+    model?: string;
+    usage?: {
+      input_tokens: number;
+      output_tokens: number;
+      model?: string;
+    };
   };
   file_id?: string;
 }

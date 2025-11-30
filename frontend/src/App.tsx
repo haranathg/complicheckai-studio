@@ -15,8 +15,9 @@ import { isAuthenticated, logout } from './utils/auth';
 import bundabergLogo from './assets/bundaberg.jpeg';
 import complianceConfig from './config/complianceChecks.json';
 
-// Default model
+// Default model and parser
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
+const DEFAULT_PARSER = 'landing_ai';
 
 function App() {
   const [authenticated, setAuthenticated] = useState(isAuthenticated());
@@ -31,6 +32,7 @@ function App() {
   const [targetPage, setTargetPage] = useState<number | undefined>(undefined);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
+  const [selectedParser, setSelectedParser] = useState(DEFAULT_PARSER);
   const [completenessChecks, setCompletenessChecks] = useState<ComplianceCheck[]>(
     complianceConfig.completeness_checks as ComplianceCheck[]
   );
@@ -82,6 +84,10 @@ function App() {
 
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('parser', selectedParser);
+    if (selectedParser === 'claude_vision') {
+      formData.append('model', selectedModel);
+    }
 
     try {
       const response = await fetch(`${API_URL}/api/parse`, {
@@ -264,6 +270,8 @@ function App() {
                 disabled={!parseResult}
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}
+                selectedParser={selectedParser}
+                onParserChange={setSelectedParser}
                 chatUsage={chatMessages.reduce(
                   (acc, msg) => {
                     if (msg.usage) {
@@ -283,6 +291,7 @@ function App() {
                   model: complianceReport.usage.model,
                 } : undefined}
                 parseCredits={parseResult?.metadata.credit_usage}
+                parseUsage={parseResult?.metadata.usage}
               />
             )}
             {activeTab === 'checks' && (

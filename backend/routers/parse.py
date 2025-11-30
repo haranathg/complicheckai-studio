@@ -1,6 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
+from typing import Optional
 from services.ade_service import ade_service
+from services.claude_vision_service import claude_vision_service
 import tempfile
 import os
 from pathlib import Path
@@ -12,8 +14,18 @@ uploaded_files: dict = {}
 
 
 @router.post("")
-async def parse_document(file: UploadFile = File(...)):
-    """Parse an uploaded document."""
+async def parse_document(
+    file: UploadFile = File(...),
+    parser: Optional[str] = Form("landing_ai"),
+    model: Optional[str] = Form(None)
+):
+    """Parse an uploaded document.
+
+    Args:
+        file: The document to parse
+        parser: Parser to use - "landing_ai" or "claude_vision"
+        model: For claude_vision, the model to use (defaults to claude-sonnet-4-20250514)
+    """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
@@ -39,7 +51,17 @@ async def parse_document(file: UploadFile = File(...)):
     uploaded_files[file_id] = temp_path
 
     try:
-        result = await ade_service.parse_document(content, file.filename)
+        if parser == "claude_vision":
+            vision_model = model or "claude-sonnet-4-20250514"
+            result = await claude_vision_service.parse_document(
+                content,
+                file.filename,
+                vision_model
+            )
+        else:
+            # Default to Landing AI
+            result = await ade_service.parse_document(content, file.filename)
+
         result["file_id"] = file_id
         return result
     except Exception as e:

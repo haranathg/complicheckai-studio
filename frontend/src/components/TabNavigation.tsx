@@ -55,28 +55,34 @@ const TABS: { id: TabType; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
+// Tabs that should always be enabled (configuration tabs)
+const ALWAYS_ENABLED_TABS: TabType[] = ['parse', 'checks', 'extract'];
+
 export default function TabNavigation({ activeTab, onTabChange, disabled }: TabNavigationProps) {
   return (
     <div className="border-b border-gray-200 bg-white">
       <nav className="flex -mb-px">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => onTabChange(tab.id)}
-            disabled={disabled && tab.id !== 'parse'}
-            className={`
-              flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors
-              ${activeTab === tab.id
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }
-              ${disabled && tab.id !== 'parse' ? 'opacity-50 cursor-not-allowed' : ''}
-            `}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
+        {TABS.map((tab) => {
+          const isDisabled = disabled && !ALWAYS_ENABLED_TABS.includes(tab.id);
+          return (
+            <button
+              key={tab.id}
+              onClick={() => onTabChange(tab.id)}
+              disabled={isDisabled}
+              className={`
+                flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors
+                ${activeTab === tab.id
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }
+                ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
+              `}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          );
+        })}
       </nav>
     </div>
   );

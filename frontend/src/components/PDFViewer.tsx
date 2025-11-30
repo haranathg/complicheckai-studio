@@ -35,6 +35,7 @@ export default function PDFViewer({
   const [fileKey, setFileKey] = useState(0);
   const [lastTargetPage, setLastTargetPage] = useState<number | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
+  const pageContainerRef = useRef<HTMLDivElement>(null);
 
   // Reset state when file changes
   useEffect(() => {
@@ -106,14 +107,43 @@ export default function PDFViewer({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onPageLoadSuccess = useCallback((page: any) => {
-    console.log('PDF page loaded, size:', page.width, 'x', page.height);
-    setPageSize({
-      width: page.width,
-      height: page.height,
+    // Calculate the actual rendered size based on the width we set
+    // page.width and page.height are original PDF dimensions
+    // We render at containerWidth * scale, so calculate the rendered height proportionally
+    const renderedWidth = containerWidth * scale;
+    const aspectRatio = page.height / page.width;
+    const renderedHeight = renderedWidth * aspectRatio;
+
+    console.log('PDF page loaded, original:', page.width, 'x', page.height, 'rendered:', renderedWidth, 'x', renderedHeight);
+
+    // Use a small delay to ensure the canvas is rendered before measuring
+    requestAnimationFrame(() => {
+      if (pageContainerRef.current) {
+        const canvas = pageContainerRef.current.querySelector('canvas');
+        if (canvas) {
+          const actualWidth = canvas.offsetWidth;
+          const actualHeight = canvas.offsetHeight;
+          console.log('Actual canvas size:', actualWidth, 'x', actualHeight);
+          setPageSize({
+            width: actualWidth,
+            height: actualHeight,
+          });
+        } else {
+          setPageSize({
+            width: renderedWidth,
+            height: renderedHeight,
+          });
+        }
+      } else {
+        setPageSize({
+          width: renderedWidth,
+          height: renderedHeight,
+        });
+      }
+      setIsPageLoading(false);
+      onPdfReady?.();
     });
-    setIsPageLoading(false);
-    onPdfReady?.();
-  }, [onPdfReady]);
+  }, [onPdfReady, containerWidth, scale]);
 
   const onPageLoadError = useCallback((error: Error) => {
     console.error('PDF page load error:', error);
@@ -124,6 +154,15 @@ export default function PDFViewer({
   const pageChunks = chunks.filter(
     (c) => c.grounding?.page === currentPage - 1
   );
+
+  // Debug: log chunk coordinates
+  if (pageChunks.length > 0 && pageSize.width > 0) {
+    console.log('Page chunks with coordinates:', pageChunks.map(c => ({
+      type: c.type,
+      box: c.grounding?.box,
+      content: c.markdown.substring(0, 50)
+    })));
+  }
 
   const goToPrevPage = () => {
     setPageSize({ width: 0, height: 0 });
@@ -212,52 +251,53 @@ export default function PDFViewer({
                   </div>
                 }
               >
-                <Page
-                  key={`page-${currentPage}-${fileKey}`}
-                  pageNumber={currentPage}
-                  width={containerWidth * scale}
-                  onLoadSuccess={onPageLoadSuccess}
-                  onLoadError={onPageLoadError}
-                  onRenderSuccess={() => {
-                    console.log('PDF page rendered successfully');
-                    setIsPageLoading(false);
-                    onPdfReady?.();
-                  }}
-                  onRenderError={(error: Error) => {
-                    console.error('PDF page render error:', error);
-                    setPdfError(`Render error: ${error.message}`);
-                  }}
-                  renderTextLayer={false}
-                  renderAnnotationLayer={false}
-                  loading={
-                    <div className="flex items-center justify-center h-96 w-64 bg-white">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <div ref={pageContainerRef} className="relative">
+                  <Page
+                    key={`page-${currentPage}-${fileKey}`}
+                    pageNumber={currentPage}
+                    width={containerWidth * scale}
+                    onLoadSuccess={onPageLoadSuccess}
+                    onLoadError={onPageLoadError}
+                    onRenderSuccess={() => {
+                      console.log('PDF page rendered successfully');
+                      setIsPageLoading(false);
+                      onPdfReady?.();
+                    }}
+                    onRenderError={(error: Error) => {
+                      console.error('PDF page render error:', error);
+                      setPdfError(`Render error: ${error.message}`);
+                    }}
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                    loading={
+                      <div className="flex items-center justify-center h-96 w-64 bg-white">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                      </div>
+                    }
+                  />
+                  {/* Chunk Overlays - now inside the page container for precise alignment */}
+                  {pageSize.width > 0 && (
+                    <div
+                      className="absolute top-0 left-0 pointer-events-none"
+                      style={{ width: pageSize.width, height: pageSize.height }}
+                    >
+                      {pageChunks.map((chunk) => (
+                        <ChunkOverlay
+                          key={chunk.id}
+                          chunk={chunk}
+                          pageWidth={pageSize.width}
+                          pageHeight={pageSize.height}
+                          isSelected={selectedChunk?.id === chunk.id}
+                          onClick={() => onChunkClick(chunk)}
+                        />
+                      ))}
                     </div>
-                  }
-                />
+                  )}
+                </div>
               </Document>
             ) : (
               <div className="flex items-center justify-center h-96 w-64 bg-white">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              </div>
-            )}
-
-            {/* Chunk Overlays */}
-            {pageSize.width > 0 && (
-              <div
-                className="absolute top-0 left-0 pointer-events-none"
-                style={{ width: pageSize.width, height: pageSize.height }}
-              >
-                {pageChunks.map((chunk) => (
-                  <ChunkOverlay
-                    key={chunk.id}
-                    chunk={chunk}
-                    pageWidth={pageSize.width}
-                    pageHeight={pageSize.height}
-                    isSelected={selectedChunk?.id === chunk.id}
-                    onClick={() => onChunkClick(chunk)}
-                  />
-                ))}
               </div>
             )}
           </div>
