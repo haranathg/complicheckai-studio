@@ -30,6 +30,7 @@ export default function PDFViewer({
   const [scale, setScale] = useState(1.0);
   const [containerWidth, setContainerWidth] = useState(0);
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
+  const [canvasOffset, setCanvasOffset] = useState({ left: 0, top: 0 });
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [, setIsPageLoading] = useState(true);
   const [fileKey, setFileKey] = useState(0);
@@ -116,29 +117,39 @@ export default function PDFViewer({
 
     console.log('PDF page loaded, original:', page.width, 'x', page.height, 'rendered:', renderedWidth, 'x', renderedHeight);
 
-    // Use a small delay to ensure the canvas is rendered before measuring
+    // Use requestAnimationFrame to ensure the canvas is rendered
     requestAnimationFrame(() => {
       if (pageContainerRef.current) {
         const canvas = pageContainerRef.current.querySelector('canvas');
         if (canvas) {
-          const actualWidth = canvas.offsetWidth;
-          const actualHeight = canvas.offsetHeight;
-          console.log('Actual canvas size:', actualWidth, 'x', actualHeight);
+          // Get the actual rendered dimensions from the canvas
+          // Use getBoundingClientRect for accurate dimensions
+          const rect = canvas.getBoundingClientRect();
+          const offsetLeft = canvas.offsetLeft;
+          const offsetTop = canvas.offsetTop;
+          console.log('Canvas bounding rect:', rect.width, 'x', rect.height);
+          console.log('Canvas offset within container:', offsetLeft, offsetTop);
           setPageSize({
-            width: actualWidth,
-            height: actualHeight,
+            width: rect.width,
+            height: rect.height,
+          });
+          setCanvasOffset({
+            left: offsetLeft,
+            top: offsetTop,
           });
         } else {
           setPageSize({
             width: renderedWidth,
             height: renderedHeight,
           });
+          setCanvasOffset({ left: 0, top: 0 });
         }
       } else {
         setPageSize({
           width: renderedWidth,
           height: renderedHeight,
         });
+        setCanvasOffset({ left: 0, top: 0 });
       }
       setIsPageLoading(false);
       onPdfReady?.();
@@ -275,11 +286,16 @@ export default function PDFViewer({
                       </div>
                     }
                   />
-                  {/* Chunk Overlays - now inside the page container for precise alignment */}
+                  {/* Chunk Overlays - positioned to match canvas exactly */}
                   {pageSize.width > 0 && (
                     <div
-                      className="absolute top-0 left-0 pointer-events-none"
-                      style={{ width: pageSize.width, height: pageSize.height }}
+                      className="absolute pointer-events-none"
+                      style={{
+                        left: canvasOffset.left,
+                        top: canvasOffset.top,
+                        width: pageSize.width,
+                        height: pageSize.height,
+                      }}
                     >
                       {pageChunks.map((chunk) => (
                         <ChunkOverlay
