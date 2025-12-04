@@ -38,15 +38,20 @@ If you want to use **Bedrock Claude** parser:
          "Action": [
            "bedrock:InvokeModel"
          ],
-         "Resource": "arn:aws:bedrock:*::foundation-model/anthropic.*"
+         "Resource": [
+           "arn:aws:bedrock:*::foundation-model/anthropic.*",
+           "arn:aws:bedrock:*::foundation-model/amazon.nova*"
+         ]
        }
      ]
    }
    ```
 4. Name the role: `AppRunnerBedrockRole`
-5. **Enable Claude models in Bedrock:**
+5. **Enable models in Bedrock:**
    - Go to **[Bedrock Console](https://console.aws.amazon.com/bedrock)** → Model access
-   - Request access to Anthropic Claude models
+   - Request access to:
+     - Anthropic Claude models (Sonnet 3.5, Opus 3)
+     - Amazon Nova models (Nova Pro)
 
 ### 1.3 Create App Runner Service
 
@@ -181,6 +186,16 @@ Push the change → App Runner auto-deploys.
 | Claude Vision | `ANTHROPIC_API_KEY` | `VITE_ENABLE_CLAUDE_VISION=true` |
 | Gemini Vision | `GOOGLE_GEMINI_API_KEY` | `VITE_ENABLE_GEMINI_VISION=true` |
 | Bedrock Claude | IAM Role + Bedrock access | `VITE_ENABLE_BEDROCK_CLAUDE=true` |
+
+### Bedrock Model Options
+
+When using the **Bedrock Claude** parser, the following models are available:
+
+| Model | Model ID | Description | Cost (per 1M tokens) |
+|-------|----------|-------------|----------------------|
+| Claude Sonnet 3.5 | `bedrock-claude-sonnet-3.5` | Balanced speed & quality | $3 / $15 |
+| Claude Opus 3 | `bedrock-claude-opus-3` | Highest quality | $15 / $75 |
+| Nova Pro | `bedrock-nova-pro` | AWS native multimodal | $0.80 / $3.20 |
 
 ### Auto-Deploy
 

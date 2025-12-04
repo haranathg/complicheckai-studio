@@ -12,6 +12,7 @@ import type { ParseResponse, Chunk, TabType, ChatMessage } from './types/ade';
 import type { ComplianceReport, ComplianceCheck } from './types/compliance';
 import { API_URL } from './config';
 import { isAuthenticated, logout } from './utils/auth';
+import { getDefaultModelForParser } from './components/ModelSelector';
 import bundabergLogo from './assets/bundaberg.jpeg';
 import complianceConfig from './config/complianceChecks.json';
 
@@ -85,7 +86,7 @@ function App() {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('parser', selectedParser);
-    if (selectedParser === 'claude_vision') {
+    if (selectedParser === 'claude_vision' || selectedParser === 'bedrock_claude') {
       formData.append('model', selectedModel);
     }
 
@@ -128,6 +129,12 @@ function App() {
   const handleLogout = () => {
     logout();
     setAuthenticated(false);
+  };
+
+  const handleParserChange = (parser: string) => {
+    setSelectedParser(parser);
+    // Reset model to the default for the new parser
+    setSelectedModel(getDefaultModelForParser(parser));
   };
 
   // Show login page if not authenticated
@@ -271,7 +278,7 @@ function App() {
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}
                 selectedParser={selectedParser}
-                onParserChange={setSelectedParser}
+                onParserChange={handleParserChange}
                 chatUsage={chatMessages.reduce(
                   (acc, msg) => {
                     if (msg.usage) {

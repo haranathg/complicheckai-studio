@@ -158,6 +158,7 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
               <ModelSelector
                 selectedModel={selectedModel}
                 onModelChange={onModelChange}
+                parser={selectedParser}
               />
             </div>
           </div>

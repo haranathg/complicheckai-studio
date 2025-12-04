@@ -135,6 +135,19 @@ def build_user_prompt(config: Dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+# Bedrock model registry - maps friendly names to Bedrock model IDs
+BEDROCK_MODELS = {
+    # Claude models
+    "bedrock-claude-sonnet-3.5": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "bedrock-claude-opus-3": "anthropic.claude-3-opus-20240229-v1:0",
+    # Amazon Nova models
+    "bedrock-nova-pro": "amazon.nova-pro-v1:0",
+}
+
+# Default Bedrock model
+DEFAULT_BEDROCK_MODEL = "bedrock-claude-sonnet-3.5"
+
+
 class BedrockVisionService:
     def __init__(self):
         # Get AWS region from environment or default to us-east-1
@@ -148,7 +161,7 @@ class BedrockVisionService:
         )
 
         # Default model - Claude 3.5 Sonnet on Bedrock
-        self.default_model = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        self.default_model = BEDROCK_MODELS[DEFAULT_BEDROCK_MODEL]
 
         # Load prompts from config
         self.prompts_config = load_prompts_config()
@@ -206,7 +219,13 @@ class BedrockVisionService:
         """Parse a document using Bedrock Claude's vision capabilities."""
 
         suffix = Path(filename).suffix.lower()
-        model_id = model or self.default_model
+        # Resolve model: check if it's a friendly name, otherwise use as-is or default
+        if model and model in BEDROCK_MODELS:
+            model_id = BEDROCK_MODELS[model]
+        elif model:
+            model_id = model  # Assume it's already a full model ID
+        else:
+            model_id = self.default_model
 
         # Prepare images
         if suffix == ".pdf":
