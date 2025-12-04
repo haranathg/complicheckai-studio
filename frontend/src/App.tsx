@@ -150,27 +150,27 @@ function App() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#F0F5FA]">
+    <div className="h-screen flex flex-col" style={{ background: 'radial-gradient(circle at top, #111827 0%, #020617 55%, #000 100%)' }}>
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-[#D1D5DB] px-6 py-3">
+      <header className="border-b border-slate-700/40 px-6 py-3" style={{ background: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(8px)' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <img
               src={urbancompassLogo}
               alt="UrbanCompass"
-              className="h-10 object-contain"
+              className="h-10 object-contain brightness-0 invert"
             />
-            <div className="h-8 w-px bg-[#D1D5DB]"></div>
+            <div className="h-8 w-px bg-slate-700/40"></div>
             <div className="flex flex-col">
-              <h1 className="text-lg font-semibold text-[#1e293b] leading-tight">
-                CompliCheck<span className="text-[#046bd2]">AI</span>
+              <h1 className="text-lg font-semibold text-white leading-tight">
+                CompliCheck<span className="bg-gradient-to-r from-sky-400 via-purple-500 to-orange-500 bg-clip-text text-transparent">AI</span>
               </h1>
-              <span className="text-xs text-[#334155]">Document Compliance Studio</span>
+              <span className="text-xs text-gray-400">Document Compliance Studio</span>
             </div>
           </div>
           <div className="flex items-center gap-4">
             {file && (
-              <span className="text-sm text-[#334155]">
+              <span className="text-sm text-gray-300">
                 {file.name}
               </span>
             )}
@@ -179,7 +179,12 @@ function App() {
               <button
                 onClick={handleProcess}
                 disabled={!isPdfReady}
-                className="px-4 py-2 bg-[#046bd2] text-white rounded hover:bg-[#045cb4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 shadow-sm"
+                className="px-4 py-2 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                style={{
+                  background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
+                  boxShadow: '0 8px 20px rgba(56, 189, 248, 0.25)',
+                  border: '1px solid rgba(191, 219, 254, 0.3)'
+                }}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -191,7 +196,7 @@ function App() {
             {isLoading && (
               <button
                 onClick={handleCancel}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-red-600/80 text-white rounded-full hover:bg-red-600 transition-colors flex items-center gap-2 border border-red-500/50"
               >
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                 <span>Cancel</span>
@@ -199,7 +204,7 @@ function App() {
             )}
             <button
               onClick={handleLogout}
-              className="p-2 text-[#9CA3AF] hover:text-[#334155] transition-colors"
+              className="p-2 text-gray-400 hover:text-white transition-colors"
               title="Sign Out"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -212,15 +217,15 @@ function App() {
 
       {/* Error Banner */}
       {error && (
-        <div className="bg-red-50 border-b border-red-200 px-6 py-3">
-          <div className="flex items-center gap-2 text-red-700">
+        <div className="bg-red-900/30 border-b border-red-700/50 px-6 py-3">
+          <div className="flex items-center gap-2 text-red-400">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span className="text-sm">{error}</span>
             <button
               onClick={() => setError(null)}
-              className="ml-auto text-red-500 hover:text-red-700"
+              className="ml-auto text-red-400 hover:text-red-300"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -233,7 +238,7 @@ function App() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - PDF Viewer */}
-        <div className="w-1/2 border-r border-[#D1D5DB] bg-white overflow-hidden">
+        <div className="w-1/2 border-r border-slate-700/40 overflow-hidden" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
           {file ? (
             <PDFViewer
               file={file}
@@ -244,18 +249,18 @@ function App() {
               targetPage={targetPage}
             />
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-[#9CA3AF]">
+            <div className="h-full flex flex-col items-center justify-center text-gray-500">
               <svg className="w-20 h-20 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
-              <p className="text-lg font-medium mb-2 text-[#334155]">Upload a document</p>
+              <p className="text-lg font-medium mb-2 text-gray-300">Upload a document</p>
               <p className="text-sm">Supported formats: PDF, PNG, JPG, TIFF, BMP</p>
             </div>
           )}
         </div>
 
         {/* Right Panel - Results */}
-        <div className="w-1/2 flex flex-col overflow-hidden">
+        <div className="w-1/2 flex flex-col overflow-hidden" style={{ background: 'rgba(2, 6, 23, 0.4)' }}>
           <TabNavigation
             activeTab={activeTab}
             onTabChange={setActiveTab}
@@ -364,10 +369,10 @@ function App() {
       </div>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-[#D1D5DB] px-6 py-2 text-xs text-[#9CA3AF] flex items-center justify-between">
-        <span>Powered by CompliCheck<span className="text-[#046bd2] font-medium">AI</span> from <a href="https://urbancompasssoftware.com" target="_blank" rel="noopener noreferrer" className="text-[#046bd2] hover:underline">UrbanCompass</a></span>
+      <footer className="border-t border-slate-700/40 px-6 py-2 text-xs text-gray-500 flex items-center justify-between" style={{ background: 'rgba(2, 6, 23, 0.8)' }}>
+        <span>Powered by CompliCheck<span className="bg-gradient-to-r from-sky-400 to-purple-500 bg-clip-text text-transparent font-medium">AI</span> from <a href="https://urbancompasssoftware.com" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">UrbanCompass</a></span>
         {parseResult && (
-          <span className="text-[#334155]">
+          <span className="text-gray-400">
             {parseResult.chunks.length} components extracted
             {parseResult.metadata.page_count && ` from ${parseResult.metadata.page_count} pages`}
           </span>

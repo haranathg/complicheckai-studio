@@ -94,11 +94,11 @@ export default function ModelSelector({ selectedModel, onModelChange, parser = '
       <select
         value={selectedModel}
         onChange={(e) => onModelChange(e.target.value)}
-        className="appearance-none bg-gray-100 border border-gray-200 rounded-lg px-3 py-1.5 pr-8 text-sm text-gray-700 cursor-pointer hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+        className="appearance-none bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-1.5 pr-8 text-sm text-gray-300 cursor-pointer hover:bg-slate-700/60 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
         title={`${currentModel.name}: ${currentModel.description} ($${currentModel.inputCost}/$${currentModel.outputCost} per 1M tokens)`}
       >
         {models.map((model) => (
-          <option key={model.id} value={model.id}>
+          <option key={model.id} value={model.id} className="bg-slate-800 text-gray-300">
             {model.name} - ${model.inputCost}/${model.outputCost}
           </option>
         ))}

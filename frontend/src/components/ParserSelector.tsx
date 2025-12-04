@@ -98,11 +98,11 @@ export default function ParserSelector({ selectedParser, onParserChange }: Parse
       <select
         value={selectedParser}
         onChange={(e) => onParserChange(e.target.value)}
-        className="appearance-none bg-gray-100 border border-gray-200 rounded-lg px-3 py-1.5 pr-8 text-sm text-gray-700 cursor-pointer hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+        className="appearance-none bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-1.5 pr-8 text-sm text-gray-300 cursor-pointer hover:bg-slate-700/60 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
         title={`${currentParser.name}: ${currentParser.description}`}
       >
         {enabledParsers.map((parser) => (
-          <option key={parser.id} value={parser.id}>
+          <option key={parser.id} value={parser.id} className="bg-slate-800 text-gray-300">
             {parser.name}
           </option>
         ))}

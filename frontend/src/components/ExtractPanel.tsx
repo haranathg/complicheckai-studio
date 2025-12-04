@@ -143,18 +143,18 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
     <div className="h-full flex flex-col">
       <div className="flex-1 overflow-auto">
         {/* Settings Section - Always visible */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
-          <h4 className="text-sm font-medium text-gray-700 mb-3">Settings</h4>
+        <div className="mb-6 p-4 rounded-xl border border-slate-700/40" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
+          <h4 className="text-sm font-medium text-gray-300 mb-3">Settings</h4>
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600 w-24">Parser:</span>
+              <span className="text-sm text-gray-400 w-24">Parser:</span>
               <ParserSelector
                 selectedParser={selectedParser}
                 onParserChange={onParserChange}
               />
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600 w-24">Chat/Compliance:</span>
+              <span className="text-sm text-gray-400 w-24">Chat/Compliance:</span>
               <ModelSelector
                 selectedModel={selectedModel}
                 onModelChange={onModelChange}
@@ -162,25 +162,25 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
               />
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-xs text-gray-500 mt-2">
             Parser: Used for document processing. Chat/Compliance: Model used for Chat and Compliance checks.
           </p>
 
           {/* Usage Stats */}
           {(parseCredits || parseUsage || chatUsage || complianceUsage) && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="mt-4 pt-4 border-t border-slate-700/40">
               <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Usage</h5>
               <div className="space-y-1.5">
                 {parseCredits != null && parseCredits > 0 && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500">Parse (Landing AI):</span>
-                    <span className="text-gray-600 font-mono">{parseCredits} credits</span>
+                    <span className="text-gray-400 font-mono">{parseCredits} credits</span>
                   </div>
                 )}
                 {parseUsage && parseUsage.input_tokens > 0 && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500">Parse (Claude Vision):</span>
-                    <span className="text-gray-600 font-mono">
+                    <span className="text-gray-400 font-mono">
                       {formatTokensWithCost(parseUsage.input_tokens, parseUsage.output_tokens, parseUsage.model)}
                     </span>
                   </div>
@@ -188,7 +188,7 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
                 {chatUsage && chatUsage.input_tokens > 0 && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500">Chat:</span>
-                    <span className="text-gray-600 font-mono">
+                    <span className="text-gray-400 font-mono">
                       {formatTokensWithCost(chatUsage.input_tokens, chatUsage.output_tokens, chatUsage.model)}
                     </span>
                   </div>
@@ -196,7 +196,7 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
                 {complianceUsage && complianceUsage.input_tokens > 0 && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500">Compliance:</span>
-                    <span className="text-gray-600 font-mono">
+                    <span className="text-gray-400 font-mono">
                       {formatTokensWithCost(complianceUsage.input_tokens, complianceUsage.output_tokens, complianceUsage.model)}
                     </span>
                   </div>
@@ -207,9 +207,9 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
                   const model = parseUsage?.model || chatUsage?.model || complianceUsage?.model;
                   if (totalInput > 0) {
                     return (
-                      <div className="flex items-center justify-between text-xs pt-1.5 border-t border-gray-200">
-                        <span className="text-gray-600 font-medium">Total Tokens:</span>
-                        <span className="text-gray-700 font-mono font-medium">
+                      <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-700/40">
+                        <span className="text-gray-400 font-medium">Total Tokens:</span>
+                        <span className="text-gray-300 font-mono font-medium">
                           {formatTokensWithCost(totalInput, totalOutput, model)}
                         </span>
                       </div>
@@ -224,7 +224,7 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
 
         {/* Data Extraction Section - requires parsed document */}
         {disabled ? (
-          <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+          <div className="flex flex-col items-center justify-center py-12 text-gray-500">
             <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
             </svg>
@@ -234,13 +234,13 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
           <>
             {/* Preset Templates */}
             <div className="mb-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Quick Start Templates</h4>
+              <h4 className="text-sm font-medium text-gray-300 mb-2">Quick Start Templates</h4>
               <div className="flex gap-2">
                 {Object.keys(PRESET_SCHEMAS).map((preset) => (
                   <button
                     key={preset}
                     onClick={() => loadPreset(preset as keyof typeof PRESET_SCHEMAS)}
-                    className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg capitalize transition-colors"
+                    className="px-3 py-1.5 text-sm bg-slate-700/50 hover:bg-slate-600/50 text-gray-300 rounded-lg capitalize transition-colors border border-slate-600/50"
                   >
                     {preset}
                   </button>
@@ -250,7 +250,7 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
 
             {/* Schema Builder */}
             <div className="mb-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Define Extraction Schema</h4>
+              <h4 className="text-sm font-medium text-gray-300 mb-2">Define Extraction Schema</h4>
               <div className="space-y-2">
                 {fields.map((field, index) => (
                   <div key={index} className="flex gap-2 items-center">
@@ -258,12 +258,12 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
                       placeholder="Field name"
                       value={field.name}
                       onChange={(e) => updateField(index, { name: e.target.value })}
-                      className="border rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-2 text-sm flex-1 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     />
                     <select
                       value={field.type}
                       onChange={(e) => updateField(index, { type: e.target.value as SchemaField['type'] })}
-                      className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
                     >
                       <option value="string">String</option>
                       <option value="number">Number</option>
@@ -274,21 +274,21 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
                       placeholder="Description"
                       value={field.description}
                       onChange={(e) => updateField(index, { description: e.target.value })}
-                      className="border rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-2 text-sm flex-1 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     />
-                    <label className="flex items-center gap-1 text-sm text-gray-600 whitespace-nowrap">
+                    <label className="flex items-center gap-1 text-sm text-gray-400 whitespace-nowrap">
                       <input
                         type="checkbox"
                         checked={field.required}
                         onChange={(e) => updateField(index, { required: e.target.checked })}
-                        className="rounded"
+                        className="rounded bg-slate-700 border-slate-600"
                       />
                       Req
                     </label>
                     <button
                       onClick={() => removeField(index)}
                       disabled={fields.length === 1}
-                      className="text-red-500 hover:text-red-700 disabled:opacity-30 disabled:cursor-not-allowed p-1"
+                      className="text-red-400 hover:text-red-300 disabled:opacity-30 disabled:cursor-not-allowed p-1"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -302,7 +302,7 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
             <div className="flex gap-2 mb-6">
               <button
                 onClick={addField}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
+                className="text-sky-400 hover:text-sky-300 text-sm font-medium flex items-center gap-1"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -312,7 +312,12 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
               <button
                 onClick={handleExtract}
                 disabled={isLoading || !fields.some((f) => f.name)}
-                className="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                className="ml-auto text-white px-4 py-2 rounded-full text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                style={{
+                  background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
+                  boxShadow: '0 8px 20px rgba(56, 189, 248, 0.25)',
+                  border: '1px solid rgba(191, 219, 254, 0.3)'
+                }}
               >
                 {isLoading ? (
                   <>
@@ -330,20 +335,20 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
 
             {/* Error */}
             {error && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              <div className="mb-4 p-4 bg-red-900/30 border border-red-700/50 rounded-xl text-red-400 text-sm">
                 {error}
               </div>
             )}
 
             {/* Results */}
             {result && (
-              <div className="bg-gray-50 rounded-lg border p-4">
-                <h4 className="font-semibold text-gray-800 mb-3">Extraction Results</h4>
+              <div className="rounded-xl border border-slate-700/40 p-4" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
+                <h4 className="font-semibold text-gray-200 mb-3">Extraction Results</h4>
                 <div className="space-y-3">
                   {Object.entries(result).map(([key, value]) => (
-                    <div key={key} className="bg-white rounded-lg p-3 border">
+                    <div key={key} className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/40">
                       <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">{key}</div>
-                      <div className="text-gray-800">
+                      <div className="text-gray-300">
                         {typeof value === 'object' ? (
                           <pre className="text-sm font-mono overflow-x-auto">
                             {JSON.stringify(value, null, 2)}

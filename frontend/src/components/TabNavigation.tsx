@@ -60,7 +60,7 @@ const ALWAYS_ENABLED_TABS: TabType[] = ['parse', 'checks', 'extract'];
 
 export default function TabNavigation({ activeTab, onTabChange, disabled }: TabNavigationProps) {
   return (
-    <div className="border-b border-gray-200 bg-white">
+    <div className="border-b border-slate-700/40" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
       <nav className="flex -mb-px">
         {TABS.map((tab) => {
           const isDisabled = disabled && !ALWAYS_ENABLED_TABS.includes(tab.id);
@@ -72,8 +72,8 @@ export default function TabNavigation({ activeTab, onTabChange, disabled }: TabN
               className={`
                 flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors
                 ${activeTab === tab.id
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-sky-400 text-sky-400'
+                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600'
                 }
                 ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
               `}

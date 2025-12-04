@@ -29,20 +29,20 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[#F0F5FA] flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-8 border border-[#D1D5DB]">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'radial-gradient(circle at top, #111827 0%, #020617 55%, #000 100%)' }}>
+      <div className="max-w-md w-full p-8 rounded-2xl border border-slate-700/40" style={{ background: 'radial-gradient(circle at top left, rgba(30, 64, 175, 0.35), #020617 65%)', boxShadow: '0 12px 35px rgba(15, 23, 42, 0.7)' }}>
         {/* Logo and Header */}
         <div className="flex flex-col items-center mb-8">
           <img
             src={urbancompassLogo}
             alt="UrbanCompass"
-            className="h-16 object-contain mb-6"
+            className="h-16 object-contain mb-6 brightness-0 invert"
           />
           <div className="text-center">
-            <h1 className="text-2xl font-semibold text-[#1e293b]">
-              CompliCheck<span className="text-[#046bd2]">AI</span>
+            <h1 className="text-2xl font-semibold text-white">
+              CompliCheck<span className="bg-gradient-to-r from-sky-400 via-purple-500 to-orange-500 bg-clip-text text-transparent">AI</span>
             </h1>
-            <p className="text-sm text-[#334155] mt-1">
+            <p className="text-sm text-gray-400 mt-1">
               Document Compliance Studio
             </p>
           </div>
@@ -50,10 +50,10 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
 
         {/* Description */}
         <div className="text-center mb-8">
-          <p className="text-[#334155] text-sm leading-relaxed">
+          <p className="text-gray-400 text-sm leading-relaxed">
             AI-powered document compliance checking for building consent applications.
           </p>
-          <p className="text-[#9CA3AF] text-xs mt-3">
+          <p className="text-gray-500 text-xs mt-3">
             Enter your access key to continue.
           </p>
         </div>
@@ -61,7 +61,7 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="accessKey" className="block text-sm font-medium text-[#334155] mb-2">
+            <label htmlFor="accessKey" className="block text-sm font-medium text-gray-300 mb-2">
               Access Key
             </label>
             <input
@@ -70,14 +70,14 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
               value={accessKey}
               onChange={(e) => setAccessKey(e.target.value)}
               placeholder="Enter your access key"
-              className="w-full px-4 py-3 border border-[#D1D5DB] rounded focus:ring-2 focus:ring-[#046bd2] focus:border-[#046bd2] outline-none transition-all text-[#1e293b] placeholder-[#9CA3AF]"
+              className="w-full px-4 py-3 bg-slate-900/60 border border-slate-600/50 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all text-white placeholder-gray-500"
               disabled={isValidating}
               autoFocus
             />
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+            <div className="p-3 bg-red-900/30 border border-red-700/50 rounded-xl text-red-400 text-sm">
               {error}
             </div>
           )}
@@ -85,7 +85,12 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
           <button
             type="submit"
             disabled={!accessKey.trim() || isValidating}
-            className="w-full py-3 bg-[#046bd2] text-white rounded font-medium hover:bg-[#045cb4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 shadow-sm"
+            className="w-full py-3 rounded-full font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+            style={{
+              background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
+              boxShadow: '0 12px 30px rgba(56, 189, 248, 0.3)',
+              border: '1px solid rgba(191, 219, 254, 0.5)'
+            }}
           >
             {isValidating ? (
               <>
@@ -104,12 +109,12 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
         </form>
 
         {/* Footer */}
-        <div className="mt-8 pt-6 border-t border-[#D1D5DB] text-center">
-          <p className="text-xs text-[#9CA3AF]">
+        <div className="mt-8 pt-6 border-t border-slate-700/40 text-center">
+          <p className="text-xs text-gray-500">
             Need access? Contact your administrator.
           </p>
-          <p className="text-xs text-[#9CA3AF] mt-2">
-            Powered by <a href="https://urbancompasssoftware.com" target="_blank" rel="noopener noreferrer" className="text-[#046bd2] hover:underline">UrbanCompass</a>
+          <p className="text-xs text-gray-500 mt-2">
+            Powered by <a href="https://urbancompasssoftware.com" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">UrbanCompass</a>
           </p>
         </div>
       </div>

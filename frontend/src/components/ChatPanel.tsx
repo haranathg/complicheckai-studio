@@ -86,11 +86,11 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
 
   if (disabled) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-400">
+      <div className="flex flex-col items-center justify-center h-full text-gray-500">
         <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
-        <p>Parse a document first to chat with it</p>
+        <p className="text-gray-400">Parse a document first to chat with it</p>
       </div>
     );
   }
@@ -99,11 +99,11 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
     <div className="h-full flex flex-col">
       {/* Messages Header */}
       <div className="flex items-center justify-between mb-4">
-        <h4 className="text-sm font-medium text-gray-700">Chat with your document</h4>
+        <h4 className="text-sm font-medium text-gray-300">Chat with your document</h4>
         {messages.length > 0 && (
           <button
             onClick={clearChat}
-            className="text-sm text-gray-500 hover:text-gray-700"
+            className="text-sm text-gray-500 hover:text-gray-300"
           >
             Clear chat
           </button>
@@ -126,7 +126,7 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
                   <button
                     key={suggestion}
                     onClick={() => setInput(suggestion)}
-                    className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors"
+                    className="px-3 py-1.5 text-sm bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-gray-300 transition-colors border border-slate-600/50"
                   >
                     {suggestion}
                   </button>
@@ -146,19 +146,23 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] p-3 rounded-lg ${
+                  className={`max-w-[85%] p-3 rounded-xl ${
                     msg.role === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-800'
+                      ? 'text-white'
+                      : 'text-gray-200 border border-slate-700/40'
                   }`}
+                  style={msg.role === 'user'
+                    ? { background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)' }
+                    : { background: 'rgba(2, 6, 23, 0.6)' }
+                  }
                 >
                   {msg.role === 'assistant' ? (
                     <>
-                      <div className="prose prose-sm max-w-none">
+                      <div className="prose prose-sm prose-invert max-w-none">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
                       {relevantChunks.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
+                        <div className="mt-3 pt-3 border-t border-slate-700/40">
                           <p className="text-xs text-gray-500 mb-2">
                             Sources ({relevantChunks.length}) — click to view:
                           </p>
@@ -169,11 +173,11 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
                                 <button
                                   key={chunk.id}
                                   onClick={() => onChunkSelect([chunk.id], pageNum || undefined)}
-                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-white border rounded hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-slate-800/50 border border-slate-600/50 rounded hover:border-sky-400 hover:bg-sky-900/30 transition-colors"
                                 >
-                                  {pageNum && <span className="text-gray-400">p.{pageNum}</span>}
-                                  <span className="capitalize text-gray-600">{chunk.type}</span>
-                                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  {pageNum && <span className="text-gray-500">p.{pageNum}</span>}
+                                  <span className="capitalize text-gray-400">{chunk.type}</span>
+                                  <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                                   </svg>
                                 </button>
@@ -194,10 +198,10 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
 
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 text-gray-800 p-3 rounded-lg">
+            <div className="p-3 rounded-xl border border-slate-700/40" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
               <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                <span className="text-sm">Thinking...</span>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-400"></div>
+                <span className="text-sm text-gray-300">Thinking...</span>
               </div>
             </div>
           </div>
@@ -208,7 +212,7 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
 
       {/* Error */}
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="mb-4 p-3 bg-red-900/30 border border-red-700/50 rounded-xl text-red-400 text-sm">
           {error}
         </div>
       )}
@@ -221,12 +225,17 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
           onKeyDown={handleKeyDown}
           placeholder="Ask a question about the document..."
           rows={1}
-          className="flex-1 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          className="flex-1 bg-slate-800/60 border border-slate-600/50 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
         />
         <button
           onClick={sendMessage}
           disabled={isLoading || !input.trim()}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="text-white px-4 py-2.5 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          style={{
+            background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
+            boxShadow: '0 8px 20px rgba(56, 189, 248, 0.25)',
+            border: '1px solid rgba(191, 219, 254, 0.3)'
+          }}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

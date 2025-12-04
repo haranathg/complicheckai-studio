@@ -20,43 +20,43 @@ type StatusFilter = 'all' | 'pass' | 'fail' | 'needs_review' | 'na';
 
 const statusConfig = {
   pass: {
-    bg: 'bg-green-50',
-    border: 'border-green-200',
-    text: 'text-green-700',
+    bg: 'bg-green-900/30',
+    border: 'border-green-700/50',
+    text: 'text-green-400',
     icon: '✓',
-    iconBg: 'bg-green-100',
+    iconBg: 'bg-green-900/50',
     label: 'Pass',
   },
   fail: {
-    bg: 'bg-red-50',
-    border: 'border-red-200',
-    text: 'text-red-700',
+    bg: 'bg-red-900/30',
+    border: 'border-red-700/50',
+    text: 'text-red-400',
     icon: '✗',
-    iconBg: 'bg-red-100',
+    iconBg: 'bg-red-900/50',
     label: 'Fail',
   },
   needs_review: {
-    bg: 'bg-yellow-50',
-    border: 'border-yellow-200',
-    text: 'text-yellow-700',
+    bg: 'bg-yellow-900/30',
+    border: 'border-yellow-700/50',
+    text: 'text-yellow-400',
     icon: '⚠',
-    iconBg: 'bg-yellow-100',
+    iconBg: 'bg-yellow-900/50',
     label: 'Review',
   },
   na: {
-    bg: 'bg-gray-50',
-    border: 'border-gray-200',
+    bg: 'bg-slate-800/50',
+    border: 'border-slate-700/50',
     text: 'text-gray-500',
     icon: '—',
-    iconBg: 'bg-gray-100',
+    iconBg: 'bg-slate-700/50',
     label: 'N/A',
   },
   pending: {
-    bg: 'bg-gray-50',
-    border: 'border-gray-200',
-    text: 'text-gray-400',
+    bg: 'bg-slate-800/50',
+    border: 'border-slate-700/50',
+    text: 'text-gray-500',
     icon: '○',
-    iconBg: 'bg-gray-100',
+    iconBg: 'bg-slate-700/50',
     label: 'Pending',
   },
 };
@@ -187,17 +187,17 @@ export default function CompliancePanel({
     const isPending = !report;
 
     return (
-      <div className="border rounded-lg overflow-hidden">
+      <div className="border border-slate-700/40 rounded-xl overflow-hidden" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
+          <thead className="border-b border-slate-700/40" style={{ background: 'rgba(2, 6, 23, 0.8)' }}>
             <tr>
-              <th className="px-3 py-2 text-left font-medium text-gray-600 w-10">Status</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-600">Check</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-600 w-16">Source</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-600 w-20">Confidence</th>
+              <th className="px-3 py-2 text-left font-medium text-gray-400 w-10">Status</th>
+              <th className="px-3 py-2 text-left font-medium text-gray-400">Check</th>
+              <th className="px-3 py-2 text-left font-medium text-gray-400 w-16">Source</th>
+              <th className="px-3 py-2 text-left font-medium text-gray-400 w-20">Confidence</th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className="divide-y divide-slate-700/40">
             {results.map((result) => {
               const status = (result.status as string) === 'pending' ? 'pending' : result.status;
               const config = statusConfig[status] || statusConfig.pending;
@@ -211,7 +211,7 @@ export default function CompliancePanel({
                   className={`
                     transition-colors
                     ${isPending ? 'cursor-default' : 'cursor-pointer'}
-                    ${isSelected ? 'bg-blue-50' : isPending ? '' : 'hover:bg-gray-50'}
+                    ${isSelected ? 'bg-sky-900/30' : isPending ? '' : 'hover:bg-slate-800/50'}
                     ${hasChunks || isPending ? '' : 'opacity-75'}
                   `}
                 >
@@ -219,11 +219,11 @@ export default function CompliancePanel({
                     {renderStatusIcon(status)}
                   </td>
                   <td className="px-3 py-2">
-                    <div className={`font-medium ${isPending ? 'text-gray-500' : 'text-gray-800'}`}>
+                    <div className={`font-medium ${isPending ? 'text-gray-500' : 'text-gray-200'}`}>
                       {result.check_name}
                     </div>
                     {isPending ? (
-                      <div className="text-xs text-gray-400">{result.notes}</div>
+                      <div className="text-xs text-gray-500">{result.notes}</div>
                     ) : result.found_value ? (
                       <div className={`text-xs ${config.text}`}>
                         Found: {result.found_value}
@@ -232,14 +232,14 @@ export default function CompliancePanel({
                   </td>
                   <td className="px-3 py-2">
                     {!isPending && hasChunks ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-blue-600 font-medium">
+                      <span className="inline-flex items-center gap-1 text-xs text-sky-400 font-medium">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                         </svg>
                         {result.chunk_ids.length}
                       </span>
                     ) : (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-gray-500">—</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-gray-500">
@@ -257,7 +257,7 @@ export default function CompliancePanel({
   const renderDetailPanel = () => {
     if (!selectedResult) {
       return (
-        <div className="text-center text-gray-400 py-6 border rounded-lg bg-gray-50">
+        <div className="text-center text-gray-500 py-6 border border-slate-700/40 rounded-xl" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
           <p className="text-sm">Select a check to view details and source components</p>
         </div>
       );
@@ -267,7 +267,7 @@ export default function CompliancePanel({
     const relevantChunks = chunks.filter(c => selectedResult.chunk_ids.includes(c.id));
 
     return (
-      <div className={`p-4 rounded-lg border ${config.bg} ${config.border}`}>
+      <div className={`p-4 rounded-xl border ${config.bg} ${config.border}`}>
         <div className="flex items-start gap-3 mb-3">
           {renderStatusIcon(selectedResult.status)}
           <div className="flex-1">
@@ -291,16 +291,16 @@ export default function CompliancePanel({
         {selectedResult.expected && (
           <div className="mb-2">
             <span className="text-xs text-gray-500">Expected: </span>
-            <span className="text-sm text-gray-700">{selectedResult.expected}</span>
+            <span className="text-sm text-gray-300">{selectedResult.expected}</span>
           </div>
         )}
 
         {selectedResult.notes && (
-          <p className="text-sm text-gray-600 mb-3">{selectedResult.notes}</p>
+          <p className="text-sm text-gray-400 mb-3">{selectedResult.notes}</p>
         )}
 
         {relevantChunks.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-gray-200">
+          <div className="mt-3 pt-3 border-t border-slate-700/40">
             <p className="text-xs text-gray-500 mb-2">
               Source components ({relevantChunks.length}) — click to view in document:
             </p>
@@ -314,20 +314,20 @@ export default function CompliancePanel({
                       e.stopPropagation();
                       onChunkSelect([chunk.id], pageNum || undefined);
                     }}
-                    className="bg-white p-2 rounded border text-xs text-gray-700 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors group"
+                    className="bg-slate-800/50 p-2 rounded-lg border border-slate-700/40 text-xs text-gray-300 cursor-pointer hover:border-sky-500/50 hover:bg-sky-900/30 transition-colors group"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="line-clamp-2 flex-1">{getMarkdownPreview(chunk.markdown, 150)}</span>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {pageNum && (
-                          <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded group-hover:bg-blue-100 group-hover:text-blue-600">
+                          <span className="text-[10px] px-1.5 py-0.5 bg-slate-700/50 text-gray-500 rounded group-hover:bg-sky-900/50 group-hover:text-sky-400">
                             p.{pageNum}
                           </span>
                         )}
-                        <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded capitalize group-hover:bg-blue-100 group-hover:text-blue-600">
+                        <span className="text-[10px] px-1.5 py-0.5 bg-slate-700/50 text-gray-500 rounded capitalize group-hover:bg-sky-900/50 group-hover:text-sky-400">
                           {chunk.type}
                         </span>
-                        <svg className="w-3 h-3 text-gray-400 group-hover:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-3 h-3 text-gray-500 group-hover:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                         </svg>
                       </div>
@@ -351,11 +351,16 @@ export default function CompliancePanel({
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-lg">Compliance Checks</h3>
+        <h3 className="font-semibold text-lg text-gray-200">Compliance Checks</h3>
         <button
           onClick={runChecks}
           disabled={disabled || isLoading}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+          className="px-4 py-2 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+          style={{
+            background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
+            boxShadow: '0 8px 20px rgba(56, 189, 248, 0.25)',
+            border: '1px solid rgba(191, 219, 254, 0.3)'
+          }}
         >
           {isLoading ? (
             <>
@@ -374,7 +379,7 @@ export default function CompliancePanel({
       </div>
 
       {error && (
-        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="mb-3 p-3 bg-red-900/30 border border-red-700/50 rounded-xl text-red-400 text-sm">
           {error}
         </div>
       )}
@@ -384,65 +389,65 @@ export default function CompliancePanel({
         <div className="grid grid-cols-5 gap-2 mb-3">
           <div
             onClick={() => handleFilterClick('all')}
-            className={`rounded-lg p-2 text-center cursor-pointer transition-all ${
+            className={`rounded-xl p-2 text-center cursor-pointer transition-all ${
               statusFilter === 'all'
-                ? 'bg-blue-100 border-2 border-blue-400'
-                : 'bg-blue-50 border border-blue-200 hover:border-blue-300'
+                ? 'bg-sky-900/40 border-2 border-sky-500'
+                : 'bg-sky-900/20 border border-sky-700/50 hover:border-sky-600'
             }`}
           >
-            <div className="text-xl font-bold text-blue-600">
+            <div className="text-xl font-bold text-sky-400">
               {report.summary.completeness_score}%
             </div>
-            <div className="text-xs text-blue-600">Complete</div>
+            <div className="text-xs text-sky-400">Complete</div>
           </div>
           <div
             onClick={() => handleFilterClick('pass')}
-            className={`rounded-lg p-2 text-center cursor-pointer transition-all ${
+            className={`rounded-xl p-2 text-center cursor-pointer transition-all ${
               statusFilter === 'pass'
-                ? 'bg-green-100 border-2 border-green-400'
-                : 'bg-green-50 border border-green-200 hover:border-green-300'
+                ? 'bg-green-900/40 border-2 border-green-500'
+                : 'bg-green-900/20 border border-green-700/50 hover:border-green-600'
             }`}
           >
-            <div className="text-xl font-bold text-green-600">
+            <div className="text-xl font-bold text-green-400">
               {report.summary.passed}
             </div>
-            <div className="text-xs text-green-600">Passed</div>
+            <div className="text-xs text-green-400">Passed</div>
           </div>
           <div
             onClick={() => handleFilterClick('fail')}
-            className={`rounded-lg p-2 text-center cursor-pointer transition-all ${
+            className={`rounded-xl p-2 text-center cursor-pointer transition-all ${
               statusFilter === 'fail'
-                ? 'bg-red-100 border-2 border-red-400'
-                : 'bg-red-50 border border-red-200 hover:border-red-300'
+                ? 'bg-red-900/40 border-2 border-red-500'
+                : 'bg-red-900/20 border border-red-700/50 hover:border-red-600'
             }`}
           >
-            <div className="text-xl font-bold text-red-600">
+            <div className="text-xl font-bold text-red-400">
               {report.summary.failed}
             </div>
-            <div className="text-xs text-red-600">Failed</div>
+            <div className="text-xs text-red-400">Failed</div>
           </div>
           <div
             onClick={() => handleFilterClick('needs_review')}
-            className={`rounded-lg p-2 text-center cursor-pointer transition-all ${
+            className={`rounded-xl p-2 text-center cursor-pointer transition-all ${
               statusFilter === 'needs_review'
-                ? 'bg-yellow-100 border-2 border-yellow-400'
-                : 'bg-yellow-50 border border-yellow-200 hover:border-yellow-300'
+                ? 'bg-yellow-900/40 border-2 border-yellow-500'
+                : 'bg-yellow-900/20 border border-yellow-700/50 hover:border-yellow-600'
             }`}
           >
-            <div className="text-xl font-bold text-yellow-600">
+            <div className="text-xl font-bold text-yellow-400">
               {report.summary.needs_review}
             </div>
-            <div className="text-xs text-yellow-600">Review</div>
+            <div className="text-xs text-yellow-400">Review</div>
           </div>
           <div
             onClick={() => handleFilterClick('na')}
-            className={`rounded-lg p-2 text-center cursor-pointer transition-all ${
+            className={`rounded-xl p-2 text-center cursor-pointer transition-all ${
               statusFilter === 'na'
-                ? 'bg-gray-200 border-2 border-gray-400'
-                : 'bg-gray-50 border border-gray-200 hover:border-gray-300'
+                ? 'bg-slate-700/50 border-2 border-slate-500'
+                : 'bg-slate-800/50 border border-slate-700/50 hover:border-slate-600'
             }`}
           >
-            <div className="text-xl font-bold text-gray-500">
+            <div className="text-xl font-bold text-gray-400">
               {report.summary.na || 0}
             </div>
             <div className="text-xs text-gray-500">N/A</div>
@@ -451,13 +456,13 @@ export default function CompliancePanel({
       )}
 
       {/* Tabs */}
-      <div className="flex border-b mb-3">
+      <div className="flex border-b border-slate-700/40 mb-3">
         <button
           onClick={() => { setActiveTab('completeness'); setSelectedResult(null); }}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'completeness'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-sky-400 text-sky-400'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
           }`}
         >
           Completeness ({report ? report.completeness_results.length : completenessChecks.length})
@@ -466,8 +471,8 @@ export default function CompliancePanel({
           onClick={() => { setActiveTab('compliance'); setSelectedResult(null); }}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'compliance'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-sky-400 text-sky-400'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
           }`}
         >
           Compliance ({report ? report.compliance_results.length : complianceChecks.length})
@@ -480,7 +485,7 @@ export default function CompliancePanel({
         <div className="flex-1 overflow-auto min-h-[200px]">
           {renderTable(displayResults)}
           {report && displayResults.length === 0 && (
-            <div className="text-center text-gray-400 py-8">
+            <div className="text-center text-gray-500 py-8">
               <p className="text-sm">No {statusFilter === 'all' ? '' : statusFilter.replace('_', ' ')} checks found</p>
             </div>
           )}
@@ -494,12 +499,12 @@ export default function CompliancePanel({
 
       {/* Footer */}
       {report && (
-        <div className="mt-3 pt-3 border-t flex items-center justify-between">
+        <div className="mt-3 pt-3 border-t border-slate-700/40 flex items-center justify-between">
           <p className="text-xs text-gray-500">
             {statusFilter !== 'all' && (
               <button
                 onClick={() => setStatusFilter('all')}
-                className="text-blue-500 hover:text-blue-600 mr-2"
+                className="text-sky-400 hover:text-sky-300 mr-2"
               >
                 Clear filter
               </button>
@@ -515,7 +520,7 @@ export default function CompliancePanel({
               a.download = `compliance-report-${new Date().toISOString().split('T')[0]}.json`;
               a.click();
             }}
-            className="text-sm text-blue-500 hover:text-blue-600 flex items-center gap-1"
+            className="text-sm text-sky-400 hover:text-sky-300 flex items-center gap-1"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

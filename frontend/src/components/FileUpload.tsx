@@ -31,7 +31,12 @@ export default function FileUpload({ onUpload, isLoading }: FileUploadProps) {
       <button
         onClick={handleClick}
         disabled={isLoading}
-        className="bg-[#046bd2] hover:bg-[#045cb4] text-white px-4 py-2 rounded font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
+        className="text-white px-4 py-2 rounded-full font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        style={{
+          background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
+          boxShadow: '0 8px 20px rgba(56, 189, 248, 0.25)',
+          border: '1px solid rgba(191, 219, 254, 0.3)'
+        }}
       >
         {isLoading ? (
           <>
