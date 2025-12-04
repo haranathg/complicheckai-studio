@@ -3,10 +3,21 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
 import json
+import boto3
 from datetime import datetime
-from services.aws_secrets import get_api_key
 
 router = APIRouter()
+
+# Bedrock client - lazy init
+_bedrock_client = None
+
+def get_bedrock_client():
+    global _bedrock_client
+    if _bedrock_client is None:
+        region = os.getenv("AWS_REGION", "ap-southeast-2")
+        _bedrock_client = boto3.client("bedrock-runtime", region_name=region)
+    return _bedrock_client
+
 
 class ComplianceCheck(BaseModel):
     id: str
@@ -23,20 +34,13 @@ class ComplianceRequest(BaseModel):
     chunks: List[dict]
     completeness_checks: List[ComplianceCheck]
     compliance_checks: List[ComplianceCheck]
-    model: Optional[str] = "claude-sonnet-4-20250514"
+    model: Optional[str] = "anthropic.claude-3-5-sonnet-20241022-v2:0"
 
 @router.post("/check")
 async def run_compliance_checks(request: ComplianceRequest):
     """Run completeness and compliance checks on the parsed document."""
 
-    try:
-        from anthropic import Anthropic
-        api_key = get_api_key("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not found in environment or AWS Secrets Manager")
-        client = Anthropic(api_key=api_key)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initialize Anthropic client: {str(e)}")
+    client = get_bedrock_client()
 
     # Create chunk summaries for the AI
     chunk_summaries = []
@@ -98,16 +102,25 @@ Respond ONLY with valid JSON in this exact format:
   ]
 }}"""
 
-    model_name = request.model or "claude-sonnet-4-20250514"
+    model_id = request.model or "anthropic.claude-3-5-sonnet-20241022-v2:0"
 
     try:
-        response = client.messages.create(
-            model=model_name,
-            max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}]
+        # Bedrock Claude API format
+        body = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+
+        response = client.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(body)
         )
 
-        response_text = response.content[0].text
+        response_body = json.loads(response["body"].read())
+        response_text = response_body["content"][0]["text"]
 
         # Extract JSON from response
         try:
@@ -213,9 +226,9 @@ Respond ONLY with valid JSON in this exact format:
                 "na": na,
             },
             "usage": {
-                "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens,
-                "model": model_name,
+                "input_tokens": response_body.get("usage", {}).get("input_tokens", 0),
+                "output_tokens": response_body.get("usage", {}).get("output_tokens", 0),
+                "model": model_id,
             }
         }
 

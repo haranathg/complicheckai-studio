@@ -4,10 +4,19 @@ from typing import List, Optional
 import os
 import json
 import re
-from anthropic import Anthropic
-from services.aws_secrets import get_api_key
+import boto3
 
 router = APIRouter()
+
+# Bedrock client - lazy init
+_bedrock_client = None
+
+def get_bedrock_client():
+    global _bedrock_client
+    if _bedrock_client is None:
+        region = os.getenv("AWS_REGION", "ap-southeast-2")
+        _bedrock_client = boto3.client("bedrock-runtime", region_name=region)
+    return _bedrock_client
 
 
 class ChatMessage(BaseModel):
@@ -20,20 +29,13 @@ class ChatRequest(BaseModel):
     markdown: str
     chunks: List[dict]
     history: Optional[List[ChatMessage]] = []
-    model: Optional[str] = "claude-sonnet-4-20250514"
+    model: Optional[str] = "anthropic.claude-3-5-sonnet-20241022-v2:0"
 
 
 @router.post("")
 async def chat_with_document(request: ChatRequest):
-    """Chat with the parsed document using Claude."""
-    api_key = get_api_key("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="ANTHROPIC_API_KEY not found in environment or AWS Secrets Manager"
-        )
-
-    client = Anthropic(api_key=api_key)
+    """Chat with the parsed document using Bedrock Claude."""
+    client = get_bedrock_client()
 
     # Build chunk reference for the prompt
     chunk_info = []
@@ -72,17 +74,26 @@ When answering:
     messages = [{"role": msg.role, "content": msg.content} for msg in request.history]
     messages.append({"role": "user", "content": request.question})
 
-    model_name = request.model or "claude-sonnet-4-20250514"
+    model_id = request.model or "anthropic.claude-3-5-sonnet-20241022-v2:0"
 
     try:
-        response = client.messages.create(
-            model=model_name,
-            max_tokens=1024,
-            system=system_prompt,
-            messages=messages
+        # Bedrock Claude API format
+        body = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1024,
+            "system": system_prompt,
+            "messages": messages
+        }
+
+        response = client.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(body)
         )
 
-        answer_text = response.content[0].text
+        response_body = json.loads(response["body"].read())
+        answer_text = response_body["content"][0]["text"]
 
         # Extract chunk IDs from the sources block
         chunk_ids = []
@@ -99,9 +110,9 @@ When answering:
             "answer": answer_text,
             "chunk_ids": chunk_ids,
             "usage": {
-                "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens,
-                "model": model_name
+                "input_tokens": response_body.get("usage", {}).get("input_tokens", 0),
+                "output_tokens": response_body.get("usage", {}).get("output_tokens", 0),
+                "model": model_id
             }
         }
     except Exception as e:
