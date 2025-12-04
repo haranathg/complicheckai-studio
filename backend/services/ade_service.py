@@ -7,14 +7,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from landingai_ade import LandingAIADE
+from services.aws_secrets import get_api_key
 import tempfile
 
 
 class ADEService:
     def __init__(self):
-        api_key = os.getenv("VISION_AGENT_API_KEY")
+        api_key = get_api_key("VISION_AGENT_API_KEY")
         if not api_key:
-            raise ValueError("VISION_AGENT_API_KEY environment variable is not set")
+            raise ValueError("VISION_AGENT_API_KEY not found in environment or AWS Secrets Manager")
         self.client = LandingAIADE(apikey=api_key)
 
     async def parse_document(self, file_content: bytes, filename: str) -> Dict[str, Any]:

@@ -5,6 +5,7 @@ import os
 import json
 import re
 from anthropic import Anthropic
+from services.aws_secrets import get_api_key
 
 router = APIRouter()
 
@@ -25,11 +26,11 @@ class ChatRequest(BaseModel):
 @router.post("")
 async def chat_with_document(request: ChatRequest):
     """Chat with the parsed document using Claude."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = get_api_key("ANTHROPIC_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=500,
-            detail="ANTHROPIC_API_KEY not configured"
+            detail="ANTHROPIC_API_KEY not found in environment or AWS Secrets Manager"
         )
 
     client = Anthropic(api_key=api_key)

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, Any, List
 from anthropic import Anthropic
 import fitz  # PyMuPDF for PDF handling
+from services.aws_secrets import get_api_key
 
 
 # Load prompts from config file
@@ -135,9 +136,9 @@ def build_user_prompt(config: Dict[str, Any]) -> str:
 
 class ClaudeVisionService:
     def __init__(self):
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = get_api_key("ANTHROPIC_API_KEY")
         if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+            raise ValueError("ANTHROPIC_API_KEY not found in environment or AWS Secrets Manager")
         self.client = Anthropic(api_key=api_key)
 
         # Load prompts from config

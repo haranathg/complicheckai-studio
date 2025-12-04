@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, Any, List
 import google.generativeai as genai
 import fitz  # PyMuPDF for PDF handling
+from services.aws_secrets import get_api_key
 
 
 # Load prompts from config file
@@ -140,9 +141,9 @@ def build_user_prompt(config: Dict[str, Any]) -> str:
 
 class GeminiVisionService:
     def __init__(self):
-        api_key = os.getenv("GOOGLE_GEMINI_API_KEY")
+        api_key = get_api_key("GOOGLE_GEMINI_API_KEY")
         if not api_key:
-            raise ValueError("GOOGLE_GEMINI_API_KEY environment variable is not set")
+            raise ValueError("GOOGLE_GEMINI_API_KEY not found in environment or AWS Secrets Manager")
 
         genai.configure(api_key=api_key)
         self.model_name = "gemini-2.0-flash"

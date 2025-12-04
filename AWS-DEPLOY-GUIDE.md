@@ -22,18 +22,38 @@ backend/
 └── routers/
 ```
 
-### 1.2 Create IAM Role for Bedrock Access (Optional)
+### 1.2 Store API Keys in AWS Secrets Manager (Recommended)
 
-If you want to use **Bedrock Claude** parser:
+Store your API keys securely in AWS Secrets Manager instead of environment variables:
+
+1. Go to **[Secrets Manager Console](https://console.aws.amazon.com/secretsmanager)**
+2. Click **Store a new secret** for each API key:
+
+   | Secret Name | Value | Required For |
+   |-------------|-------|--------------|
+   | `LandingAI-API-Key` | Your Landing.AI API key | Landing AI parser |
+   | `Anthropic-API-Key` | Your Anthropic API key | Claude Vision parser |
+   | `Google-Gemini-API-Key` | Your Google Gemini key | Gemini Vision parser |
+
+3. For each secret:
+   - **Secret type:** Other type of secret
+   - **Key/value:** Use `api_key` as key, your actual key as value
+   - **Secret name:** Use the exact names above
+   - **Region:** Same region as your App Runner service (e.g., `ap-southeast-2`)
+
+### 1.3 Create IAM Role for App Runner
+
+Create an IAM role with permissions for Bedrock and Secrets Manager:
 
 1. Go to **[IAM Console](https://console.aws.amazon.com/iam)** → Roles → Create role
 2. **Trusted entity:** AWS Service → App Runner
-3. **Permissions:** Create a custom policy:
+3. **Permissions:** Create a custom policy with this JSON:
    ```json
    {
      "Version": "2012-10-17",
      "Statement": [
        {
+         "Sid": "BedrockAccess",
          "Effect": "Allow",
          "Action": [
            "bedrock:InvokeModel"
@@ -41,6 +61,18 @@ If you want to use **Bedrock Claude** parser:
          "Resource": [
            "arn:aws:bedrock:*::foundation-model/anthropic.*",
            "arn:aws:bedrock:*::foundation-model/amazon.nova*"
+         ]
+       },
+       {
+         "Sid": "SecretsManagerAccess",
+         "Effect": "Allow",
+         "Action": [
+           "secretsmanager:GetSecretValue"
+         ],
+         "Resource": [
+           "arn:aws:secretsmanager:*:*:secret:LandingAI-API-Key*",
+           "arn:aws:secretsmanager:*:*:secret:Anthropic-API-Key*",
+           "arn:aws:secretsmanager:*:*:secret:Google-Gemini-API-Key*"
          ]
        }
      ]
@@ -53,7 +85,7 @@ If you want to use **Bedrock Claude** parser:
      - Anthropic Claude models (Sonnet 3.5, Opus 3)
      - Amazon Nova models (Nova Pro)
 
-### 1.3 Create App Runner Service
+### 1.4 Create App Runner Service
 
 1. Go to **[AWS App Runner Console](https://console.aws.amazon.com/apprunner)**
 2. Click **Create service**
@@ -69,29 +101,25 @@ If you want to use **Bedrock Claude** parser:
    - Service name: `landing-pdf-backend`
    - CPU: 1 vCPU (can start small)
    - Memory: 2 GB
-6. **Security** (for Bedrock access):
-   - Instance role: Select `AppRunnerBedrockRole` (created in step 1.2)
+6. **Security** (for Bedrock and Secrets Manager access):
+   - Instance role: Select `AppRunnerBedrockRole` (created in step 1.3)
 7. **Environment variables** (click "Add environment variable"):
    ```
-   # Required for Landing AI parser
-   VISION_AGENT_API_KEY  = your-landing-ai-key
+   # AWS region (for Bedrock and Secrets Manager)
+   AWS_REGION      = ap-southeast-2
 
-   # Required for Claude Vision parser (Anthropic API)
-   ANTHROPIC_API_KEY     = sk-ant-xxxxx
-
-   # Required for Gemini Vision parser
-   GOOGLE_GEMINI_API_KEY = your-gemini-key
-
-   # For Bedrock Claude parser (uses IAM role, no key needed)
-   AWS_REGION            = us-east-1
+   # CORS allowed origins (add your Amplify URL later)
+   ALLOWED_ORIGINS = http://localhost:3000,http://localhost:5173
    ```
+   > **Note:** API keys are retrieved from AWS Secrets Manager automatically.
+   > You can optionally set them as env vars to override Secrets Manager.
 8. Click **Create & deploy**
 9. Wait ~5 min → Copy your URL: `https://xxxxx.us-east-1.awsapprunner.com`
 
-### 1.4 Test Backend
+### 1.5 Test Backend
 
 ```bash
-curl https://xxxxx.us-east-1.awsapprunner.com/health
+curl https://xxxxx.ap-southeast-2.awsapprunner.com/health
 # Should return: {"status":"healthy"}
 ```
 
@@ -160,15 +188,19 @@ Push the change → App Runner auto-deploys.
 ### Env Variables Summary
 
 **App Runner (Backend):**
-| Variable | Required For | Description |
-|----------|--------------|-------------|
-| `VISION_AGENT_API_KEY` | Landing AI parser | Your Landing.AI key |
-| `ANTHROPIC_API_KEY` | Claude Vision parser + Chat | Your Anthropic API key |
-| `GOOGLE_GEMINI_API_KEY` | Gemini Vision parser | Your Google Gemini key |
-| `AWS_REGION` | Bedrock Claude parser | AWS region (default: us-east-1) |
-| `ALLOWED_ORIGINS` | CORS | Comma-separated allowed origins |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AWS_REGION` | Yes | AWS region for Bedrock and Secrets Manager |
+| `ALLOWED_ORIGINS` | Yes | Comma-separated CORS allowed origins |
 
-> **Note:** Bedrock Claude doesn't need an API key - it uses the IAM role attached to App Runner.
+**API Keys (via AWS Secrets Manager):**
+| Secret Name | Required For | Description |
+|-------------|--------------|-------------|
+| `LandingAI-API-Key` | Landing AI parser | Your Landing.AI key |
+| `Anthropic-API-Key` | Claude Vision + Chat | Your Anthropic API key |
+| `Google-Gemini-API-Key` | Gemini Vision parser | Your Google Gemini key |
+
+> **Note:** API keys are retrieved from Secrets Manager automatically. You can override by setting env vars directly.
 
 **Amplify (Frontend):**
 | Variable | Description |
@@ -182,9 +214,9 @@ Push the change → App Runner auto-deploys.
 
 | Parser | Backend Requirement | Frontend Flag |
 |--------|---------------------|---------------|
-| Landing AI | `VISION_AGENT_API_KEY` | Always enabled |
-| Claude Vision | `ANTHROPIC_API_KEY` | `VITE_ENABLE_CLAUDE_VISION=true` |
-| Gemini Vision | `GOOGLE_GEMINI_API_KEY` | `VITE_ENABLE_GEMINI_VISION=true` |
+| Landing AI | `LandingAI-API-Key` secret | Always enabled |
+| Claude Vision | `Anthropic-API-Key` secret | `VITE_ENABLE_CLAUDE_VISION=true` |
+| Gemini Vision | `Google-Gemini-API-Key` secret | `VITE_ENABLE_GEMINI_VISION=true` |
 | Bedrock Claude | IAM Role + Bedrock access | `VITE_ENABLE_BEDROCK_CLAUDE=true` |
 
 ### Bedrock Model Options

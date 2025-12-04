@@ -11,8 +11,15 @@ run:
   network:
     port: 8080
   env:
-    - name: ANTHROPIC_API_KEY
-      value: "${ANTHROPIC_API_KEY}"
-    - name: VISION_AGENT_API_KEY
-      value: "${VISION_AGENT_API_KEY}"
+    # AWS region for Bedrock and Secrets Manager
+    - name: AWS_REGION
+      value: "${AWS_REGION}"
+    # CORS - comma-separated allowed origins
+    - name: ALLOWED_ORIGINS
+      value: "${ALLOWED_ORIGINS}"
+    # API keys are retrieved from AWS Secrets Manager
+    # Optionally, you can still set these as env vars for local dev or override
+    # - name: VISION_AGENT_API_KEY
+    # - name: ANTHROPIC_API_KEY
+    # - name: GOOGLE_GEMINI_API_KEY
   runtime-version: 3.11

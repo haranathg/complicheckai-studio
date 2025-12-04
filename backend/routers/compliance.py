@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Any
 import os
 import json
 from datetime import datetime
+from services.aws_secrets import get_api_key
 
 router = APIRouter()
 
@@ -30,7 +31,10 @@ async def run_compliance_checks(request: ComplianceRequest):
 
     try:
         from anthropic import Anthropic
-        client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        api_key = get_api_key("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not found in environment or AWS Secrets Manager")
+        client = Anthropic(api_key=api_key)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to initialize Anthropic client: {str(e)}")
 
