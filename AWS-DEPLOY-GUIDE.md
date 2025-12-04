@@ -22,24 +22,31 @@ backend/
 └── routers/
 ```
 
-### 1.2 Update CORS in main.py
+### 1.2 Create IAM Role for Bedrock Access (Optional)
 
-Add your future Amplify domain (you can update this after deploy):
+If you want to use **Bedrock Claude** parser:
 
-```python
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://*.amplifyapp.com",  # Amplify domains
-        # Add your custom domain later if needed
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-```
+1. Go to **[IAM Console](https://console.aws.amazon.com/iam)** → Roles → Create role
+2. **Trusted entity:** AWS Service → App Runner
+3. **Permissions:** Create a custom policy:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Action": [
+           "bedrock:InvokeModel"
+         ],
+         "Resource": "arn:aws:bedrock:*::foundation-model/anthropic.*"
+       }
+     ]
+   }
+   ```
+4. Name the role: `AppRunnerBedrockRole`
+5. **Enable Claude models in Bedrock:**
+   - Go to **[Bedrock Console](https://console.aws.amazon.com/bedrock)** → Model access
+   - Request access to Anthropic Claude models
 
 ### 1.3 Create App Runner Service
 
@@ -57,13 +64,24 @@ app.add_middleware(
    - Service name: `landing-pdf-backend`
    - CPU: 1 vCPU (can start small)
    - Memory: 2 GB
-6. **Environment variables** (click "Add environment variable"):
+6. **Security** (for Bedrock access):
+   - Instance role: Select `AppRunnerBedrockRole` (created in step 1.2)
+7. **Environment variables** (click "Add environment variable"):
    ```
-   ANTHROPIC_API_KEY     = sk-ant-xxxxx
+   # Required for Landing AI parser
    VISION_AGENT_API_KEY  = your-landing-ai-key
+
+   # Required for Claude Vision parser (Anthropic API)
+   ANTHROPIC_API_KEY     = sk-ant-xxxxx
+
+   # Required for Gemini Vision parser
+   GOOGLE_GEMINI_API_KEY = your-gemini-key
+
+   # For Bedrock Claude parser (uses IAM role, no key needed)
+   AWS_REGION            = us-east-1
    ```
-7. Click **Create & deploy**
-8. Wait ~5 min → Copy your URL: `https://xxxxx.us-east-1.awsapprunner.com`
+8. Click **Create & deploy**
+9. Wait ~5 min → Copy your URL: `https://xxxxx.us-east-1.awsapprunner.com`
 
 ### 1.4 Test Backend
 
@@ -99,7 +117,13 @@ frontend/
    - Framework: should auto-detect Vite
 7. **Environment variables** (expand "Advanced settings"):
    ```
+   # Backend API URL (from App Runner)
    VITE_API_URL = https://xxxxx.us-east-1.awsapprunner.com
+
+   # Parser options - set to 'true' to enable each parser
+   VITE_ENABLE_CLAUDE_VISION   = true
+   VITE_ENABLE_GEMINI_VISION   = true
+   VITE_ENABLE_BEDROCK_CLAUDE  = true
    ```
    (Use the App Runner URL from Step 1)
 8. Click **Save and deploy**
@@ -109,14 +133,17 @@ frontend/
 
 ## Step 3: Update CORS (Final Step)
 
-Once you have your Amplify URL, update your backend's CORS:
+Once you have your Amplify URL, update your backend's CORS in `main.py`:
 
 ```python
-allow_origins=[
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://main.xxxxxxx.amplifyapp.com",  # Your actual Amplify URL
-],
+allowed_origins = os.getenv("ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:5173,https://main.xxxxxxx.amplifyapp.com"
+).split(",")
+```
+
+Or set via environment variable in App Runner:
+```
+ALLOWED_ORIGINS = http://localhost:3000,http://localhost:5173,https://main.xxxxxxx.amplifyapp.com
 ```
 
 Push the change → App Runner auto-deploys.
@@ -128,15 +155,32 @@ Push the change → App Runner auto-deploys.
 ### Env Variables Summary
 
 **App Runner (Backend):**
-| Variable | Value |
-|----------|-------|
-| `ANTHROPIC_API_KEY` | Your Anthropic API key |
-| `VISION_AGENT_API_KEY` | Your Landing.AI key |
+| Variable | Required For | Description |
+|----------|--------------|-------------|
+| `VISION_AGENT_API_KEY` | Landing AI parser | Your Landing.AI key |
+| `ANTHROPIC_API_KEY` | Claude Vision parser + Chat | Your Anthropic API key |
+| `GOOGLE_GEMINI_API_KEY` | Gemini Vision parser | Your Google Gemini key |
+| `AWS_REGION` | Bedrock Claude parser | AWS region (default: us-east-1) |
+| `ALLOWED_ORIGINS` | CORS | Comma-separated allowed origins |
+
+> **Note:** Bedrock Claude doesn't need an API key - it uses the IAM role attached to App Runner.
 
 **Amplify (Frontend):**
-| Variable | Value |
-|----------|-------|
-| `VITE_API_URL` | Your App Runner URL |
+| Variable | Description |
+|----------|-------------|
+| `VITE_API_URL` | Your App Runner backend URL |
+| `VITE_ENABLE_CLAUDE_VISION` | Show Claude Vision in dropdown (true/false) |
+| `VITE_ENABLE_GEMINI_VISION` | Show Gemini Vision in dropdown (true/false) |
+| `VITE_ENABLE_BEDROCK_CLAUDE` | Show Bedrock Claude in dropdown (true/false) |
+
+### Parser Options
+
+| Parser | Backend Requirement | Frontend Flag |
+|--------|---------------------|---------------|
+| Landing AI | `VISION_AGENT_API_KEY` | Always enabled |
+| Claude Vision | `ANTHROPIC_API_KEY` | `VITE_ENABLE_CLAUDE_VISION=true` |
+| Gemini Vision | `GOOGLE_GEMINI_API_KEY` | `VITE_ENABLE_GEMINI_VISION=true` |
+| Bedrock Claude | IAM Role + Bedrock access | `VITE_ENABLE_BEDROCK_CLAUDE=true` |
 
 ### Auto-Deploy
 
@@ -148,6 +192,7 @@ Both services auto-deploy when you push to your connected branch. No manual rede
 |---------|------|
 | App Runner | ~$5-15/mo (pauses when idle) |
 | Amplify Hosting | Free tier covers most dev usage |
+| Bedrock Claude | Pay per token (~$3/M input, $15/M output for Sonnet) |
 
 ---
 
@@ -162,6 +207,15 @@ Both services auto-deploy when you push to your connected branch. No manual rede
 - Check CORS settings include your Amplify domain
 - Verify `VITE_API_URL` doesn't have a trailing slash
 - Check browser console for errors
+
+### Bedrock Claude not working?
+- Verify IAM role is attached to App Runner service
+- Check Bedrock model access is enabled in your region
+- Ensure the role has `bedrock:InvokeModel` permission
+
+### Parser not showing in dropdown?
+- Check the `VITE_ENABLE_*` environment variable is set to `true`
+- Rebuild the Amplify app after changing env vars
 
 ### Build failing?
 - App Runner: Check build logs for Python errors
