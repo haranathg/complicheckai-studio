@@ -4,6 +4,7 @@ from typing import Optional
 from services.ade_service import ade_service
 from services.claude_vision_service import claude_vision_service
 from services.gemini_vision_service import gemini_vision_service
+from services.bedrock_vision_service import get_bedrock_vision_service
 import tempfile
 import os
 from pathlib import Path
@@ -24,7 +25,7 @@ async def parse_document(
 
     Args:
         file: The document to parse
-        parser: Parser to use - "landing_ai", "claude_vision", or "gemini_vision"
+        parser: Parser to use - "landing_ai", "claude_vision", "gemini_vision", or "bedrock_claude"
         model: For vision parsers, the model to use
     """
     if not file.filename:
@@ -62,6 +63,14 @@ async def parse_document(
         elif parser == "gemini_vision":
             vision_model = model or "gemini-2.0-flash"
             result = await gemini_vision_service.parse_document(
+                content,
+                file.filename,
+                vision_model
+            )
+        elif parser == "bedrock_claude":
+            bedrock_service = get_bedrock_vision_service()
+            vision_model = model or "anthropic.claude-3-5-sonnet-20241022-v2:0"
+            result = await bedrock_service.parse_document(
                 content,
                 file.filename,
                 vision_model

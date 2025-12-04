@@ -7,3 +7,4 @@ pydantic
 anthropic
 pymupdf
 google-generativeai
+boto3

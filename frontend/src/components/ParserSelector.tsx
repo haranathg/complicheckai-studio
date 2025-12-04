@@ -20,6 +20,11 @@ const PARSERS: ParserOption[] = [
     name: 'Gemini Vision',
     description: 'Google Gemini vision-based parsing',
   },
+  {
+    id: 'bedrock_claude',
+    name: 'Bedrock Claude',
+    description: 'AWS Bedrock Claude vision parsing',
+  },
 ];
 
 interface ParserSelectorProps {
