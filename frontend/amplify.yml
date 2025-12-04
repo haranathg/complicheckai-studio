@@ -6,8 +6,12 @@ frontend:
         - npm ci
     build:
       commands:
-        # Inject the backend URL at build time
+        # Inject environment variables at build time
+        # These are set in Amplify Console → Environment variables
         - echo "VITE_API_URL=$VITE_API_URL" >> .env.production
+        - echo "VITE_ENABLE_CLAUDE_VISION=$VITE_ENABLE_CLAUDE_VISION" >> .env.production
+        - echo "VITE_ENABLE_GEMINI_VISION=$VITE_ENABLE_GEMINI_VISION" >> .env.production
+        - echo "VITE_ENABLE_BEDROCK_CLAUDE=$VITE_ENABLE_BEDROCK_CLAUDE" >> .env.production
         - npm run build
   artifacts:
     baseDirectory: dist
