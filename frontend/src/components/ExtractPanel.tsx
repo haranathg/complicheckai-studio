@@ -154,16 +154,16 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
               />
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600 w-24">AI Model:</span>
+              <span className="text-sm text-gray-600 w-24">Chat/Compliance:</span>
               <ModelSelector
                 selectedModel={selectedModel}
                 onModelChange={onModelChange}
-                parser={selectedParser}
+                parser="bedrock_claude"
               />
             </div>
           </div>
           <p className="text-xs text-gray-400 mt-2">
-            Parser: Used for document processing. AI Model: Used for Chat, Compliance, and Claude Vision parsing.
+            Parser: Used for document processing. Chat/Compliance: Model used for Chat and Compliance checks.
           </p>
 
           {/* Usage Stats */}

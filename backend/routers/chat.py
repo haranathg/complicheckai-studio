@@ -8,6 +8,15 @@ import boto3
 
 router = APIRouter()
 
+# Bedrock model registry - maps friendly names to Bedrock model IDs
+BEDROCK_MODELS = {
+    "bedrock-claude-sonnet-3.5": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "bedrock-claude-opus-3": "anthropic.claude-3-opus-20240229-v1:0",
+    "bedrock-nova-pro": "amazon.nova-pro-v1:0",
+}
+
+DEFAULT_MODEL_ID = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+
 # Bedrock client - lazy init
 _bedrock_client = None
 
@@ -17,6 +26,10 @@ def get_bedrock_client():
         region = os.getenv("AWS_REGION", "ap-southeast-2")
         _bedrock_client = boto3.client("bedrock-runtime", region_name=region)
     return _bedrock_client
+
+def resolve_model_id(model: str) -> str:
+    """Convert friendly model name to Bedrock model ID."""
+    return BEDROCK_MODELS.get(model, model if model else DEFAULT_MODEL_ID)
 
 
 class ChatMessage(BaseModel):
@@ -74,7 +87,7 @@ When answering:
     messages = [{"role": msg.role, "content": msg.content} for msg in request.history]
     messages.append({"role": "user", "content": request.question})
 
-    model_id = request.model or "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    model_id = resolve_model_id(request.model)
 
     try:
         # Bedrock Claude API format

@@ -13,11 +13,12 @@ import type { ComplianceReport, ComplianceCheck } from './types/compliance';
 import { API_URL } from './config';
 import { isAuthenticated, logout } from './utils/auth';
 import { getDefaultModelForParser } from './components/ModelSelector';
+import { getParserType, getModelForParser } from './components/ParserSelector';
 import bundabergLogo from './assets/bundaberg.jpeg';
 import complianceConfig from './config/complianceChecks.json';
 
-// Default model and parser
-const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
+// Default model (for chat/compliance) and parser
+const DEFAULT_MODEL = 'bedrock-claude-sonnet-3.5';
 const DEFAULT_PARSER = 'landing_ai';
 
 function App() {
@@ -85,8 +86,14 @@ function App() {
 
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('parser', selectedParser);
-    if (selectedParser === 'claude_vision' || selectedParser === 'bedrock_claude') {
+    // Map frontend parser ID to backend parser type
+    const parserType = getParserType(selectedParser);
+    formData.append('parser', parserType);
+    // For Bedrock parsers, use the model from ParserSelector; otherwise use selectedModel
+    const bedrockModel = getModelForParser(selectedParser);
+    if (bedrockModel) {
+      formData.append('model', bedrockModel);
+    } else if (parserType === 'claude_vision') {
       formData.append('model', selectedModel);
     }
 

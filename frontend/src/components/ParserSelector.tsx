@@ -3,6 +3,7 @@ interface ParserOption {
   name: string;
   description: string;
   envFlag?: string; // Environment variable to check if enabled
+  model?: string; // For Bedrock, the specific model ID
 }
 
 const ALL_PARSERS: ParserOption[] = [
@@ -24,11 +25,27 @@ const ALL_PARSERS: ParserOption[] = [
     description: 'Google Gemini vision-based parsing',
     envFlag: 'VITE_ENABLE_GEMINI_VISION',
   },
+  // Individual Bedrock models as separate parser options
   {
-    id: 'bedrock_claude',
-    name: 'Bedrock Claude',
-    description: 'AWS Bedrock Claude vision parsing',
+    id: 'bedrock_claude_sonnet',
+    name: 'Bedrock Sonnet 3.5',
+    description: 'AWS Bedrock Claude Sonnet 3.5',
     envFlag: 'VITE_ENABLE_BEDROCK_CLAUDE',
+    model: 'bedrock-claude-sonnet-3.5',
+  },
+  {
+    id: 'bedrock_claude_opus',
+    name: 'Bedrock Opus 3',
+    description: 'AWS Bedrock Claude Opus 3',
+    envFlag: 'VITE_ENABLE_BEDROCK_CLAUDE',
+    model: 'bedrock-claude-opus-3',
+  },
+  {
+    id: 'bedrock_nova_pro',
+    name: 'Bedrock Nova Pro',
+    description: 'AWS Bedrock Nova Pro',
+    envFlag: 'VITE_ENABLE_BEDROCK_CLAUDE',
+    model: 'bedrock-nova-pro',
   },
 ];
 
@@ -42,6 +59,25 @@ const getEnabledParsers = (): ParserOption[] => {
     return envValue === 'true' || envValue === true;
   });
 };
+
+// Get the model for a parser (for Bedrock parsers)
+export function getModelForParser(parserId: string): string | undefined {
+  const parser = ALL_PARSERS.find(p => p.id === parserId);
+  return parser?.model;
+}
+
+// Check if parser is a Bedrock parser
+export function isBedrockParser(parserId: string): boolean {
+  return parserId.startsWith('bedrock_');
+}
+
+// Get the actual parser type to send to backend
+export function getParserType(parserId: string): string {
+  if (parserId.startsWith('bedrock_')) {
+    return 'bedrock_claude';
+  }
+  return parserId;
+}
 
 interface ParserSelectorProps {
   selectedParser: string;
