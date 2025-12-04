@@ -96,14 +96,10 @@ Create an IAM role with permissions for Bedrock and Secrets Manager:
    - Memory: 2 GB
 6. **Security:**
    - Instance role: Select `AppRunnerBedrockRole` (created in Step 2)
-7. **Environment variables** (click "Add environment variable"):
-
-   | Variable | Value |
-   |----------|-------|
-   | `AWS_REGION` | `ap-southeast-2` |
-   | `ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` |
-
-   > **Note:** API keys are retrieved from AWS Secrets Manager automatically.
+7. **Environment variables:**
+   - The `apprunner.yaml` already has default values for `AWS_REGION` and `ALLOWED_ORIGINS`
+   - You can override these in the console if needed (console values take precedence)
+   - API keys are retrieved from AWS Secrets Manager automatically
 
 8. Click **Create & deploy**
 9. Wait ~5 min → Copy your URL: `https://xxxxx.ap-southeast-2.awsapprunner.com`

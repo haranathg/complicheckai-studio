@@ -3,15 +3,13 @@ runtime: python311
 build:
   commands:
     build:
-      - pip install -r requirements.txt
+      - pip3 install -r requirements.txt
 run:
-  command: uvicorn main:app --host 0.0.0.0 --port 8080
+  command: python3 -m uvicorn main:app --host 0.0.0.0 --port 8080
   network:
     port: 8080
   env:
-    # AWS region for Bedrock and Secrets Manager
     - name: AWS_REGION
-      value: "${AWS_REGION}"
-    # CORS - comma-separated allowed origins
+      value: "ap-southeast-2"
     - name: ALLOWED_ORIGINS
-      value: "${ALLOWED_ORIGINS}"
+      value: "http://localhost:3000,http://localhost:5173"
