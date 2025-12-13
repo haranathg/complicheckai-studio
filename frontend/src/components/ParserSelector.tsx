@@ -88,8 +88,8 @@ export default function ParserSelector({ selectedParser, onParserChange }: Parse
   const enabledParsers = getEnabledParsers();
   const currentParser = enabledParsers.find(p => p.id === selectedParser) || enabledParsers[0];
 
-  // If only one parser is available, don't show the selector
-  if (enabledParsers.length <= 1) {
+  // If no parsers are available, don't show the selector
+  if (enabledParsers.length === 0) {
     return null;
   }
 
