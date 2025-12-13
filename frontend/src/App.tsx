@@ -14,7 +14,6 @@ import { API_URL } from './config';
 import { isAuthenticated, logout } from './utils/auth';
 import { getDefaultModelForParser } from './components/ModelSelector';
 import { getParserType, getModelForParser } from './components/ParserSelector';
-import urbancompassLogo from './assets/urbancompass.png';
 import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
 import complianceConfig from './config/complianceChecks.json';
 
@@ -155,11 +154,11 @@ function App() {
       {/* Header */}
       <header className="border-b border-slate-700/40 px-6 py-3" style={{ background: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(8px)' }}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <img
-              src={urbancompassLogo}
-              alt="UrbanCompass"
-              className="h-10 object-contain brightness-0 invert"
+              src={cognaifyLogo}
+              alt="Cognaify Solutions"
+              className="h-10 object-contain"
             />
             <div className="h-8 w-px bg-slate-700/40"></div>
             <div className="flex flex-col">

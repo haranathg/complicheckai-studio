@@ -12,4 +12,4 @@ run:
     - name: AWS_REGION
       value: "ap-southeast-2"
     - name: ALLOWED_ORIGINS
-      value: "http://localhost:3000,http://localhost:5173,https://main.d3prlfimutk3zt.amplifyapp.com"
+      value: "http://localhost:3000,http://localhost:5173,https://main.d3prlfimutk3zt.amplifyapp.com,https://main.d3rrtadjufwebu.amplifyapp.com,https://ccai.cognaify.com.au,https://complicheckai.cognaify.com.au"
