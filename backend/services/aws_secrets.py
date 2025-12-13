@@ -5,6 +5,7 @@ Falls back to environment variables if secrets are not found or if running local
 
 import os
 import json
+from typing import Optional
 import boto3
 from botocore.exceptions import ClientError
 from functools import lru_cache
@@ -19,7 +20,7 @@ SECRET_NAMES = {
 
 
 @lru_cache(maxsize=10)
-def get_secret(secret_name: str, region_name: str = None) -> str | None:
+def get_secret(secret_name: str, region_name: Optional[str] = None) -> Optional[str]:
     """
     Retrieve a secret from AWS Secrets Manager.
     Uses LRU cache to avoid repeated API calls for the same secret.
@@ -72,7 +73,7 @@ def get_secret(secret_name: str, region_name: str = None) -> str | None:
         return None
 
 
-def get_api_key(key_name: str) -> str | None:
+def get_api_key(key_name: str) -> Optional[str]:
     """
     Get an API key, trying AWS Secrets Manager first, then falling back to env vars.
 
