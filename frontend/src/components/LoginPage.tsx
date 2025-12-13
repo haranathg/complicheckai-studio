@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { validateAccessKey, setAuthenticated } from '../utils/auth';
-import urbancompassLogo from '../assets/urbancompass.png';
+import cognaifyLogo from '../assets/Cognaify-logo-white-bg.png';
 
 interface LoginPageProps {
   onAuthenticated: () => void;
@@ -34,9 +34,9 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
         {/* Logo and Header */}
         <div className="flex flex-col items-center mb-8">
           <img
-            src={urbancompassLogo}
-            alt="UrbanCompass"
-            className="h-16 object-contain mb-6 brightness-0 invert"
+            src={cognaifyLogo}
+            alt="Cognaify Solutions"
+            className="h-16 object-contain mb-6"
           />
           <div className="text-center">
             <h1 className="text-2xl font-semibold text-white">
@@ -113,8 +113,8 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
           <p className="text-xs text-gray-500">
             Need access? Contact your administrator.
           </p>
-          <p className="text-xs text-gray-500 mt-2">
-            Powered by <a href="https://urbancompasssoftware.com" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">UrbanCompass</a>
+          <p className="text-xs text-gray-500 mt-2 flex items-center justify-center gap-1">
+            Powered by <a href="https://cognaify.com" target="_blank" rel="noopener noreferrer" className="flex items-center"><img src={cognaifyLogo} alt="Cognaify Solutions" className="h-4 object-contain" /></a>
           </p>
         </div>
       </div>

@@ -15,6 +15,7 @@ import { isAuthenticated, logout } from './utils/auth';
 import { getDefaultModelForParser } from './components/ModelSelector';
 import { getParserType, getModelForParser } from './components/ParserSelector';
 import urbancompassLogo from './assets/urbancompass.png';
+import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
 import complianceConfig from './config/complianceChecks.json';
 
 // Default model (for chat/compliance) and parser
@@ -370,7 +371,12 @@ function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-700/40 px-6 py-2 text-xs text-gray-500 flex items-center justify-between" style={{ background: 'rgba(2, 6, 23, 0.8)' }}>
-        <span>Powered by CompliCheck<span className="bg-gradient-to-r from-sky-400 to-purple-500 bg-clip-text text-transparent font-medium">AI</span> from <a href="https://urbancompasssoftware.com" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">UrbanCompass</a></span>
+        <span className="flex items-center gap-2">
+          CompliCheck<span className="bg-gradient-to-r from-sky-400 to-purple-500 bg-clip-text text-transparent font-medium">AI</span> - powered by
+          <a href="https://cognaify.com" target="_blank" rel="noopener noreferrer" className="flex items-center">
+            <img src={cognaifyLogo} alt="Cognaify Solutions" className="h-5 object-contain" />
+          </a>
+        </span>
         {parseResult && (
           <span className="text-gray-400">
             {parseResult.chunks.length} components extracted
