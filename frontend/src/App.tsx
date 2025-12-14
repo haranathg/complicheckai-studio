@@ -371,7 +371,8 @@ function App() {
       {/* Footer */}
       <footer className="border-t border-slate-700/40 px-6 py-2 text-xs text-gray-500 flex items-center justify-between" style={{ background: 'rgba(2, 6, 23, 0.8)' }}>
         <span className="flex items-center gap-2">
-          CompliCheck<span className="bg-gradient-to-r from-sky-400 to-purple-500 bg-clip-text text-transparent font-medium">AI</span> - powered by
+          <span>CompliCheck<span className="bg-gradient-to-r from-sky-400 to-purple-500 bg-clip-text text-transparent font-medium">AI</span></span>
+          <span>- powered by</span>
           <a href="https://cognaify.com" target="_blank" rel="noopener noreferrer" className="flex items-center">
             <img src={cognaifyLogo} alt="Cognaify Solutions" className="h-5 object-contain" />
           </a>
