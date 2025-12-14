@@ -15,6 +15,7 @@ import { isAuthenticated, logout } from './utils/auth';
 import { getDefaultModelForParser } from './components/ModelSelector';
 import { getParserType, getModelForParser } from './components/ParserSelector';
 import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
+import cognaifySymbol from './assets/cognaify-symbol.png';
 import complianceConfig from './config/complianceChecks.json';
 
 // Default model (for chat/compliance) and parser
@@ -156,14 +157,14 @@ function App() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img
-              src={cognaifyLogo}
+              src={cognaifySymbol}
               alt="Cognaify Solutions"
               className="h-10 object-contain"
             />
             <div className="h-8 w-px bg-slate-700/40"></div>
             <div className="flex flex-col">
               <h1 className="text-lg font-semibold text-white leading-tight">
-                CompliCheck<span className="bg-gradient-to-r from-sky-400 via-purple-500 to-orange-500 bg-clip-text text-transparent">AI</span>
+                CompliCheck<span className="bg-gradient-to-r from-sky-400 via-purple-500 to-orange-500 bg-clip-text text-transparent">AI</span><sup className="text-[8px] text-gray-400 ml-0.5">TM</sup>
               </h1>
               <span className="text-xs text-gray-400">Document Compliance Studio</span>
             </div>
@@ -371,7 +372,7 @@ function App() {
       {/* Footer */}
       <footer className="border-t border-slate-700/40 px-6 py-2 text-xs text-gray-500 flex items-center justify-between" style={{ background: 'rgba(2, 6, 23, 0.8)' }}>
         <span className="flex items-center gap-2">
-          <span>CompliCheck<span className="bg-gradient-to-r from-sky-400 to-purple-500 bg-clip-text text-transparent font-medium">AI</span></span>
+          <span>CompliCheck<span className="bg-gradient-to-r from-sky-400 to-purple-500 bg-clip-text text-transparent font-medium">AI</span><sup className="text-[6px]">TM</sup></span>
           <span>- powered by</span>
           <a href="https://cognaify.com" target="_blank" rel="noopener noreferrer" className="flex items-center">
             <img src={cognaifyLogo} alt="Cognaify Solutions" className="h-5 object-contain" />
