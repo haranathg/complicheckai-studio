@@ -1,6 +1,4 @@
 import { useState, useRef } from 'react';
-import FileUpload from './components/FileUpload';
-import type { FileUploadRef } from './components/FileUpload';
 import PDFViewer from './components/PDFViewer';
 import TabNavigation from './components/TabNavigation';
 import ParseResults from './components/ParseResults';
@@ -8,6 +6,8 @@ import ChatPanel from './components/ChatPanel';
 import CompliancePanel from './components/CompliancePanel';
 import SettingsPanel from './components/SettingsPanel';
 import ProjectDocumentPanel from './components/ProjectDocumentPanel';
+import type { Project, Document } from './components/ProjectDocumentPanel';
+import UploadDialog from './components/UploadDialog';
 import LoginPage from './components/LoginPage';
 import type { ParseResponse, Chunk, TabType, ChatMessage } from './types/ade';
 import type { ComplianceReport, ComplianceCheck } from './types/compliance';
@@ -15,6 +15,7 @@ import { API_URL } from './config';
 import { isAuthenticated, logout } from './utils/auth';
 import { getDefaultModelForParser } from './components/ModelSelector';
 import { getParserType, getModelForParser } from './components/ParserSelector';
+import { uploadDocument } from './services/projectService';
 import { useTheme, getThemeStyles } from './contexts/ThemeContext';
 import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
 import cognaifySymbol from './assets/cognaify-symbol.png';
@@ -49,8 +50,14 @@ function App() {
 
   const [isPdfReady, setIsPdfReady] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [isUploadingToProject, setIsUploadingToProject] = useState(false);
+  const [projectRefreshKey, setProjectRefreshKey] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const fileUploadRef = useRef<FileUploadRef>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (uploadedFile: File, cachedResult?: ParseResponse) => {
     // Cancel any ongoing processing
@@ -119,6 +126,11 @@ function App() {
     } else if (parserType === 'claude_vision') {
       formData.append('model', selectedModel);
     }
+    // Add project/document context for caching
+    if (currentProject && currentDocument) {
+      formData.append('project_id', currentProject.id);
+      formData.append('document_id', currentDocument.id);
+    }
 
     try {
       const response = await fetch(`${API_URL}/api/parse`, {
@@ -134,6 +146,10 @@ function App() {
 
       const result = await response.json();
       setParseResult(result);
+      // Refresh document list to show cached badge if parsing was for a project document
+      if (currentProject && currentDocument) {
+        setProjectRefreshKey(prev => prev + 1);
+      }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         // Request was cancelled, don't show error
@@ -167,6 +183,51 @@ function App() {
     setSelectedModel(getDefaultModelForParser(parser));
   };
 
+  // Handle file input change - show dialog to choose project or not
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setPendingFile(selectedFile);
+      setIsUploadDialogOpen(true);
+    }
+    e.target.value = ''; // Reset input
+  };
+
+  // Upload to project and load
+  const handleUploadToProject = async () => {
+    if (!pendingFile || !currentProject) return;
+
+    setIsUploadingToProject(true);
+    try {
+      const doc = await uploadDocument(currentProject.id, pendingFile);
+      setCurrentDocument(doc);
+      setProjectRefreshKey(prev => prev + 1);
+      handleFileSelect(pendingFile);
+    } catch (err) {
+      console.error('Failed to upload to project:', err);
+      // Still load the file even if upload fails
+      handleFileSelect(pendingFile);
+    } finally {
+      setIsUploadingToProject(false);
+      setIsUploadDialogOpen(false);
+      setPendingFile(null);
+    }
+  };
+
+  // Just load file without saving to project
+  const handleUploadWithoutProject = () => {
+    if (pendingFile) {
+      handleFileSelect(pendingFile);
+    }
+    setIsUploadDialogOpen(false);
+    setPendingFile(null);
+  };
+
+  const handleUploadDialogClose = () => {
+    setIsUploadDialogOpen(false);
+    setPendingFile(null);
+  };
+
   // Show login page if not authenticated
   if (!authenticated) {
     return <LoginPage onAuthenticated={() => setAuthenticated(true)} />;
@@ -197,7 +258,6 @@ function App() {
                 {file.name}
               </span>
             )}
-            <FileUpload ref={fileUploadRef} onUpload={handleFileSelect} isLoading={isLoading} />
             {file && !parseResult && !isLoading && (
               <button
                 onClick={handleProcess}
@@ -282,16 +342,22 @@ function App() {
               targetPage={targetPage}
             />
           ) : (
-            <button
-              onClick={() => fileUploadRef.current?.triggerUpload()}
+            <label
               className={`h-full w-full flex flex-col items-center justify-center ${theme.textSubtle} hover:opacity-80 transition-opacity cursor-pointer`}
             >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp"
+                onChange={handleFileInputChange}
+                className="hidden"
+              />
               <svg className="w-20 h-20 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               <p className={`text-lg font-medium mb-2 ${theme.textSecondary}`}>Upload a document</p>
               <p className="text-sm">Supported formats: PDF, PNG, JPG, TIFF, BMP</p>
-            </button>
+            </label>
           )}
         </div>
 
@@ -303,6 +369,9 @@ function App() {
             onClearDocument={handleClearDocument}
             isLoading={isLoading}
             selectedParser={selectedParser}
+            onProjectChange={setCurrentProject}
+            onDocumentChange={setCurrentDocument}
+            refreshTrigger={projectRefreshKey}
           />
 
           <TabNavigation
@@ -421,6 +490,17 @@ function App() {
         } : undefined}
         parseCredits={parseResult?.metadata.credit_usage}
         parseUsage={parseResult?.metadata.usage}
+      />
+
+      {/* Upload Dialog */}
+      <UploadDialog
+        isOpen={isUploadDialogOpen}
+        onClose={handleUploadDialogClose}
+        onUploadToProject={handleUploadToProject}
+        onUploadWithoutProject={handleUploadWithoutProject}
+        currentProject={currentProject}
+        fileName={pendingFile?.name || ''}
+        isUploading={isUploadingToProject}
       />
     </div>
   );

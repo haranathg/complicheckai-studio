@@ -16,6 +16,9 @@ interface ProjectDocumentPanelProps {
   onClearDocument: () => void;
   isLoading: boolean;
   selectedParser: string;
+  onProjectChange?: (project: Project | null) => void;
+  onDocumentChange?: (document: Document | null) => void;
+  refreshTrigger?: number; // Increment to refresh document list
 }
 
 export default function ProjectDocumentPanel({
@@ -23,6 +26,9 @@ export default function ProjectDocumentPanel({
   onClearDocument,
   isLoading,
   selectedParser,
+  onProjectChange,
+  onDocumentChange,
+  refreshTrigger,
 }: ProjectDocumentPanelProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
@@ -40,9 +46,17 @@ export default function ProjectDocumentPanel({
     checkProjectsAvailable().then(setIsAvailable);
   }, []);
 
+  // Refresh document list when external trigger changes
+  useEffect(() => {
+    if (refreshTrigger !== undefined && refreshTrigger > 0) {
+      setRefreshKey(prev => prev + 1);
+    }
+  }, [refreshTrigger]);
+
   // When a document is selected, try to load its cached result
   const handleDocumentSelect = useCallback(async (doc: Document | null) => {
     setSelectedDocument(doc);
+    onDocumentChange?.(doc);
     setError(null);
 
     if (!doc || !selectedProject) {
@@ -98,7 +112,7 @@ export default function ProjectDocumentPanel({
     } finally {
       setIsFetchingCached(false);
     }
-  }, [selectedProject, selectedParser, onDocumentLoad]);
+  }, [selectedProject, selectedParser, onDocumentLoad, onDocumentChange]);
 
   // Handle file upload to project
   const handleUploadToProject = async (file: File) => {
@@ -114,6 +128,7 @@ export default function ProjectDocumentPanel({
     try {
       const doc = await uploadDocument(selectedProject.id, file);
       setSelectedDocument(doc);
+      onDocumentChange?.(doc);
       setRefreshKey(prev => prev + 1); // Refresh document list
       onDocumentLoad(file);
     } catch (err) {
@@ -130,6 +145,8 @@ export default function ProjectDocumentPanel({
   const handleProjectChange = (project: Project | null) => {
     setSelectedProject(project);
     setSelectedDocument(null);
+    onProjectChange?.(project);
+    onDocumentChange?.(null);
     onClearDocument();
   };
 
@@ -156,7 +173,7 @@ export default function ProjectDocumentPanel({
   return (
     <div className={`border-b ${theme.border}`}>
       {/* Project selector header */}
-      <div className={`flex items-center gap-3 px-4 py-2 border-b ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.4)' : 'rgba(248, 250, 252, 0.8)' }}>
+      <div className={`flex items-center gap-3 px-4 py-2 border-b ${theme.border} ${isDark ? 'bg-slate-800/40' : 'bg-slate-50'}`}>
         <ProjectSelector
           selectedProject={selectedProject}
           onProjectChange={handleProjectChange}
@@ -205,14 +222,14 @@ export default function ProjectDocumentPanel({
 
       {/* Error message */}
       {error && (
-        <div className={`px-4 py-2 text-sm text-red-400 ${isDark ? 'bg-red-900/20' : 'bg-red-50'}`}>
+        <div className={`px-4 py-2 text-sm ${isDark ? 'text-red-400 bg-red-900/20' : 'text-red-600 bg-red-50'}`}>
           {error}
         </div>
       )}
 
       {/* Document list */}
       {selectedProject && (
-        <div className="px-2 py-2 max-h-48 overflow-y-auto" style={{ background: isDark ? 'rgba(2, 6, 23, 0.3)' : 'rgba(248, 250, 252, 0.5)' }}>
+        <div className={`px-2 py-2 max-h-48 overflow-y-auto ${isDark ? 'bg-slate-900/30' : 'bg-white'}`}>
           <DocumentList
             key={`${selectedProject.id}-${refreshKey}`}
             project={selectedProject}

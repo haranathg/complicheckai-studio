@@ -117,8 +117,7 @@ export default function ProjectSelector({
       {/* Dropdown */}
       {isOpen && (
         <div
-          className={`absolute top-full left-0 mt-1 w-72 rounded-lg border ${theme.border} shadow-lg z-50`}
-          style={{ background: isDark ? '#1e293b' : '#ffffff' }}
+          className={`absolute top-full left-0 mt-1 w-72 rounded-lg border ${theme.border} shadow-lg z-50 ${isDark ? 'bg-slate-800' : 'bg-white'}`}
         >
           {/* Create new project */}
           {isCreating ? (
@@ -165,7 +164,7 @@ export default function ProjectSelector({
 
           {/* Error message */}
           {error && (
-            <div className={`px-3 py-2 text-sm text-red-400 bg-red-900/20 border-b ${theme.border}`}>
+            <div className={`px-3 py-2 text-sm border-b ${theme.border} ${isDark ? 'text-red-400 bg-red-900/20' : 'text-red-600 bg-red-50'}`}>
               {error}
             </div>
           )}

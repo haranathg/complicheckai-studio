@@ -1,3 +1,5 @@
+import { useTheme } from '../contexts/ThemeContext';
+
 interface ModelOption {
   id: string;
   name: string;
@@ -86,6 +88,7 @@ interface ModelSelectorProps {
 }
 
 export default function ModelSelector({ selectedModel, onModelChange, parser = 'claude_vision' }: ModelSelectorProps) {
+  const { isDark } = useTheme();
   const models = getModelsForParser(parser);
   const currentModel = models.find(m => m.id === selectedModel) || models[0];
 
@@ -94,17 +97,21 @@ export default function ModelSelector({ selectedModel, onModelChange, parser = '
       <select
         value={selectedModel}
         onChange={(e) => onModelChange(e.target.value)}
-        className="appearance-none bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-1.5 pr-8 text-sm text-gray-300 cursor-pointer hover:bg-slate-700/60 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
+        className={`appearance-none border rounded-lg px-3 py-1.5 pr-8 text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors ${
+          isDark
+            ? 'bg-slate-800/60 border-slate-600/50 text-gray-300 hover:bg-slate-700/60'
+            : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+        }`}
         title={`${currentModel.name}: ${currentModel.description} ($${currentModel.inputCost}/$${currentModel.outputCost} per 1M tokens)`}
       >
         {models.map((model) => (
-          <option key={model.id} value={model.id} className="bg-slate-800 text-gray-300">
+          <option key={model.id} value={model.id} className={isDark ? 'bg-slate-800 text-gray-300' : 'bg-white text-slate-700'}>
             {model.name} - ${model.inputCost}/${model.outputCost}
           </option>
         ))}
       </select>
       <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className={`w-4 h-4 ${isDark ? 'text-gray-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </div>

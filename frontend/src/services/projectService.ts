@@ -92,15 +92,11 @@ export async function deleteDocument(projectId: string, documentId: string): Pro
 }
 
 /**
- * Get the download URL for a document
+ * Get the download URL for a document (returns the backend proxy URL, not S3 directly)
  */
 export async function getDocumentDownloadUrl(projectId: string, documentId: string): Promise<string> {
-  const response = await fetch(`${API_URL}/api/projects/${projectId}/documents/${documentId}/download`);
-  if (!response.ok) {
-    throw new Error('Failed to get download URL');
-  }
-  const data = await response.json();
-  return data.url;
+  // Use the /file endpoint which proxies through the backend to avoid CORS issues
+  return `${API_URL}/api/projects/${projectId}/documents/${documentId}/file`;
 }
 
 /**

@@ -1,3 +1,5 @@
+import { useTheme } from '../contexts/ThemeContext';
+
 interface ParserOption {
   id: string;
   name: string;
@@ -85,6 +87,7 @@ interface ParserSelectorProps {
 }
 
 export default function ParserSelector({ selectedParser, onParserChange }: ParserSelectorProps) {
+  const { isDark } = useTheme();
   const enabledParsers = getEnabledParsers();
   const currentParser = enabledParsers.find(p => p.id === selectedParser) || enabledParsers[0];
 
@@ -98,17 +101,21 @@ export default function ParserSelector({ selectedParser, onParserChange }: Parse
       <select
         value={selectedParser}
         onChange={(e) => onParserChange(e.target.value)}
-        className="appearance-none bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-1.5 pr-8 text-sm text-gray-300 cursor-pointer hover:bg-slate-700/60 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
+        className={`appearance-none border rounded-lg px-3 py-1.5 pr-8 text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors ${
+          isDark
+            ? 'bg-slate-800/60 border-slate-600/50 text-gray-300 hover:bg-slate-700/60'
+            : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+        }`}
         title={`${currentParser.name}: ${currentParser.description}`}
       >
         {enabledParsers.map((parser) => (
-          <option key={parser.id} value={parser.id} className="bg-slate-800 text-gray-300">
+          <option key={parser.id} value={parser.id} className={isDark ? 'bg-slate-800 text-gray-300' : 'bg-white text-slate-700'}>
             {parser.name}
           </option>
         ))}
       </select>
       <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className={`w-4 h-4 ${isDark ? 'text-gray-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </div>

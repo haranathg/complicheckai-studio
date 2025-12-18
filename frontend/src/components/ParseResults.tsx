@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { ParseResponse, Chunk } from '../types/ade';
 import { getChunkColor } from '../utils/boundingBox';
 import { getMarkdownPreview } from '../utils/cleanMarkdown';
+import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 
 interface ParseResultsProps {
   result: ParseResponse | null;
@@ -22,6 +23,8 @@ export default function ParseResults({
   onChunkSelect,
   isLoading,
 }: ParseResultsProps) {
+  const { isDark } = useTheme();
+  const theme = getThemeStyles(isDark);
   const [viewMode, setViewMode] = useState<ViewMode>('components');
   const [filter, setFilter] = useState<string>('all');
   const chunkRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -47,21 +50,21 @@ export default function ParseResults({
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-400">
+      <div className={`flex flex-col items-center justify-center h-full ${theme.textMuted}`}>
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-400 mb-4"></div>
-        <p className="text-gray-300">Parsing document...</p>
-        <p className="text-sm text-gray-500 mt-2">This may take a moment</p>
+        <p className={theme.textSecondary}>Parsing document...</p>
+        <p className={`text-sm ${theme.textSubtle} mt-2`}>This may take a moment</p>
       </div>
     );
   }
 
   if (!result) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-500">
+      <div className={`flex flex-col items-center justify-center h-full ${theme.textSubtle}`}>
         <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        <p className="text-gray-400">Upload a document to see parsed results</p>
+        <p className={theme.textMuted}>Upload a document to see parsed results</p>
       </div>
     );
   }
@@ -75,29 +78,29 @@ export default function ParseResults({
   return (
     <div className="h-full flex flex-col">
       {/* Header with metadata */}
-      <div className="rounded-xl p-4 mb-4 border border-slate-700/40" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
-        <h3 className="font-semibold text-gray-200 mb-2">Document Info</h3>
+      <div className={`rounded-xl p-4 mb-4 border ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : '#ffffff' }}>
+        <h3 className={`font-semibold ${theme.textPrimary} mb-2`}>Document Info</h3>
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <span className="text-gray-500">Pages:</span>
-            <span className="ml-2 font-medium text-gray-300">{result.metadata.page_count || 'N/A'}</span>
+            <span className={theme.textSubtle}>Pages:</span>
+            <span className={`ml-2 font-medium ${theme.textSecondary}`}>{result.metadata.page_count || 'N/A'}</span>
           </div>
           <div>
-            <span className="text-gray-500">Components:</span>
-            <span className="ml-2 font-medium text-gray-300">{result.chunks.length}</span>
+            <span className={theme.textSubtle}>Components:</span>
+            <span className={`ml-2 font-medium ${theme.textSecondary}`}>{result.chunks.length}</span>
           </div>
         </div>
       </div>
 
       {/* View mode toggle and filter */}
       <div className="flex items-center gap-4 mb-4">
-        <div className="flex bg-slate-800/60 rounded-lg p-1 border border-slate-700/40">
+        <div className={`flex rounded-lg p-1 border ${theme.border}`} style={{ background: isDark ? 'rgba(30, 41, 59, 0.6)' : '#f1f5f9' }}>
           <button
             onClick={() => setViewMode('components')}
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
               viewMode === 'components'
-                ? 'bg-slate-700 text-white shadow-sm'
-                : 'text-gray-400 hover:text-gray-200'
+                ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
+                : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             Components
@@ -106,8 +109,8 @@ export default function ParseResults({
             onClick={() => setViewMode('markdown')}
             className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
               viewMode === 'markdown'
-                ? 'bg-slate-700 text-white shadow-sm'
-                : 'text-gray-400 hover:text-gray-200'
+                ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
+                : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             Markdown
@@ -118,11 +121,15 @@ export default function ParseResults({
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="bg-slate-800/60 border border-slate-600/50 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className={`border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+              isDark
+                ? 'bg-slate-800/60 border-slate-600/50 text-gray-300'
+                : 'bg-white border-slate-300 text-slate-700'
+            }`}
           >
-            <option value="all" className="bg-slate-800">All types ({result.chunks.length})</option>
+            <option value="all">All types ({result.chunks.length})</option>
             {chunkTypes.map((type) => (
-              <option key={type} value={type} className="bg-slate-800">
+              <option key={type} value={type}>
                 {type} ({result.chunks.filter((c) => c.type === type).length})
               </option>
             ))}
@@ -133,8 +140,8 @@ export default function ParseResults({
       {/* Content */}
       <div className="flex-1 overflow-auto flex flex-col">
         {viewMode === 'markdown' ? (
-          <div className="rounded-xl border border-slate-700/40 p-4" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
-            <pre className="whitespace-pre-wrap text-sm font-mono text-gray-300 overflow-x-auto">
+          <div className={`rounded-xl border p-4 ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : '#ffffff' }}>
+            <pre className={`whitespace-pre-wrap text-sm font-mono ${theme.textSecondary} overflow-x-auto`}>
               {result.markdown}
             </pre>
           </div>
@@ -155,10 +162,14 @@ export default function ParseResults({
                     p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md
                     ${highlightedChunk?.id === chunk.id
                       ? 'border-sky-500 ring-2 ring-sky-500/50 border-2'
-                      : 'border-slate-700/40 hover:border-slate-600'
+                      : isDark ? 'border-slate-700/40 hover:border-slate-600' : 'border-slate-200 hover:border-slate-300'
                     }
                   `}
-                  style={{ background: highlightedChunk?.id === chunk.id ? 'rgba(14, 165, 233, 0.1)' : 'rgba(2, 6, 23, 0.6)' }}
+                  style={{
+                    background: highlightedChunk?.id === chunk.id
+                      ? (isDark ? 'rgba(14, 165, 233, 0.1)' : 'rgba(186, 230, 253, 0.3)')
+                      : (isDark ? 'rgba(2, 6, 23, 0.6)' : '#ffffff')
+                  }}
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <span
@@ -168,12 +179,12 @@ export default function ParseResults({
                       {chunk.type}
                     </span>
                     {chunk.grounding && (
-                      <span className="text-xs text-gray-500">
+                      <span className={`text-xs ${theme.textSubtle}`}>
                         Page {chunk.grounding.page + 1}
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-300 line-clamp-3">
+                  <p className={`text-sm ${theme.textSecondary} line-clamp-3`}>
                     {getMarkdownPreview(chunk.markdown, 200)}
                     {chunk.markdown.length > 200 && (
                       <button
@@ -198,16 +209,19 @@ export default function ParseResults({
       {/* Modal popup for viewing full chunk content */}
       {popupChunk && (
         <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          className={`fixed inset-0 flex items-center justify-center z-50 p-4 ${isDark ? 'bg-black/70' : 'bg-black/50'}`}
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               onPopupOpen(null);
             }
           }}
         >
-          <div className="rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col border border-slate-700/40" style={{ background: 'radial-gradient(circle at top left, rgba(30, 64, 175, 0.2), #020617 65%)' }}>
+          <div
+            className={`rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col border ${theme.border}`}
+            style={{ background: isDark ? 'radial-gradient(circle at top left, rgba(30, 64, 175, 0.2), #020617 65%)' : '#ffffff' }}
+          >
             {/* Modal header */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-700/40">
+            <div className={`flex items-center justify-between p-4 border-b ${theme.border}`}>
               <div className="flex items-center gap-3">
                 <span
                   className="px-3 py-1 rounded text-sm font-medium text-white"
@@ -216,17 +230,17 @@ export default function ParseResults({
                   {popupChunk.type}
                 </span>
                 {popupChunk.grounding && (
-                  <span className="text-sm text-gray-400">
+                  <span className={`text-sm ${theme.textMuted}`}>
                     Page {popupChunk.grounding.page + 1}
                   </span>
                 )}
-                <span className="text-sm text-gray-500">
+                <span className={`text-sm ${theme.textSubtle}`}>
                   {popupChunk.markdown.length} characters
                 </span>
               </div>
               <button
                 onClick={() => onPopupOpen(null)}
-                className="text-gray-400 hover:text-gray-200 p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
+                className={`p-2 rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-gray-200 hover:bg-slate-700/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
                 title="Close (Esc)"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -237,14 +251,17 @@ export default function ParseResults({
 
             {/* Modal content */}
             <div className="flex-1 overflow-auto p-4">
-              <pre className="whitespace-pre-wrap text-sm font-mono text-gray-300 leading-relaxed">
+              <pre className={`whitespace-pre-wrap text-sm font-mono ${theme.textSecondary} leading-relaxed`}>
                 {popupChunk.markdown}
               </pre>
             </div>
 
             {/* Modal footer */}
-            <div className="flex items-center justify-between p-4 border-t border-slate-700/40 rounded-b-xl" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
-              <span className="text-xs text-gray-500">Press Esc or click outside to close</span>
+            <div
+              className={`flex items-center justify-between p-4 border-t ${theme.border} rounded-b-xl`}
+              style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : 'rgba(248, 250, 252, 0.9)' }}
+            >
+              <span className={`text-xs ${theme.textSubtle}`}>Press Esc or click outside to close</span>
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(popupChunk.markdown);

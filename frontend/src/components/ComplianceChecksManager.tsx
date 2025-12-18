@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ComplianceCheck } from '../types/compliance';
+import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 
 interface ComplianceChecksManagerProps {
   completenessChecks: ComplianceCheck[];
@@ -21,6 +22,8 @@ export default function ComplianceChecksManager({
   onCompletenessChecksChange,
   onComplianceChecksChange,
 }: ComplianceChecksManagerProps) {
+  const { isDark } = useTheme();
+  const theme = getThemeStyles(isDark);
   const [activeTab, setActiveTab] = useState<CheckType>('completeness');
   const [editingCheck, setEditingCheck] = useState<ComplianceCheck | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -91,15 +94,15 @@ export default function ComplianceChecksManager({
   };
 
   return (
-    <div className="border rounded-lg bg-white">
+    <div className={`border rounded-lg ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : '#ffffff' }}>
       {/* Header */}
-      <div className="p-4 border-b bg-gray-50 rounded-t-lg">
+      <div className={`p-4 border-b ${theme.border} rounded-t-lg`} style={{ background: isDark ? 'rgba(15, 23, 42, 0.8)' : '#f9fafb' }}>
         <div className="flex items-center justify-between">
-          <h4 className="text-sm font-medium text-gray-700">Compliance Checks Configuration</h4>
+          <h4 className={`text-sm font-medium ${theme.textSecondary}`}>Compliance Checks Configuration</h4>
           <button
             onClick={handleAdd}
             disabled={!!editingCheck}
-            className="text-xs px-3 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+            className="text-xs px-3 py-1.5 bg-sky-500 text-white rounded hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -114,8 +117,8 @@ export default function ComplianceChecksManager({
             onClick={() => { setActiveTab('completeness'); setEditingCheck(null); }}
             className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
               activeTab === 'completeness'
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-sky-500/20 text-sky-400'
+                : isDark ? 'bg-slate-700/60 text-gray-400 hover:bg-slate-600/60' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
             Completeness ({completenessChecks.length})
@@ -124,8 +127,8 @@ export default function ComplianceChecksManager({
             onClick={() => { setActiveTab('compliance'); setEditingCheck(null); }}
             className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
               activeTab === 'compliance'
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-sky-500/20 text-sky-400'
+                : isDark ? 'bg-slate-700/60 text-gray-400 hover:bg-slate-600/60' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
             Compliance ({complianceChecks.length})
@@ -135,64 +138,74 @@ export default function ComplianceChecksManager({
 
       {/* Edit Form */}
       {editingCheck && (
-        <div className="p-4 border-b bg-blue-50">
-          <h5 className="text-xs font-medium text-gray-600 mb-3">
+        <div className={`p-4 border-b ${theme.border}`} style={{ background: isDark ? 'rgba(14, 165, 233, 0.1)' : '#eff6ff' }}>
+          <h5 className={`text-xs font-medium ${theme.textMuted} mb-3`}>
             {isAdding ? 'Add New Check' : 'Edit Check'}
           </h5>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Name *</label>
+                <label className={`block text-xs ${theme.textSubtle} mb-1`}>Name *</label>
                 <input
                   type="text"
                   value={editingCheck.name}
                   onChange={(e) => updateEditingCheck({ name: e.target.value })}
                   placeholder="Check name"
-                  className="w-full text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className={`w-full text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500 ${
+                    isDark ? 'bg-slate-800/60 border-slate-600/50 text-gray-300' : 'bg-white border-slate-300 text-slate-700'
+                  }`}
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Category</label>
+                <label className={`block text-xs ${theme.textSubtle} mb-1`}>Category</label>
                 <select
                   value={editingCheck.category}
                   onChange={(e) => updateEditingCheck({ category: e.target.value })}
-                  className="w-full text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className={`w-full text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500 ${
+                    isDark ? 'bg-slate-800/60 border-slate-600/50 text-gray-300' : 'bg-white border-slate-300 text-slate-700'
+                  }`}
                 >
                   {CATEGORIES[activeTab].map(cat => (
-                    <option key={cat} value={cat}>{cat.replace('_', ' ')}</option>
+                    <option key={cat} value={cat} className={isDark ? 'bg-slate-800 text-gray-300' : 'bg-white text-slate-700'}>{cat.replace('_', ' ')}</option>
                   ))}
                 </select>
               </div>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Description</label>
+              <label className={`block text-xs ${theme.textSubtle} mb-1`}>Description</label>
               <input
                 type="text"
                 value={editingCheck.description}
                 onChange={(e) => updateEditingCheck({ description: e.target.value })}
                 placeholder="What this check verifies"
-                className="w-full text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className={`w-full text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500 ${
+                  isDark ? 'bg-slate-800/60 border-slate-600/50 text-gray-300' : 'bg-white border-slate-300 text-slate-700'
+                }`}
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Search Terms (comma separated)</label>
+              <label className={`block text-xs ${theme.textSubtle} mb-1`}>Search Terms (comma separated)</label>
               <input
                 type="text"
                 value={editingCheck.search_terms?.join(', ') || ''}
                 onChange={(e) => handleSearchTermsChange(e.target.value)}
                 placeholder="term1, term2, term3"
-                className="w-full text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className={`w-full text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500 ${
+                  isDark ? 'bg-slate-800/60 border-slate-600/50 text-gray-300' : 'bg-white border-slate-300 text-slate-700'
+                }`}
               />
             </div>
             {activeTab === 'compliance' && (
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Rule Reference</label>
+                <label className={`block text-xs ${theme.textSubtle} mb-1`}>Rule Reference</label>
                 <input
                   type="text"
                   value={editingCheck.rule_reference || ''}
                   onChange={(e) => updateEditingCheck({ rule_reference: e.target.value })}
                   placeholder="e.g., District Plan - Site Coverage"
-                  className="w-full text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className={`w-full text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-sky-500 ${
+                    isDark ? 'bg-slate-800/60 border-slate-600/50 text-gray-300' : 'bg-white border-slate-300 text-slate-700'
+                  }`}
                 />
               </div>
             )}
@@ -205,20 +218,20 @@ export default function ComplianceChecksManager({
                   onChange={(e) => updateEditingCheck({ required: e.target.checked })}
                   className="rounded"
                 />
-                <label htmlFor="required" className="text-xs text-gray-600">Required field</label>
+                <label htmlFor="required" className={`text-xs ${theme.textMuted}`}>Required field</label>
               </div>
             )}
             <div className="flex gap-2 pt-2">
               <button
                 onClick={handleSave}
                 disabled={!editingCheck.name.trim()}
-                className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 text-xs bg-sky-500 text-white rounded hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isAdding ? 'Add' : 'Save'}
               </button>
               <button
                 onClick={handleCancel}
-                className="px-3 py-1.5 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                className={`px-3 py-1.5 text-xs rounded ${isDark ? 'bg-slate-700/60 text-gray-300 hover:bg-slate-600/60' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
               >
                 Cancel
               </button>
@@ -230,15 +243,18 @@ export default function ComplianceChecksManager({
       {/* Checks List */}
       <div className="max-h-64 overflow-auto">
         {checks.length === 0 ? (
-          <div className="p-4 text-center text-gray-400 text-sm">
+          <div className={`p-4 text-center text-sm ${theme.textSubtle}`}>
             No checks configured. Click "Add Check" to create one.
           </div>
         ) : (
-          <div className="divide-y">
+          <div className={`divide-y ${isDark ? 'divide-slate-700/40' : 'divide-gray-200'}`}>
             {checks.map((check) => (
               <div
                 key={check.id}
-                className={`p-3 hover:bg-gray-50 ${expandedId === check.id ? 'bg-gray-50' : ''}`}
+                className={`p-3 ${isDark
+                  ? `hover:bg-slate-800/40 ${expandedId === check.id ? 'bg-slate-800/40' : ''}`
+                  : `hover:bg-gray-50 ${expandedId === check.id ? 'bg-gray-50' : ''}`
+                }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div
@@ -246,24 +262,24 @@ export default function ComplianceChecksManager({
                     onClick={() => setExpandedId(expandedId === check.id ? null : check.id)}
                   >
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-700">{check.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">
+                      <span className={`text-sm font-medium ${theme.textSecondary}`}>{check.name}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${isDark ? 'bg-slate-700/60 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
                         {check.category.replace('_', ' ')}
                       </span>
                       {activeTab === 'completeness' && check.required && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-600 rounded">
+                        <span className="text-[10px] px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded">
                           required
                         </span>
                       )}
                     </div>
                     {expandedId === check.id && (
-                      <div className="mt-2 text-xs text-gray-500 space-y-1">
+                      <div className={`mt-2 text-xs ${theme.textSubtle} space-y-1`}>
                         <p>{check.description}</p>
                         {check.search_terms && check.search_terms.length > 0 && (
-                          <p><span className="text-gray-400">Search terms:</span> {check.search_terms.join(', ')}</p>
+                          <p><span className={theme.textSubtle}>Search terms:</span> {check.search_terms.join(', ')}</p>
                         )}
                         {check.rule_reference && (
-                          <p><span className="text-gray-400">Rule:</span> {check.rule_reference}</p>
+                          <p><span className={theme.textSubtle}>Rule:</span> {check.rule_reference}</p>
                         )}
                       </div>
                     )}
@@ -272,7 +288,7 @@ export default function ComplianceChecksManager({
                     <button
                       onClick={() => handleEdit(check)}
                       disabled={!!editingCheck}
-                      className="p-1 text-gray-400 hover:text-blue-500 disabled:opacity-30"
+                      className={`p-1 ${theme.textSubtle} hover:text-sky-400 disabled:opacity-30`}
                       title="Edit"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -282,7 +298,7 @@ export default function ComplianceChecksManager({
                     <button
                       onClick={() => handleDelete(check.id)}
                       disabled={!!editingCheck}
-                      className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-30"
+                      className={`p-1 ${theme.textSubtle} hover:text-red-400 disabled:opacity-30`}
                       title="Delete"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -298,8 +314,8 @@ export default function ComplianceChecksManager({
       </div>
 
       {/* Footer */}
-      <div className="p-3 border-t bg-gray-50 rounded-b-lg">
-        <p className="text-[10px] text-gray-400">
+      <div className={`p-3 border-t ${theme.border} rounded-b-lg`} style={{ background: isDark ? 'rgba(15, 23, 42, 0.8)' : '#f9fafb' }}>
+        <p className={`text-[10px] ${theme.textSubtle}`}>
           {activeTab === 'completeness'
             ? 'Completeness checks verify that required information is present in the document.'
             : 'Compliance checks verify that values meet regulatory requirements and thresholds.'}
