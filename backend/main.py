@@ -60,12 +60,33 @@ app.include_router(batch.router, prefix="/api/projects", tags=["batch"])
 
 @app.get("/health")
 def health_check():
-    """Health check endpoint."""
+    """Health check endpoint with database ping to keep connection alive."""
+    from sqlalchemy import text
+
     database_url = os.getenv("DATABASE_URL")
     s3_bucket = os.getenv("S3_BUCKET")
+    db_healthy = False
+    db_error = None
+
+    # Ping the database to keep it active (prevents Neon from suspending)
+    if database_url:
+        try:
+            from database import SessionLocal
+            if SessionLocal:
+                db = SessionLocal()
+                try:
+                    db.execute(text("SELECT 1"))
+                    db_healthy = True
+                finally:
+                    db.close()
+        except Exception as e:
+            db_error = str(e)
+
     return {
-        "status": "healthy",
+        "status": "healthy" if (not database_url or db_healthy) else "degraded",
         "database_configured": bool(database_url),
+        "database_healthy": db_healthy,
+        "database_error": db_error,
         "s3_configured": bool(s3_bucket)
     }
 
