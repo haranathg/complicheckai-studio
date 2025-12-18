@@ -31,16 +31,11 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'radial-gradient(circle at top, #111827 0%, #020617 55%, #000 100%)' }}>
       <div className="max-w-md w-full p-8 rounded-2xl border border-slate-700/40" style={{ background: 'radial-gradient(circle at top left, rgba(30, 64, 175, 0.35), #020617 65%)', boxShadow: '0 12px 35px rgba(15, 23, 42, 0.7)' }}>
-        {/* Logo and Header */}
+        {/* Header */}
         <div className="flex flex-col items-center mb-8">
-          <img
-            src={cognaifyLogo}
-            alt="Cognaify Solutions"
-            className="h-16 object-contain mb-6"
-          />
           <div className="text-center">
             <h1 className="text-2xl font-semibold text-white">
-              CompliCheck<span className="bg-gradient-to-r from-sky-400 via-purple-500 to-orange-500 bg-clip-text text-transparent">AI</span>
+              CompliCheck<span className="bg-gradient-to-r from-sky-400 via-purple-500 to-orange-500 bg-clip-text text-transparent">AI</span><sup className="text-[10px] text-gray-400 ml-0.5">TM</sup>
             </h1>
             <p className="text-sm text-gray-400 mt-1">
               Document Compliance Studio
