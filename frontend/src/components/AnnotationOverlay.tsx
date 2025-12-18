@@ -72,21 +72,13 @@ export default function AnnotationOverlay({
         onClick?.();
       }}
     >
-      {/* Sticky note header */}
-      <div
-        className="px-2 py-1 text-xs font-semibold border-b flex items-center justify-between"
-        style={{ borderColor: borderColor }}
-      >
-        <span className="capitalize text-gray-800">
-          {annotation.level}
-        </span>
-        {annotation.status === 'resolved' && (
-          <span className="text-green-700 text-[10px]">✓</span>
-        )}
-      </div>
+      {/* Resolved indicator */}
+      {annotation.status === 'resolved' && (
+        <div className="absolute top-1 right-1 text-green-700 text-xs font-bold">✓</div>
+      )}
 
       {/* Sticky note content */}
-      <div className="px-2 py-1.5">
+      <div className="px-2 py-1.5 pt-2">
         <p
           className={`text-xs text-gray-800 leading-tight ${
             isExpanded ? '' : 'line-clamp-2'

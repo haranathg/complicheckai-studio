@@ -21,6 +21,7 @@ interface PDFViewerProps {
   annotations?: Annotation[];
   selectedAnnotation?: Annotation | null;
   onAnnotationClick?: (annotation: Annotation) => void;
+  showChunks?: boolean;
 }
 
 export default function PDFViewer({
@@ -34,6 +35,7 @@ export default function PDFViewer({
   annotations = [],
   selectedAnnotation,
   onAnnotationClick,
+  showChunks = true,
 }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -324,7 +326,8 @@ export default function PDFViewer({
                     }
                   />
                   {/* Chunk Overlays - positioned to match canvas exactly */}
-                  {pageSize.width > 0 && (
+                  {/* When showChunks is false (Review tab), only show chunks linked to annotations */}
+                  {pageSize.width > 0 && (showChunks || pageAnnotations.some(a => a.chunk_id)) && (
                     <div
                       className="absolute pointer-events-none"
                       style={{
@@ -334,7 +337,9 @@ export default function PDFViewer({
                         height: pageSize.height,
                       }}
                     >
-                      {pageChunks.map((chunk) => (
+                      {pageChunks
+                        .filter(chunk => showChunks || pageAnnotations.some(a => a.chunk_id === chunk.id))
+                        .map((chunk) => (
                         <ChunkOverlay
                           key={chunk.id}
                           chunk={chunk}
@@ -400,24 +405,45 @@ export default function PDFViewer({
 
       {/* Legend */}
       <div className="bg-white border-t px-4 py-2 flex flex-wrap gap-3 text-xs">
-        <span className="text-gray-500 font-medium">Component types:</span>
-        {['text', 'table', 'figure', 'title', 'caption', 'form_field'].map((type) => (
-          <span key={type} className="flex items-center gap-1">
-            <span
-              className="w-3 h-3 rounded"
-              style={{
-                backgroundColor:
-                  type === 'text' ? 'rgba(59, 130, 246, 0.5)' :
-                  type === 'table' ? 'rgba(34, 197, 94, 0.5)' :
-                  type === 'figure' ? 'rgba(249, 115, 22, 0.5)' :
-                  type === 'title' ? 'rgba(168, 85, 247, 0.5)' :
-                  type === 'caption' ? 'rgba(236, 72, 153, 0.5)' :
-                  'rgba(20, 184, 166, 0.5)',
-              }}
-            />
-            {type}
-          </span>
-        ))}
+        {showChunks ? (
+          <>
+            <span className="text-gray-500 font-medium">Component types:</span>
+            {['text', 'table', 'figure', 'title', 'caption', 'form_field'].map((type) => (
+              <span key={type} className="flex items-center gap-1">
+                <span
+                  className="w-3 h-3 rounded"
+                  style={{
+                    backgroundColor:
+                      type === 'text' ? 'rgba(59, 130, 246, 0.5)' :
+                      type === 'table' ? 'rgba(34, 197, 94, 0.5)' :
+                      type === 'figure' ? 'rgba(249, 115, 22, 0.5)' :
+                      type === 'title' ? 'rgba(168, 85, 247, 0.5)' :
+                      type === 'caption' ? 'rgba(236, 72, 153, 0.5)' :
+                      'rgba(20, 184, 166, 0.5)',
+                  }}
+                />
+                {type}
+              </span>
+            ))}
+          </>
+        ) : (
+          <>
+            <span className="text-gray-500 font-medium">Annotation levels:</span>
+            {[
+              { level: 'page', color: 'rgba(251, 191, 36, 0.85)' },
+              { level: 'document', color: 'rgba(96, 165, 250, 0.85)' },
+              { level: 'project', color: 'rgba(74, 222, 128, 0.85)' },
+            ].map(({ level, color }) => (
+              <span key={level} className="flex items-center gap-1">
+                <span
+                  className="w-3 h-3 rounded"
+                  style={{ backgroundColor: color }}
+                />
+                {level}
+              </span>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );
