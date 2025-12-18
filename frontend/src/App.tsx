@@ -1,12 +1,12 @@
 import { useState, useRef } from 'react';
 import FileUpload from './components/FileUpload';
+import type { FileUploadRef } from './components/FileUpload';
 import PDFViewer from './components/PDFViewer';
 import TabNavigation from './components/TabNavigation';
 import ParseResults from './components/ParseResults';
-import ExtractPanel from './components/ExtractPanel';
 import ChatPanel from './components/ChatPanel';
 import CompliancePanel from './components/CompliancePanel';
-import ComplianceChecksManager from './components/ComplianceChecksManager';
+import SettingsPanel from './components/SettingsPanel';
 import LoginPage from './components/LoginPage';
 import type { ParseResponse, Chunk, TabType, ChatMessage } from './types/ade';
 import type { ComplianceReport, ComplianceCheck } from './types/compliance';
@@ -47,7 +47,9 @@ function App() {
   );
 
   const [isPdfReady, setIsPdfReady] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const fileUploadRef = useRef<FileUploadRef>(null);
 
   const handleFileSelect = (uploadedFile: File) => {
     // Cancel any ongoing processing
@@ -178,7 +180,7 @@ function App() {
                 {file.name}
               </span>
             )}
-            <FileUpload onUpload={handleFileSelect} isLoading={isLoading} />
+            <FileUpload ref={fileUploadRef} onUpload={handleFileSelect} isLoading={isLoading} />
             {file && !parseResult && !isLoading && (
               <button
                 onClick={handleProcess}
@@ -206,6 +208,16 @@ function App() {
                 <span>Cancel</span>
               </button>
             )}
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className={`p-2 ${theme.textMuted} hover:${theme.textPrimary} transition-colors`}
+              title="Settings"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
             <button
               onClick={handleLogout}
               className={`p-2 ${theme.textMuted} hover:${theme.textPrimary} transition-colors`}
@@ -253,13 +265,16 @@ function App() {
               targetPage={targetPage}
             />
           ) : (
-            <div className={`h-full flex flex-col items-center justify-center ${theme.textSubtle}`}>
+            <button
+              onClick={() => fileUploadRef.current?.triggerUpload()}
+              className={`h-full w-full flex flex-col items-center justify-center ${theme.textSubtle} hover:opacity-80 transition-opacity cursor-pointer`}
+            >
               <svg className="w-20 h-20 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               <p className={`text-lg font-medium mb-2 ${theme.textSecondary}`}>Upload a document</p>
               <p className="text-sm">Supported formats: PDF, PNG, JPG, TIFF, BMP</p>
-            </div>
+            </button>
           )}
         </div>
 
@@ -287,46 +302,6 @@ function App() {
                 }}
                 isLoading={isLoading}
               />
-            )}
-            {activeTab === 'extract' && (
-              <ExtractPanel
-                markdown={parseResult?.markdown || ''}
-                disabled={!parseResult}
-                selectedModel={selectedModel}
-                onModelChange={setSelectedModel}
-                selectedParser={selectedParser}
-                onParserChange={handleParserChange}
-                chatUsage={chatMessages.reduce(
-                  (acc, msg) => {
-                    if (msg.usage) {
-                      return {
-                        input_tokens: acc.input_tokens + msg.usage.input_tokens,
-                        output_tokens: acc.output_tokens + msg.usage.output_tokens,
-                        model: msg.usage.model || acc.model,
-                      };
-                    }
-                    return acc;
-                  },
-                  { input_tokens: 0, output_tokens: 0, model: undefined as string | undefined }
-                )}
-                complianceUsage={complianceReport?.usage ? {
-                  input_tokens: complianceReport.usage.input_tokens,
-                  output_tokens: complianceReport.usage.output_tokens,
-                  model: complianceReport.usage.model,
-                } : undefined}
-                parseCredits={parseResult?.metadata.credit_usage}
-                parseUsage={parseResult?.metadata.usage}
-              />
-            )}
-            {activeTab === 'checks' && (
-              <div className="h-full">
-                <ComplianceChecksManager
-                  completenessChecks={completenessChecks}
-                  complianceChecks={complianceChecks}
-                  onCompletenessChecksChange={setCompletenessChecks}
-                  onComplianceChecksChange={setComplianceChecks}
-                />
-              </div>
             )}
             {activeTab === 'chat' && (
               <ChatPanel
@@ -388,6 +363,40 @@ function App() {
           </span>
         )}
       </footer>
+
+      {/* Settings Panel */}
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        selectedModel={selectedModel}
+        onModelChange={setSelectedModel}
+        selectedParser={selectedParser}
+        onParserChange={handleParserChange}
+        completenessChecks={completenessChecks}
+        complianceChecks={complianceChecks}
+        onCompletenessChecksChange={setCompletenessChecks}
+        onComplianceChecksChange={setComplianceChecks}
+        chatUsage={chatMessages.reduce(
+          (acc, msg) => {
+            if (msg.usage) {
+              return {
+                input_tokens: acc.input_tokens + msg.usage.input_tokens,
+                output_tokens: acc.output_tokens + msg.usage.output_tokens,
+                model: msg.usage.model || acc.model,
+              };
+            }
+            return acc;
+          },
+          { input_tokens: 0, output_tokens: 0, model: undefined as string | undefined }
+        )}
+        complianceUsage={complianceReport?.usage ? {
+          input_tokens: complianceReport.usage.input_tokens,
+          output_tokens: complianceReport.usage.output_tokens,
+          model: complianceReport.usage.model,
+        } : undefined}
+        parseCredits={parseResult?.metadata.credit_usage}
+        parseUsage={parseResult?.metadata.usage}
+      />
     </div>
   );
 }

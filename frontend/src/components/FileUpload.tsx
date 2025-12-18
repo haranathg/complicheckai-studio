@@ -1,11 +1,15 @@
-import React, { useRef } from 'react';
+import React, { useRef, useImperativeHandle, forwardRef } from 'react';
 
 interface FileUploadProps {
   onUpload: (file: File) => void;
   isLoading: boolean;
 }
 
-export default function FileUpload({ onUpload, isLoading }: FileUploadProps) {
+export interface FileUploadRef {
+  triggerUpload: () => void;
+}
+
+const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({ onUpload, isLoading }, ref) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -18,6 +22,11 @@ export default function FileUpload({ onUpload, isLoading }: FileUploadProps) {
   const handleClick = () => {
     inputRef.current?.click();
   };
+
+  // Expose triggerUpload method to parent components
+  useImperativeHandle(ref, () => ({
+    triggerUpload: handleClick
+  }));
 
   return (
     <div>
@@ -69,4 +78,6 @@ export default function FileUpload({ onUpload, isLoading }: FileUploadProps) {
       </button>
     </div>
   );
-}
+});
+
+export default FileUpload;
