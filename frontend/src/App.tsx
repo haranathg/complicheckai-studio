@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import PDFViewer from './components/PDFViewer';
 import TabNavigation from './components/TabNavigation';
 import ParseResults from './components/ParseResults';
@@ -7,7 +7,7 @@ import CompliancePanel from './components/CompliancePanel';
 import SettingsPanel from './components/SettingsPanel';
 import ProjectDocumentPanel from './components/ProjectDocumentPanel';
 import type { Project, Document } from './components/ProjectDocumentPanel';
-import UploadDialog from './components/UploadDialog';
+import SaveToProjectDropdown from './components/SaveToProjectDropdown';
 import LoginPage from './components/LoginPage';
 import type { ParseResponse, Chunk, TabType, ChatMessage } from './types/ade';
 import type { ComplianceReport, ComplianceCheck } from './types/compliance';
@@ -15,7 +15,7 @@ import { API_URL } from './config';
 import { isAuthenticated, logout } from './utils/auth';
 import { getDefaultModelForParser } from './components/ModelSelector';
 import { getParserType, getModelForParser } from './components/ParserSelector';
-import { uploadDocument } from './services/projectService';
+import { uploadDocument, checkProjectsAvailable, getOrCreateDefaultProject } from './services/projectService';
 import { useTheme, getThemeStyles } from './contexts/ThemeContext';
 import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
 import cognaifySymbol from './assets/cognaify-symbol.png';
@@ -52,12 +52,24 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
-  const [isUploadingToProject, setIsUploadingToProject] = useState(false);
   const [projectRefreshKey, setProjectRefreshKey] = useState(0);
+  const [projectsAvailable, setProjectsAvailable] = useState<boolean | null>(null);
+  const [defaultProject, setDefaultProject] = useState<Project | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check if projects are available and get default project on mount
+  useEffect(() => {
+    const init = async () => {
+      const available = await checkProjectsAvailable();
+      setProjectsAvailable(available);
+      if (available) {
+        const defProject = await getOrCreateDefaultProject();
+        setDefaultProject(defProject);
+      }
+    };
+    init();
+  }, []);
 
   const handleFileSelect = (uploadedFile: File, cachedResult?: ParseResponse) => {
     // Cancel any ongoing processing
@@ -90,6 +102,7 @@ function App() {
     setComplianceReport(null);
     setTargetPage(undefined);
     setChatMessages([]);
+    setCurrentDocument(null);
   };
 
   const handlePdfReady = () => {
@@ -183,55 +196,60 @@ function App() {
     setSelectedModel(getDefaultModelForParser(parser));
   };
 
-  // Handle file input change - show dialog to choose project or not
+  // Save current file to a project (for docs not yet saved)
+  const handleSaveToProject = async (project: Project) => {
+    if (!file) return;
+
+    try {
+      const doc = await uploadDocument(project.id, file);
+      setCurrentProject(project);
+      setCurrentDocument(doc);
+      setProjectRefreshKey(prev => prev + 1);
+    } catch (err) {
+      console.error('Failed to save to project:', err);
+      setError('Failed to save document to project');
+    }
+  };
+
+  // Handle file upload - always saves to selected project or default Personal project
+  const handleFileUpload = async (selectedFile: File) => {
+    // Use current project if selected, otherwise use default project
+    const targetProject = currentProject || defaultProject;
+
+    if (targetProject && projectsAvailable) {
+      try {
+        const doc = await uploadDocument(targetProject.id, selectedFile);
+        setCurrentProject(targetProject);
+        setCurrentDocument(doc);
+        setProjectRefreshKey(prev => prev + 1);
+        handleFileSelect(selectedFile);
+      } catch (err) {
+        console.error('Failed to upload to project:', err);
+        // Still load the file even if upload fails
+        handleFileSelect(selectedFile);
+      }
+    } else {
+      // No project available, just load the file
+      handleFileSelect(selectedFile);
+    }
+  };
+
+  // Handle file input change
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      setPendingFile(selectedFile);
-      setIsUploadDialogOpen(true);
+      handleFileUpload(selectedFile);
     }
     e.target.value = ''; // Reset input
-  };
-
-  // Upload to project and load
-  const handleUploadToProject = async () => {
-    if (!pendingFile || !currentProject) return;
-
-    setIsUploadingToProject(true);
-    try {
-      const doc = await uploadDocument(currentProject.id, pendingFile);
-      setCurrentDocument(doc);
-      setProjectRefreshKey(prev => prev + 1);
-      handleFileSelect(pendingFile);
-    } catch (err) {
-      console.error('Failed to upload to project:', err);
-      // Still load the file even if upload fails
-      handleFileSelect(pendingFile);
-    } finally {
-      setIsUploadingToProject(false);
-      setIsUploadDialogOpen(false);
-      setPendingFile(null);
-    }
-  };
-
-  // Just load file without saving to project
-  const handleUploadWithoutProject = () => {
-    if (pendingFile) {
-      handleFileSelect(pendingFile);
-    }
-    setIsUploadDialogOpen(false);
-    setPendingFile(null);
-  };
-
-  const handleUploadDialogClose = () => {
-    setIsUploadDialogOpen(false);
-    setPendingFile(null);
   };
 
   // Show login page if not authenticated
   if (!authenticated) {
     return <LoginPage onAuthenticated={() => setAuthenticated(true)} />;
   }
+
+  // Check if current doc is unsaved (has file but no document record)
+  const isUnsavedDoc = file && !currentDocument && projectsAvailable;
 
   return (
     <div className="h-screen flex flex-col" style={{ background: theme.pageBg }}>
@@ -254,9 +272,22 @@ function App() {
           </div>
           <div className="flex items-center gap-4">
             {file && (
-              <span className={`text-sm ${theme.textSecondary}`}>
-                {file.name}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-sm ${theme.textSecondary}`}>
+                  {file.name}
+                </span>
+                {currentDocument && currentProject && (
+                  <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700'}`}>
+                    {currentProject.name}
+                  </span>
+                )}
+              </div>
+            )}
+            {isUnsavedDoc && (
+              <SaveToProjectDropdown
+                onSave={handleSaveToProject}
+                currentProject={currentProject}
+              />
             )}
             {file && !parseResult && !isLoading && (
               <button
@@ -342,9 +373,7 @@ function App() {
               targetPage={targetPage}
             />
           ) : (
-            <label
-              className={`h-full w-full flex flex-col items-center justify-center ${theme.textSubtle} hover:opacity-80 transition-opacity cursor-pointer`}
-            >
+            <label className={`h-full w-full flex flex-col items-center justify-center ${theme.textSubtle} cursor-pointer hover:opacity-80 transition-opacity`}>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -352,11 +381,13 @@ function App() {
                 onChange={handleFileInputChange}
                 className="hidden"
               />
-              <svg className="w-20 h-20 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              <svg className="w-16 h-16 mb-4 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <p className={`text-lg font-medium mb-2 ${theme.textSecondary}`}>Upload a document</p>
-              <p className="text-sm">Supported formats: PDF, PNG, JPG, TIFF, BMP</p>
+              <p className={`text-sm ${theme.textMuted}`}>Click to add a document</p>
+              <p className={`text-xs mt-1 ${theme.textSubtle}`}>
+                Will be saved to: <span className="font-medium">{currentProject?.name || defaultProject?.name || 'Personal'}</span>
+              </p>
             </label>
           )}
         </div>
@@ -490,17 +521,7 @@ function App() {
         } : undefined}
         parseCredits={parseResult?.metadata.credit_usage}
         parseUsage={parseResult?.metadata.usage}
-      />
-
-      {/* Upload Dialog */}
-      <UploadDialog
-        isOpen={isUploadDialogOpen}
-        onClose={handleUploadDialogClose}
-        onUploadToProject={handleUploadToProject}
-        onUploadWithoutProject={handleUploadWithoutProject}
         currentProject={currentProject}
-        fileName={pendingFile?.name || ''}
-        isUploading={isUploadingToProject}
       />
     </div>
   );

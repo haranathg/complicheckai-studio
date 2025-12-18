@@ -81,3 +81,24 @@ export interface CachedParseResponse {
     parse_result_id?: string;
   };
 }
+
+export interface UsageByParser {
+  parser: string;
+  parse_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  credit_usage: number;
+  estimated_cost: number;
+}
+
+export interface ProjectUsageResponse {
+  project_id: string;
+  project_name: string;
+  document_count: number;
+  total_parses: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_credit_usage: number;
+  estimated_total_cost: number;
+  usage_by_parser: UsageByParser[];
+}

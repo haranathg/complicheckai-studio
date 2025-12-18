@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 import ModelSelector from './ModelSelector';
 import ParserSelector from './ParserSelector';
 import ComplianceChecksManager from './ComplianceChecksManager';
 import { formatTokensWithCost } from '../utils/tokenCost';
 import type { ComplianceCheck } from '../types/compliance';
+import type { Project, ProjectUsageResponse } from '../types/project';
+import { getProjectUsage } from '../services/projectService';
 
 type SettingsTab = 'general' | 'checks' | 'usage';
 
@@ -30,6 +32,7 @@ interface SettingsPanelProps {
   complianceUsage?: UsageData;
   parseCredits?: number | null;
   parseUsage?: UsageData | null;
+  currentProject?: Project | null;
 }
 
 export default function SettingsPanel({
@@ -47,10 +50,24 @@ export default function SettingsPanel({
   complianceUsage,
   parseCredits,
   parseUsage,
+  currentProject,
 }: SettingsPanelProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [projectUsage, setProjectUsage] = useState<ProjectUsageResponse | null>(null);
+  const [isLoadingUsage, setIsLoadingUsage] = useState(false);
+
+  // Fetch project usage when project changes or tab switches to usage
+  useEffect(() => {
+    if (currentProject && activeTab === 'usage') {
+      setIsLoadingUsage(true);
+      getProjectUsage(currentProject.id)
+        .then(setProjectUsage)
+        .catch(console.error)
+        .finally(() => setIsLoadingUsage(false));
+    }
+  }, [currentProject, activeTab]);
 
   const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
     {
@@ -182,70 +199,158 @@ export default function SettingsPanel({
           )}
 
           {activeTab === 'usage' && (
-            <div className="space-y-4">
-              <h3 className={`text-sm font-medium ${theme.textSecondary} mb-3`}>Token Usage</h3>
-
-              {!(parseCredits || parseUsage || chatUsage || complianceUsage) ? (
-                <div className={`text-center py-8 ${theme.textSubtle}`}>
-                  <svg className="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  <p className="text-sm">No usage data yet. Process a document to see usage statistics.</p>
-                </div>
-              ) : (
-                <div className={`p-4 rounded-xl border ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : 'rgba(255, 255, 255, 0.8)' }}>
-                  <div className="space-y-3">
-                    {parseCredits != null && parseCredits > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className={`text-sm ${theme.textMuted}`}>Parse (Landing AI)</span>
-                        <span className={`text-sm font-mono ${theme.textSecondary}`}>{parseCredits} credits</span>
-                      </div>
-                    )}
-                    {parseUsage && parseUsage.input_tokens > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className={`text-sm ${theme.textMuted}`}>Parse (Claude Vision)</span>
-                        <span className={`text-sm font-mono ${theme.textSecondary}`}>
-                          {formatTokensWithCost(parseUsage.input_tokens, parseUsage.output_tokens, parseUsage.model)}
-                        </span>
-                      </div>
-                    )}
-                    {chatUsage && chatUsage.input_tokens > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className={`text-sm ${theme.textMuted}`}>Chat</span>
-                        <span className={`text-sm font-mono ${theme.textSecondary}`}>
-                          {formatTokensWithCost(chatUsage.input_tokens, chatUsage.output_tokens, chatUsage.model)}
-                        </span>
-                      </div>
-                    )}
-                    {complianceUsage && complianceUsage.input_tokens > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className={`text-sm ${theme.textMuted}`}>Compliance</span>
-                        <span className={`text-sm font-mono ${theme.textSecondary}`}>
-                          {formatTokensWithCost(complianceUsage.input_tokens, complianceUsage.output_tokens, complianceUsage.model)}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Total */}
-                    {(() => {
-                      const totalInput = (parseUsage?.input_tokens || 0) + (chatUsage?.input_tokens || 0) + (complianceUsage?.input_tokens || 0);
-                      const totalOutput = (parseUsage?.output_tokens || 0) + (chatUsage?.output_tokens || 0) + (complianceUsage?.output_tokens || 0);
-                      const model = parseUsage?.model || chatUsage?.model || complianceUsage?.model;
-                      if (totalInput > 0) {
-                        return (
-                          <div className={`flex items-center justify-between pt-3 mt-3 border-t ${theme.border}`}>
-                            <span className={`text-sm font-medium ${theme.textSecondary}`}>Total</span>
-                            <span className={`text-sm font-mono font-medium ${theme.textPrimary}`}>
-                              {formatTokensWithCost(totalInput, totalOutput, model)}
-                            </span>
+            <div className="space-y-6">
+              {/* Project Usage Section */}
+              {currentProject && (
+                <div>
+                  <h3 className={`text-sm font-medium ${theme.textSecondary} mb-3`}>
+                    Project Usage: {currentProject.name}
+                  </h3>
+                  {isLoadingUsage ? (
+                    <div className={`flex items-center justify-center py-8 ${theme.textSubtle}`}>
+                      <svg className="animate-spin h-6 w-6 mr-2" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Loading usage data...
+                    </div>
+                  ) : projectUsage ? (
+                    <div className={`p-4 rounded-xl border ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : 'rgba(255, 255, 255, 0.8)' }}>
+                      <div className="space-y-4">
+                        {/* Summary stats */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className={`p-3 rounded-lg ${isDark ? 'bg-slate-800/50' : 'bg-slate-100'}`}>
+                            <div className={`text-xs ${theme.textSubtle}`}>Documents</div>
+                            <div className={`text-lg font-semibold ${theme.textPrimary}`}>{projectUsage.document_count}</div>
                           </div>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </div>
+                          <div className={`p-3 rounded-lg ${isDark ? 'bg-slate-800/50' : 'bg-slate-100'}`}>
+                            <div className={`text-xs ${theme.textSubtle}`}>Parses</div>
+                            <div className={`text-lg font-semibold ${theme.textPrimary}`}>{projectUsage.total_parses}</div>
+                          </div>
+                        </div>
+
+                        {/* Usage by parser */}
+                        {projectUsage.usage_by_parser.length > 0 && (
+                          <div className="space-y-2">
+                            <div className={`text-xs font-medium ${theme.textMuted} uppercase tracking-wider`}>By Parser</div>
+                            {projectUsage.usage_by_parser.map((usage) => (
+                              <div key={usage.parser} className={`flex items-center justify-between py-2 border-b ${theme.border} last:border-0`}>
+                                <div>
+                                  <span className={`text-sm ${theme.textSecondary}`}>
+                                    {usage.parser === 'landing_ai' ? 'Landing AI' :
+                                     usage.parser === 'bedrock_claude' ? 'Bedrock Claude' :
+                                     usage.parser === 'claude_vision' ? 'Claude Vision' :
+                                     usage.parser === 'gemini_vision' ? 'Gemini Vision' : usage.parser}
+                                  </span>
+                                  <div className={`text-xs ${theme.textSubtle}`}>
+                                    {usage.parse_count} parse{usage.parse_count !== 1 ? 's' : ''}
+                                    {usage.credit_usage > 0 && ` · ${usage.credit_usage} credits`}
+                                    {usage.input_tokens > 0 && ` · ${(usage.input_tokens / 1000).toFixed(1)}k tokens`}
+                                  </div>
+                                </div>
+                                <span className={`text-sm font-mono ${theme.textPrimary}`}>
+                                  ${usage.estimated_cost.toFixed(4)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Total cost */}
+                        <div className={`flex items-center justify-between pt-3 border-t ${theme.border}`}>
+                          <span className={`text-sm font-medium ${theme.textSecondary}`}>Estimated Total Cost</span>
+                          <span className={`text-lg font-mono font-bold bg-gradient-to-r from-sky-400 to-purple-500 bg-clip-text text-transparent`}>
+                            ${projectUsage.estimated_total_cost.toFixed(4)}
+                          </span>
+                        </div>
+
+                        {/* Token totals */}
+                        {(projectUsage.total_input_tokens > 0 || projectUsage.total_credit_usage > 0) && (
+                          <div className={`text-xs ${theme.textSubtle} pt-2`}>
+                            {projectUsage.total_credit_usage > 0 && (
+                              <span>Total credits: {projectUsage.total_credit_usage} · </span>
+                            )}
+                            {projectUsage.total_input_tokens > 0 && (
+                              <span>Total tokens: {((projectUsage.total_input_tokens + projectUsage.total_output_tokens) / 1000).toFixed(1)}k</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`text-center py-6 ${theme.textSubtle}`}>
+                      <p className="text-sm">No usage data for this project yet.</p>
+                    </div>
+                  )}
                 </div>
               )}
+
+              {/* Current Session Usage */}
+              <div>
+                <h3 className={`text-sm font-medium ${theme.textSecondary} mb-3`}>Current Session Usage</h3>
+
+                {!(parseCredits || parseUsage || chatUsage || complianceUsage) ? (
+                  <div className={`text-center py-8 ${theme.textSubtle}`}>
+                    <svg className="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <p className="text-sm">No session usage yet. Process a document to see usage statistics.</p>
+                  </div>
+                ) : (
+                  <div className={`p-4 rounded-xl border ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : 'rgba(255, 255, 255, 0.8)' }}>
+                    <div className="space-y-3">
+                      {parseCredits != null && parseCredits > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm ${theme.textMuted}`}>Parse (Landing AI)</span>
+                          <span className={`text-sm font-mono ${theme.textSecondary}`}>{parseCredits} credits</span>
+                        </div>
+                      )}
+                      {parseUsage && parseUsage.input_tokens > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm ${theme.textMuted}`}>Parse (Claude Vision)</span>
+                          <span className={`text-sm font-mono ${theme.textSecondary}`}>
+                            {formatTokensWithCost(parseUsage.input_tokens, parseUsage.output_tokens, parseUsage.model)}
+                          </span>
+                        </div>
+                      )}
+                      {chatUsage && chatUsage.input_tokens > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm ${theme.textMuted}`}>Chat</span>
+                          <span className={`text-sm font-mono ${theme.textSecondary}`}>
+                            {formatTokensWithCost(chatUsage.input_tokens, chatUsage.output_tokens, chatUsage.model)}
+                          </span>
+                        </div>
+                      )}
+                      {complianceUsage && complianceUsage.input_tokens > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm ${theme.textMuted}`}>Compliance</span>
+                          <span className={`text-sm font-mono ${theme.textSecondary}`}>
+                            {formatTokensWithCost(complianceUsage.input_tokens, complianceUsage.output_tokens, complianceUsage.model)}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Total */}
+                      {(() => {
+                        const totalInput = (parseUsage?.input_tokens || 0) + (chatUsage?.input_tokens || 0) + (complianceUsage?.input_tokens || 0);
+                        const totalOutput = (parseUsage?.output_tokens || 0) + (chatUsage?.output_tokens || 0) + (complianceUsage?.output_tokens || 0);
+                        const model = parseUsage?.model || chatUsage?.model || complianceUsage?.model;
+                        if (totalInput > 0) {
+                          return (
+                            <div className={`flex items-center justify-between pt-3 mt-3 border-t ${theme.border}`}>
+                              <span className={`text-sm font-medium ${theme.textSecondary}`}>Total</span>
+                              <span className={`text-sm font-mono font-medium ${theme.textPrimary}`}>
+                                {formatTokensWithCost(totalInput, totalOutput, model)}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -7,7 +7,8 @@ import type {
   ProjectListResponse,
   Document,
   DocumentListResponse,
-  CachedParseResponse
+  CachedParseResponse,
+  ProjectUsageResponse
 } from '../types/project';
 
 /**
@@ -130,4 +131,35 @@ export async function checkProjectsAvailable(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+const DEFAULT_PROJECT_NAME = 'Personal';
+
+/**
+ * Get the default "Personal" project, creating it if it doesn't exist
+ */
+export async function getOrCreateDefaultProject(): Promise<Project | null> {
+  try {
+    const { projects } = await listProjects();
+    let defaultProject = projects.find(p => p.name === DEFAULT_PROJECT_NAME);
+
+    if (!defaultProject) {
+      defaultProject = await createProject(DEFAULT_PROJECT_NAME, 'Default project for personal documents');
+    }
+
+    return defaultProject;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get usage statistics for a project
+ */
+export async function getProjectUsage(projectId: string): Promise<ProjectUsageResponse> {
+  const response = await fetch(`${API_URL}/api/projects/${projectId}/usage`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch project usage');
+  }
+  return response.json();
 }

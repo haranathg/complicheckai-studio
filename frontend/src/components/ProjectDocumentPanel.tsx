@@ -9,6 +9,7 @@ import {
   getLatestParseResult,
   getDocumentDownloadUrl,
   checkProjectsAvailable,
+  getOrCreateDefaultProject,
 } from '../services/projectService';
 
 interface ProjectDocumentPanelProps {
@@ -35,15 +36,24 @@ export default function ProjectDocumentPanel({
 
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [defaultProject, setDefaultProject] = useState<Project | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isFetchingCached, setIsFetchingCached] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Check if projects feature is available
+  // Check if projects feature is available and get default project
   useEffect(() => {
-    checkProjectsAvailable().then(setIsAvailable);
+    const init = async () => {
+      const available = await checkProjectsAvailable();
+      setIsAvailable(available);
+      if (available) {
+        const defProject = await getOrCreateDefaultProject();
+        setDefaultProject(defProject);
+      }
+    };
+    init();
   }, []);
 
   // Refresh document list when external trigger changes
@@ -114,10 +124,12 @@ export default function ProjectDocumentPanel({
     }
   }, [selectedProject, selectedParser, onDocumentLoad, onDocumentChange]);
 
-  // Handle file upload to project
+  // Handle file upload to project (uses selected project or default Personal project)
   const handleUploadToProject = async (file: File) => {
-    if (!selectedProject) {
-      // No project selected, just use the file directly without saving
+    const targetProject = selectedProject || defaultProject;
+
+    if (!targetProject) {
+      // No project available, just use the file directly without saving
       onDocumentLoad(file);
       return;
     }
@@ -126,7 +138,12 @@ export default function ProjectDocumentPanel({
     setError(null);
 
     try {
-      const doc = await uploadDocument(selectedProject.id, file);
+      const doc = await uploadDocument(targetProject.id, file);
+      // If using default project and no project was selected, select it now
+      if (!selectedProject && defaultProject) {
+        setSelectedProject(defaultProject);
+        onProjectChange?.(defaultProject);
+      }
       setSelectedDocument(doc);
       onDocumentChange?.(doc);
       setRefreshKey(prev => prev + 1); // Refresh document list
@@ -180,44 +197,42 @@ export default function ProjectDocumentPanel({
           disabled={isLoading || isUploading || isFetchingCached}
         />
 
-        {selectedProject && (
-          <label className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors ${
-            isUploading ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
-          style={{
-            background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
-            color: 'white',
-          }}
-          >
-            <input
-              type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleUploadToProject(file);
-                e.target.value = ''; // Reset input
-              }}
-              disabled={isUploading || isLoading || isFetchingCached}
-              className="hidden"
-            />
-            {isUploading ? (
-              <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Uploading...
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Document
-              </>
-            )}
-          </label>
-        )}
+        <label className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors ${
+          isUploading ? 'opacity-50 cursor-not-allowed' : ''
+        }`}
+        style={{
+          background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
+          color: 'white',
+        }}
+        >
+          <input
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleUploadToProject(file);
+              e.target.value = ''; // Reset input
+            }}
+            disabled={isUploading || isLoading || isFetchingCached}
+            className="hidden"
+          />
+          {isUploading ? (
+            <>
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Uploading...
+            </>
+          ) : (
+            <>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Document
+            </>
+          )}
+        </label>
       </div>
 
       {/* Error message */}
@@ -254,7 +269,7 @@ export default function ProjectDocumentPanel({
       {/* Info when no project selected */}
       {!selectedProject && (
         <div className={`px-4 py-3 text-xs ${theme.textSubtle}`}>
-          Select a project to save and organize your documents, or upload directly without a project.
+          Documents will be saved to <span className="font-medium">{defaultProject?.name || 'Personal'}</span> project. Select a different project above to organize documents.
         </div>
       )}
     </div>
