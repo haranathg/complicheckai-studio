@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 import type { Project, Document } from '../types/project';
+import type { Chunk } from '../types/ade';
 import type { Annotation, AnnotationCreate, AnnotationLevel } from '../types/annotation';
 import { ANNOTATION_COLORS, ANNOTATION_BORDER_COLORS } from '../types/annotation';
 import {
@@ -14,6 +15,7 @@ import {
   deleteAnnotation,
   resolveAnnotation,
 } from '../services/annotationService';
+import { downloadPDFWithAnnotations } from '../utils/pdfExport';
 
 export type ViewMode = 'page' | 'document' | 'project';
 
@@ -23,6 +25,8 @@ interface ReviewTabProps {
   currentPage: number;
   onAnnotationSelect?: (annotation: Annotation) => void;
   onCreateAnnotation?: (position: { page: number; bbox: { left: number; top: number; right: number; bottom: number } }) => void;
+  file?: File | null;
+  chunks?: Chunk[];
 }
 
 export default function ReviewTab({
@@ -30,6 +34,8 @@ export default function ReviewTab({
   currentDocument,
   currentPage,
   onAnnotationSelect,
+  file,
+  chunks = [],
 }: ReviewTabProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
@@ -42,6 +48,7 @@ export default function ReviewTab({
   const [newAnnotation, setNewAnnotation] = useState<Partial<AnnotationCreate>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [isExporting, setIsExporting] = useState(false);
 
   // Load annotations based on view mode
   const loadAnnotations = useCallback(async () => {
@@ -139,6 +146,26 @@ export default function ReviewTab({
     }
   };
 
+  // Export PDF with annotations
+  const handleExportPDF = async () => {
+    if (!file || annotations.length === 0) return;
+
+    setIsExporting(true);
+    try {
+      const docName = currentDocument?.original_filename || currentDocument?.filename || file.name;
+      const baseName = docName.replace('.pdf', '');
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      const filename = `${baseName}_annotated_${timestamp}.pdf`;
+      await downloadPDFWithAnnotations(file, annotations, chunks, filename);
+    } catch (err) {
+      console.error('Failed to export PDF:', err);
+      setError('Failed to export PDF with annotations');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const getLevelIcon = (level: AnnotationLevel) => {
     switch (level) {
       case 'page':
@@ -189,7 +216,7 @@ export default function ReviewTab({
                   }`}
                   disabled={mode === 'page' && !currentDocument}
                 >
-                  {mode === 'page' ? 'Current Page' : mode === 'document' ? 'All Pages' : 'All Docs'}
+                  {mode === 'page' ? 'Current Page' : mode === 'document' ? 'Document' : 'Project'}
                 </button>
               ))}
             </div>
@@ -205,6 +232,31 @@ export default function ReviewTab({
               <option value="open">Open</option>
               <option value="resolved">Resolved</option>
             </select>
+
+            {/* Export PDF button */}
+            {file && annotations.length > 0 && (
+              <button
+                onClick={handleExportPDF}
+                disabled={isExporting}
+                className={`px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1 ${
+                  isExporting
+                    ? 'opacity-50 cursor-not-allowed'
+                    : isDark
+                      ? 'bg-green-600 hover:bg-green-500 text-white'
+                      : 'bg-green-500 hover:bg-green-600 text-white'
+                }`}
+                title="Export PDF with annotations"
+              >
+                {isExporting ? (
+                  <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent" />
+                ) : (
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                )}
+                Export PDF
+              </button>
+            )}
 
             <button
               onClick={() => setIsCreating(true)}

@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import type { Chunk } from '../types/ade';
+import type { Annotation } from '../types/annotation';
 import ChunkOverlay from './ChunkOverlay';
+import AnnotationOverlay from './AnnotationOverlay';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 
@@ -16,6 +18,9 @@ interface PDFViewerProps {
   onPdfReady?: () => void;
   targetPage?: number;
   onPageChange?: (page: number) => void;
+  annotations?: Annotation[];
+  selectedAnnotation?: Annotation | null;
+  onAnnotationClick?: (annotation: Annotation) => void;
 }
 
 export default function PDFViewer({
@@ -26,6 +31,9 @@ export default function PDFViewer({
   onPdfReady,
   targetPage,
   onPageChange,
+  annotations = [],
+  selectedAnnotation,
+  onAnnotationClick,
 }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -173,6 +181,28 @@ export default function PDFViewer({
     (c) => c.grounding?.page === currentPage - 1
   );
 
+  // Filter annotations for current page
+  // Include: page-level annotations for this page, document-level, project-level
+  // Also include annotations linked to chunks on this page
+  const pageAnnotations = annotations.filter((a) => {
+    // Page-level annotation for current page
+    if (a.level === 'page' && a.page_number === currentPage) {
+      return true;
+    }
+    // Document or project level annotations show on page 1
+    if ((a.level === 'document' || a.level === 'project') && currentPage === 1) {
+      return true;
+    }
+    // Annotation linked to a chunk - check if chunk is on current page
+    if (a.chunk_id) {
+      const linkedChunk = chunks.find(c => c.id === a.chunk_id);
+      if (linkedChunk && linkedChunk.grounding?.page === currentPage - 1) {
+        return true;
+      }
+    }
+    return false;
+  });
+
   // Debug: log chunk coordinates
   if (pageChunks.length > 0 && pageSize.width > 0) {
     console.log('Page chunks with coordinates:', pageChunks.map(c => ({
@@ -314,6 +344,47 @@ export default function PDFViewer({
                           onClick={() => onChunkClick(chunk)}
                         />
                       ))}
+                    </div>
+                  )}
+                  {/* Annotation Overlays - rendered above chunks */}
+                  {pageSize.width > 0 && pageAnnotations.length > 0 && (
+                    <div
+                      className="absolute pointer-events-none"
+                      style={{
+                        left: canvasOffset.left,
+                        top: canvasOffset.top,
+                        width: pageSize.width,
+                        height: pageSize.height,
+                      }}
+                    >
+                      {pageAnnotations.map((annotation) => {
+                        // For chunk-linked annotations, get bbox from the linked chunk
+                        let annotationWithBbox = annotation;
+                        if (annotation.chunk_id && !annotation.bbox) {
+                          const linkedChunk = chunks.find(c => c.id === annotation.chunk_id);
+                          if (linkedChunk?.grounding?.box) {
+                            annotationWithBbox = {
+                              ...annotation,
+                              bbox: {
+                                left: linkedChunk.grounding.box.right + 0.01,
+                                top: linkedChunk.grounding.box.top,
+                                right: linkedChunk.grounding.box.right + 0.15,
+                                bottom: linkedChunk.grounding.box.top + 0.1,
+                              },
+                            };
+                          }
+                        }
+                        return (
+                          <AnnotationOverlay
+                            key={annotation.id}
+                            annotation={annotationWithBbox}
+                            pageWidth={pageSize.width}
+                            pageHeight={pageSize.height}
+                            isSelected={selectedAnnotation?.id === annotation.id}
+                            onClick={() => onAnnotationClick?.(annotation)}
+                          />
+                        );
+                      })}
                     </div>
                   )}
                 </div>

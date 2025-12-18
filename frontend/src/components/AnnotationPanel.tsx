@@ -14,6 +14,7 @@ import {
   deleteAnnotation,
   resolveAnnotation,
 } from '../services/annotationService';
+import { downloadPDFWithAnnotations } from '../utils/pdfExport';
 
 interface AnnotationPanelProps {
   currentProject: Project | null;
@@ -22,6 +23,9 @@ interface AnnotationPanelProps {
   prefilledChunk?: Chunk | null;
   onClearPrefilledChunk?: () => void;
   onAnnotationClick?: (annotation: Annotation) => void;
+  onAnnotationsChange?: () => void;
+  file?: File | null;
+  chunks?: Chunk[];
 }
 
 export default function AnnotationPanel({
@@ -31,6 +35,9 @@ export default function AnnotationPanel({
   prefilledChunk,
   onClearPrefilledChunk,
   onAnnotationClick,
+  onAnnotationsChange,
+  file,
+  chunks = [],
 }: AnnotationPanelProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
@@ -41,6 +48,7 @@ export default function AnnotationPanel({
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [noteLevel, setNoteLevel] = useState<AnnotationLevel>('page');
+  const [isExporting, setIsExporting] = useState(false);
 
   // When a prefilled chunk comes in, open the add note form
   useEffect(() => {
@@ -96,6 +104,7 @@ export default function AnnotationPanel({
       setNoteText('');
       setIsAddingNote(false);
       onClearPrefilledChunk?.();
+      onAnnotationsChange?.();
     } catch (err) {
       console.error('Failed to create annotation:', err);
     }
@@ -105,6 +114,7 @@ export default function AnnotationPanel({
     try {
       await deleteAnnotation(id);
       setAnnotations(prev => prev.filter(a => a.id !== id));
+      onAnnotationsChange?.();
     } catch (err) {
       console.error('Failed to delete annotation:', err);
     }
@@ -114,6 +124,7 @@ export default function AnnotationPanel({
     try {
       const updated = await resolveAnnotation(id);
       setAnnotations(prev => prev.map(a => a.id === id ? updated : a));
+      onAnnotationsChange?.();
     } catch (err) {
       console.error('Failed to resolve annotation:', err);
     }
@@ -123,6 +134,24 @@ export default function AnnotationPanel({
     setIsAddingNote(false);
     setNoteText('');
     onClearPrefilledChunk?.();
+  };
+
+  const handleExportPDF = async () => {
+    if (!file || annotations.length === 0) return;
+
+    setIsExporting(true);
+    try {
+      const docName = currentDocument?.original_filename || currentDocument?.filename || file.name;
+      const baseName = docName.replace('.pdf', '');
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      const filename = `${baseName}_annotated_${timestamp}.pdf`;
+      await downloadPDFWithAnnotations(file, annotations, chunks, filename);
+    } catch (err) {
+      console.error('Failed to export PDF:', err);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   if (!currentProject || !currentDocument) {
@@ -156,23 +185,52 @@ export default function AnnotationPanel({
             </span>
           )}
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsAddingNote(true);
-            setIsExpanded(true);
-          }}
-          className={`p-1 rounded transition-colors ${
-            isDark
-              ? 'text-sky-400 hover:bg-sky-900/30'
-              : 'text-sky-600 hover:bg-sky-50'
-          }`}
-          title="Add note"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1">
+          {/* Export PDF button */}
+          {file && annotations.length > 0 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleExportPDF();
+              }}
+              disabled={isExporting}
+              className={`p-1 rounded transition-colors ${
+                isExporting
+                  ? 'opacity-50 cursor-not-allowed'
+                  : isDark
+                    ? 'text-green-400 hover:bg-green-900/30'
+                    : 'text-green-600 hover:bg-green-50'
+              }`}
+              title="Export PDF with annotations"
+            >
+              {isExporting ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-green-400 border-t-transparent" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              )}
+            </button>
+          )}
+          {/* Add note button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsAddingNote(true);
+              setIsExpanded(true);
+            }}
+            className={`p-1 rounded transition-colors ${
+              isDark
+                ? 'text-sky-400 hover:bg-sky-900/30'
+                : 'text-sky-600 hover:bg-sky-50'
+            }`}
+            title="Add note"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {isExpanded && (
@@ -193,6 +251,7 @@ export default function AnnotationPanel({
                 >
                   <option value="page">Page {currentPage}</option>
                   <option value="document">Document</option>
+                  <option value="project">Project</option>
                 </select>
               </div>
               <textarea

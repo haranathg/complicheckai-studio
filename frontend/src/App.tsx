@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import PDFViewer from './components/PDFViewer';
 import TabNavigation from './components/TabNavigation';
 import ParseResults from './components/ParseResults';
@@ -9,6 +9,7 @@ import UploadTab from './components/UploadTab';
 import ReviewTab from './components/ReviewTab';
 import AnnotationPanel from './components/AnnotationPanel';
 import type { Project, Document } from './types/project';
+import type { Annotation } from './types/annotation';
 import SaveToProjectDropdown from './components/SaveToProjectDropdown';
 import LoginPage from './components/LoginPage';
 import type { ParseResponse, Chunk, TabType, ChatMessage } from './types/ade';
@@ -18,6 +19,7 @@ import { isAuthenticated, logout } from './utils/auth';
 import { getDefaultModelForParser } from './components/ModelSelector';
 import { getParserType, getModelForParser } from './components/ParserSelector';
 import { uploadDocument, checkProjectsAvailable, getOrCreateDefaultProject } from './services/projectService';
+import { listDocumentAnnotations, listProjectAnnotations } from './services/annotationService';
 import { useTheme, getThemeStyles } from './contexts/ThemeContext';
 import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
 import cognaifySymbol from './assets/cognaify-symbol.png';
@@ -58,6 +60,8 @@ function App() {
   const [projectsAvailable, setProjectsAvailable] = useState<boolean | null>(null);
   const [defaultProject, setDefaultProject] = useState<Project | null>(null);
   const [prefilledChunk, setPrefilledChunk] = useState<Chunk | null>(null);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [selectedAnnotation, setSelectedAnnotation] = useState<Annotation | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -73,6 +77,30 @@ function App() {
     };
     init();
   }, []);
+
+  // Fetch annotations when document changes
+  const loadAnnotations = useCallback(async () => {
+    if (!currentProject) {
+      setAnnotations([]);
+      return;
+    }
+    try {
+      if (currentDocument) {
+        const response = await listDocumentAnnotations(currentProject.id, currentDocument.id);
+        setAnnotations(response.annotations);
+      } else {
+        const response = await listProjectAnnotations(currentProject.id);
+        setAnnotations(response.annotations);
+      }
+    } catch (err) {
+      console.error('Failed to load annotations:', err);
+      setAnnotations([]);
+    }
+  }, [currentProject, currentDocument]);
+
+  useEffect(() => {
+    loadAnnotations();
+  }, [loadAnnotations]);
 
   const handleFileSelect = (uploadedFile: File, cachedResult?: ParseResponse) => {
     // Cancel any ongoing processing
@@ -371,6 +399,21 @@ function App() {
                   onPdfReady={handlePdfReady}
                   targetPage={targetPage}
                   onPageChange={setCurrentPage}
+                  annotations={annotations}
+                  selectedAnnotation={selectedAnnotation}
+                  onAnnotationClick={(annotation) => {
+                    setSelectedAnnotation(annotation);
+                    // If annotation is linked to a chunk, navigate to that chunk
+                    if (annotation.chunk_id) {
+                      const linkedChunk = parseResult?.chunks?.find(c => c.id === annotation.chunk_id);
+                      if (linkedChunk && linkedChunk.grounding) {
+                        setTargetPage(linkedChunk.grounding.page + 1);
+                        setHighlightedChunk(linkedChunk);
+                      }
+                    } else if (annotation.page_number) {
+                      setTargetPage(annotation.page_number);
+                    }
+                  }}
                 />
               </div>
               {/* Annotation Panel - below PDF */}
@@ -381,10 +424,20 @@ function App() {
                 prefilledChunk={prefilledChunk}
                 onClearPrefilledChunk={() => setPrefilledChunk(null)}
                 onAnnotationClick={(annotation) => {
-                  if (annotation.page_number) {
+                  setSelectedAnnotation(annotation);
+                  if (annotation.chunk_id) {
+                    const linkedChunk = parseResult?.chunks?.find(c => c.id === annotation.chunk_id);
+                    if (linkedChunk && linkedChunk.grounding) {
+                      setTargetPage(linkedChunk.grounding.page + 1);
+                      setHighlightedChunk(linkedChunk);
+                    }
+                  } else if (annotation.page_number) {
                     setTargetPage(annotation.page_number);
                   }
                 }}
+                onAnnotationsChange={loadAnnotations}
+                file={file}
+                chunks={parseResult?.chunks}
               />
             </>
           ) : (
@@ -466,6 +519,8 @@ function App() {
                     setCurrentPage(annotation.page_number);
                   }
                 }}
+                file={file}
+                chunks={parseResult?.chunks}
               />
             )}
             {activeTab === 'chat' && (
