@@ -5,8 +5,9 @@ import ParseResults from './components/ParseResults';
 import ChatPanel from './components/ChatPanel';
 import CompliancePanel from './components/CompliancePanel';
 import SettingsPanel from './components/SettingsPanel';
-import ProjectDocumentPanel from './components/ProjectDocumentPanel';
-import type { Project, Document } from './components/ProjectDocumentPanel';
+import UploadTab from './components/UploadTab';
+import ReviewTab from './components/ReviewTab';
+import type { Project, Document } from './types/project';
 import SaveToProjectDropdown from './components/SaveToProjectDropdown';
 import LoginPage from './components/LoginPage';
 import type { ParseResponse, Chunk, TabType, ChatMessage } from './types/ade';
@@ -33,11 +34,12 @@ function App() {
   const [parseResult, setParseResult] = useState<ParseResponse | null>(null);
   const [highlightedChunk, setHighlightedChunk] = useState<Chunk | null>(null);
   const [popupChunk, setPopupChunk] = useState<Chunk | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('parse');
+  const [activeTab, setActiveTab] = useState<TabType>('upload');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
   const [targetPage, setTargetPage] = useState<number | undefined>(undefined);
+  const [currentPage, setCurrentPage] = useState(1);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [selectedParser, setSelectedParser] = useState(DEFAULT_PARSER);
@@ -52,7 +54,6 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
-  const [projectRefreshKey, setProjectRefreshKey] = useState(0);
   const [projectsAvailable, setProjectsAvailable] = useState<boolean | null>(null);
   const [defaultProject, setDefaultProject] = useState<Project | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -159,10 +160,6 @@ function App() {
 
       const result = await response.json();
       setParseResult(result);
-      // Refresh document list to show cached badge if parsing was for a project document
-      if (currentProject && currentDocument) {
-        setProjectRefreshKey(prev => prev + 1);
-      }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         // Request was cancelled, don't show error
@@ -204,7 +201,6 @@ function App() {
       const doc = await uploadDocument(project.id, file);
       setCurrentProject(project);
       setCurrentDocument(doc);
-      setProjectRefreshKey(prev => prev + 1);
     } catch (err) {
       console.error('Failed to save to project:', err);
       setError('Failed to save document to project');
@@ -221,7 +217,6 @@ function App() {
         const doc = await uploadDocument(targetProject.id, selectedFile);
         setCurrentProject(targetProject);
         setCurrentDocument(doc);
-        setProjectRefreshKey(prev => prev + 1);
         handleFileSelect(selectedFile);
       } catch (err) {
         console.error('Failed to upload to project:', err);
@@ -371,6 +366,7 @@ function App() {
               onChunkClick={handleChunkClick}
               onPdfReady={handlePdfReady}
               targetPage={targetPage}
+              onPageChange={setCurrentPage}
             />
           ) : (
             <label className={`h-full w-full flex flex-col items-center justify-center ${theme.textSubtle} cursor-pointer hover:opacity-80 transition-opacity`}>
@@ -394,79 +390,100 @@ function App() {
 
         {/* Right Panel - Results */}
         <div className="w-1/2 flex flex-col overflow-hidden" style={{ background: theme.panelBgAlt }}>
-          {/* Project/Document Panel */}
-          <ProjectDocumentPanel
-            onDocumentLoad={handleFileSelect}
-            onClearDocument={handleClearDocument}
-            isLoading={isLoading}
-            selectedParser={selectedParser}
-            onProjectChange={setCurrentProject}
-            onDocumentChange={setCurrentDocument}
-            refreshTrigger={projectRefreshKey}
-          />
-
           <TabNavigation
             activeTab={activeTab}
             onTabChange={setActiveTab}
             disabled={!parseResult}
           />
 
-          <div className="flex-1 overflow-auto p-4">
+          <div className="flex-1 overflow-auto">
+            {activeTab === 'upload' && (
+              <UploadTab
+                onDocumentLoad={handleFileSelect}
+                onClearDocument={handleClearDocument}
+                isProcessing={isLoading}
+                selectedParser={selectedParser}
+                selectedModel={selectedModel}
+                onProjectChange={setCurrentProject}
+                onDocumentChange={setCurrentDocument}
+                currentProject={currentProject}
+                currentDocument={currentDocument}
+              />
+            )}
             {activeTab === 'parse' && (
-              <ParseResults
-                result={parseResult}
-                highlightedChunk={highlightedChunk}
-                popupChunk={popupChunk}
-                onPopupOpen={setPopupChunk}
-                onChunkSelect={(chunk) => {
-                  setHighlightedChunk(highlightedChunk?.id === chunk.id ? null : chunk);
-                  // Navigate to the chunk's page
-                  if (chunk.grounding) {
-                    setTargetPage(chunk.grounding.page + 1);
+              <div className="p-4">
+                <ParseResults
+                  result={parseResult}
+                  highlightedChunk={highlightedChunk}
+                  popupChunk={popupChunk}
+                  onPopupOpen={setPopupChunk}
+                  onChunkSelect={(chunk) => {
+                    setHighlightedChunk(highlightedChunk?.id === chunk.id ? null : chunk);
+                    // Navigate to the chunk's page
+                    if (chunk.grounding) {
+                      setTargetPage(chunk.grounding.page + 1);
+                    }
+                  }}
+                  isLoading={isLoading}
+                />
+              </div>
+            )}
+            {activeTab === 'review' && (
+              <ReviewTab
+                currentProject={currentProject}
+                currentDocument={currentDocument}
+                currentPage={currentPage}
+                onAnnotationSelect={(annotation) => {
+                  if (annotation.page_number) {
+                    setTargetPage(annotation.page_number);
+                    setCurrentPage(annotation.page_number);
                   }
                 }}
-                isLoading={isLoading}
               />
             )}
             {activeTab === 'chat' && (
-              <ChatPanel
-                markdown={parseResult?.markdown || ''}
-                chunks={parseResult?.chunks || []}
-                disabled={!parseResult}
-                messages={chatMessages}
-                onMessagesChange={setChatMessages}
-                selectedModel={selectedModel}
-                onChunkSelect={(chunkIds, pageNumber) => {
-                  const chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
-                  if (chunk) {
-                    setHighlightedChunk(chunk);
-                    if (pageNumber) {
-                      setTargetPage(pageNumber);
+              <div className="p-4 h-full">
+                <ChatPanel
+                  markdown={parseResult?.markdown || ''}
+                  chunks={parseResult?.chunks || []}
+                  disabled={!parseResult}
+                  messages={chatMessages}
+                  onMessagesChange={setChatMessages}
+                  selectedModel={selectedModel}
+                  onChunkSelect={(chunkIds, pageNumber) => {
+                    const chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
+                    if (chunk) {
+                      setHighlightedChunk(chunk);
+                      if (pageNumber) {
+                        setTargetPage(pageNumber);
+                      }
                     }
-                  }
-                }}
-              />
+                  }}
+                />
+              </div>
             )}
             {activeTab === 'compliance' && (
-              <CompliancePanel
-                markdown={parseResult?.markdown || ''}
-                chunks={parseResult?.chunks || []}
-                disabled={!parseResult}
-                report={complianceReport}
-                onReportChange={setComplianceReport}
-                selectedModel={selectedModel}
-                completenessChecks={completenessChecks}
-                complianceChecks={complianceChecks}
-                onChunkSelect={(chunkIds, pageNumber) => {
-                  const chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
-                  if (chunk) {
-                    setHighlightedChunk(chunk);
-                    if (pageNumber) {
-                      setTargetPage(pageNumber);
+              <div className="p-4 h-full">
+                <CompliancePanel
+                  markdown={parseResult?.markdown || ''}
+                  chunks={parseResult?.chunks || []}
+                  disabled={!parseResult}
+                  report={complianceReport}
+                  onReportChange={setComplianceReport}
+                  selectedModel={selectedModel}
+                  completenessChecks={completenessChecks}
+                  complianceChecks={complianceChecks}
+                  onChunkSelect={(chunkIds, pageNumber) => {
+                    const chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
+                    if (chunk) {
+                      setHighlightedChunk(chunk);
+                      if (pageNumber) {
+                        setTargetPage(pageNumber);
+                      }
                     }
-                  }
-                }}
-              />
+                  }}
+                />
+              </div>
             )}
           </div>
         </div>

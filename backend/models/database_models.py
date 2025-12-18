@@ -200,3 +200,112 @@ class ChatMessage(Base):
     __table_args__ = (
         Index("ix_chat_messages_session_id", "session_id"),
     )
+
+
+class DocumentAnnotation(Base):
+    """Sticky note annotations on documents for review workflow."""
+    __tablename__ = "document_annotations"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    document_id = Column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=True)
+    chunk_id = Column(String(100), nullable=True)  # Optional: attach to specific chunk
+
+    # Annotation scope level
+    level = Column(String(20), nullable=False)  # page, document, project
+
+    # Location (for page-level annotations)
+    page_number = Column(Integer, nullable=True)
+    bbox_left = Column(Float, nullable=True)
+    bbox_top = Column(Float, nullable=True)
+    bbox_right = Column(Float, nullable=True)
+    bbox_bottom = Column(Float, nullable=True)
+
+    # Content
+    text = Column(Text, nullable=False)
+    title = Column(String(255), nullable=True)
+    color = Column(String(50), default="yellow")  # yellow, blue, green based on level
+
+    # Classification
+    annotation_type = Column(String(50), default="comment")  # comment, question, issue, suggestion
+    status = Column(String(20), default="open")  # open, resolved, archived
+    priority = Column(String(20), default="normal")  # low, normal, high, critical
+
+    # Metadata
+    author = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_annotations_project_id", "project_id"),
+        Index("ix_annotations_document_id", "document_id"),
+        Index("ix_annotations_level", "level"),
+        Index("ix_annotations_status", "status"),
+    )
+
+
+class BatchJob(Base):
+    """Batch processing job for multiple documents."""
+    __tablename__ = "batch_jobs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+
+    # Configuration
+    parser = Column(String(50), nullable=False)  # landing_ai, claude_vision, etc.
+    model = Column(String(100), nullable=True)
+
+    # Progress tracking
+    status = Column(String(20), default="pending")  # pending, processing, completed, failed, cancelled
+    total_documents = Column(Integer, default=0)
+    completed_documents = Column(Integer, default=0)
+    failed_documents = Column(Integer, default=0)
+
+    # Error tracking
+    error_message = Column(Text, nullable=True)
+
+    # Timing
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    tasks = relationship("BatchTask", back_populates="batch_job", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_batch_jobs_project_id", "project_id"),
+        Index("ix_batch_jobs_status", "status"),
+    )
+
+
+class BatchTask(Base):
+    """Individual document task within a batch job."""
+    __tablename__ = "batch_tasks"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    batch_job_id = Column(String(36), ForeignKey("batch_jobs.id", ondelete="CASCADE"), nullable=False)
+    document_id = Column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+
+    # Status
+    status = Column(String(20), default="pending")  # pending, processing, completed, failed, skipped
+    progress = Column(Integer, default=0)  # 0-100 percentage
+
+    # Result reference
+    parse_result_id = Column(String(36), ForeignKey("parse_results.id", ondelete="SET NULL"), nullable=True)
+
+    # Error tracking
+    error_message = Column(Text, nullable=True)
+
+    # Timing
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    batch_job = relationship("BatchJob", back_populates="tasks")
+
+    __table_args__ = (
+        Index("ix_batch_tasks_batch_job_id", "batch_job_id"),
+        Index("ix_batch_tasks_document_id", "document_id"),
+        Index("ix_batch_tasks_status", "status"),
+    )

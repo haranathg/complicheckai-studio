@@ -15,6 +15,7 @@ interface PDFViewerProps {
   onChunkClick: (chunk: Chunk) => void;
   onPdfReady?: () => void;
   targetPage?: number;
+  onPageChange?: (page: number) => void;
 }
 
 export default function PDFViewer({
@@ -24,6 +25,7 @@ export default function PDFViewer({
   onChunkClick,
   onPdfReady,
   targetPage,
+  onPageChange,
 }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -92,6 +94,11 @@ export default function PDFViewer({
       });
     }
   }, [selectedChunk, pageSize]);
+
+  // Notify parent when page changes
+  useEffect(() => {
+    onPageChange?.(currentPage);
+  }, [currentPage, onPageChange]);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     console.log('PDF document loaded, pages:', numPages);

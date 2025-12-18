@@ -59,4 +59,4 @@ export interface ChatResponse {
   };
 }
 
-export type TabType = 'parse' | 'chat' | 'compliance';
+export type TabType = 'upload' | 'parse' | 'review' | 'chat' | 'compliance';

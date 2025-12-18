@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
-from routers import parse, extract, chat, compliance, projects, documents
+from routers import parse, extract, chat, compliance, projects, documents, annotations, batch
 import os
 
 load_dotenv()
@@ -54,6 +54,8 @@ app.include_router(compliance.router, prefix="/api/compliance", tags=["complianc
 # New project/document management routers
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(documents.router, prefix="/api/projects", tags=["documents"])
+app.include_router(annotations.router, prefix="/api/projects", tags=["annotations"])
+app.include_router(batch.router, prefix="/api/projects", tags=["batch"])
 
 
 @app.get("/health")
