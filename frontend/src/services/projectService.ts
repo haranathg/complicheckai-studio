@@ -63,19 +63,70 @@ export async function listDocuments(projectId: string): Promise<DocumentListResp
 }
 
 /**
- * Upload a document to a project
+ * Duplicate check response type
  */
-export async function uploadDocument(projectId: string, file: File): Promise<Document> {
+export interface DuplicateCheckResponse {
+  is_duplicate: boolean;
+  existing_document?: Document;
+  duplicate_type?: 'exact' | 'filename';
+  message?: string;
+}
+
+/**
+ * Check if a document would be a duplicate before uploading
+ */
+export async function checkDuplicateDocument(
+  projectId: string,
+  file: File
+): Promise<DuplicateCheckResponse> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_URL}/api/projects/${projectId}/documents`, {
+  const response = await fetch(`${API_URL}/api/projects/${projectId}/documents/check-duplicate`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error('Failed to check for duplicates');
+  }
+  return response.json();
+}
+
+/**
+ * Upload a document to a project
+ */
+export async function uploadDocument(
+  projectId: string,
+  file: File,
+  replaceExisting: boolean = false
+): Promise<Document> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const url = new URL(`${API_URL}/api/projects/${projectId}/documents`);
+  if (replaceExisting) {
+    url.searchParams.set('replace_existing', 'true');
+  }
+
+  const response = await fetch(url.toString(), {
     method: 'POST',
     body: formData,
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
-    throw new Error(error.detail || 'Failed to upload document');
+    // Handle conflict error specially
+    if (response.status === 409 && error.detail) {
+      const err = new Error(error.detail.message || 'File already exists') as Error & {
+        isConflict: boolean;
+        existingDocumentId: string;
+        uploadedAt: string;
+      };
+      err.isConflict = true;
+      err.existingDocumentId = error.detail.existing_document_id;
+      err.uploadedAt = error.detail.uploaded_at;
+      throw err;
+    }
+    throw new Error(typeof error.detail === 'string' ? error.detail : 'Failed to upload document');
   }
   return response.json();
 }

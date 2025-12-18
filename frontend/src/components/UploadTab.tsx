@@ -15,6 +15,7 @@ import {
   getOrCreateDefaultProject,
   listDocuments,
 } from '../services/projectService';
+import type { DuplicateCheckResponse } from '../services/projectService';
 import {
   startBatchProcess,
   getBatchJob,
@@ -63,6 +64,9 @@ export default function UploadTab({
   // Batch processing state
   const [activeBatchJob, setActiveBatchJob] = useState<BatchJob | null>(null);
   const [batchError, setBatchError] = useState<string | null>(null);
+
+  // Duplicate confirmation state
+  const [pendingUpload, setPendingUpload] = useState<{ file: File; duplicate: DuplicateCheckResponse } | null>(null);
 
   // Check if projects feature is available
   useEffect(() => {
@@ -186,8 +190,8 @@ export default function UploadTab({
     }
   }, [currentProject, defaultProject, selectedParser, onDocumentLoad, onDocumentChange]);
 
-  // Handle file upload
-  const handleUpload = async (file: File) => {
+  // Handle file upload - tries upload directly and handles conflicts
+  const handleUpload = async (file: File, replaceExisting: boolean = false) => {
     const targetProject = currentProject || defaultProject;
     if (!targetProject) {
       onDocumentLoad(file);
@@ -198,20 +202,48 @@ export default function UploadTab({
     setError(null);
 
     try {
-      const doc = await uploadDocument(targetProject.id, file);
+      const doc = await uploadDocument(targetProject.id, file, replaceExisting);
       if (!currentProject && defaultProject) {
         onProjectChange?.(defaultProject);
       }
       onDocumentChange?.(doc);
       setRefreshKey(prev => prev + 1);
       onDocumentLoad(file);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to upload document:', err);
-      setError('Failed to upload document');
-      onDocumentLoad(file);
+
+      // Check if it's a conflict error (filename duplicate)
+      const error = err as Error & { isConflict?: boolean; uploadedAt?: string };
+      if (error.isConflict) {
+        // Show duplicate confirmation dialog
+        setPendingUpload({
+          file,
+          duplicate: {
+            is_duplicate: true,
+            duplicate_type: 'filename',
+            message: `A file named '${file.name}' already exists (uploaded ${error.uploadedAt ? new Date(error.uploadedAt).toLocaleString() : 'previously'}). Do you want to replace it?`
+          }
+        });
+      } else {
+        setError('Failed to upload document');
+        onDocumentLoad(file);
+      }
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // Handle duplicate confirmation
+  const handleDuplicateConfirm = async (replace: boolean) => {
+    if (!pendingUpload) return;
+
+    if (replace) {
+      await handleUpload(pendingUpload.file, true);
+    } else {
+      // User chose to keep existing, load the file locally without uploading
+      onDocumentLoad(pendingUpload.file);
+    }
+    setPendingUpload(null);
   };
 
   // Toggle document selection for batch processing
@@ -318,7 +350,7 @@ export default function UploadTab({
         />
 
         <label className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors ${
-          isUploading ? 'opacity-50 cursor-not-allowed' : ''
+          isUploading || !!pendingUpload ? 'opacity-50 cursor-not-allowed' : ''
         }`}
         style={{
           background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
@@ -333,7 +365,7 @@ export default function UploadTab({
               if (file) handleUpload(file);
               e.target.value = '';
             }}
-            disabled={isUploading || isProcessing || isFetchingCached}
+            disabled={isUploading || !!pendingUpload}
             className="hidden"
           />
           {isUploading ? (
@@ -359,6 +391,51 @@ export default function UploadTab({
       {(error || batchError) && (
         <div className={`px-4 py-2 text-sm ${isDark ? 'text-red-400 bg-red-900/20' : 'text-red-600 bg-red-50'}`}>
           {error || batchError}
+        </div>
+      )}
+
+      {/* Duplicate confirmation dialog */}
+      {pendingUpload && (
+        <div className={`px-4 py-3 border-b ${theme.border} ${isDark ? 'bg-amber-900/20' : 'bg-amber-50'}`}>
+          <div className="flex items-start gap-3">
+            <svg className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div className="flex-1">
+              <p className={`text-sm font-medium ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>
+                Duplicate file detected
+              </p>
+              <p className={`text-sm mt-1 ${isDark ? 'text-amber-400/80' : 'text-amber-700'}`}>
+                {pendingUpload.duplicate.message}
+              </p>
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  onClick={() => handleDuplicateConfirm(true)}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    isDark ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'
+                  }`}
+                >
+                  Replace existing
+                </button>
+                <button
+                  onClick={() => handleDuplicateConfirm(false)}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                  }`}
+                >
+                  Keep existing
+                </button>
+                <button
+                  onClick={() => setPendingUpload(null)}
+                  className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    isDark ? 'text-slate-400 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

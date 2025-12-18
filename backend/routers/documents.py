@@ -152,10 +152,66 @@ async def list_documents(
     return DocumentListResponse(documents=doc_responses, total=total)
 
 
+class DuplicateDocumentResponse(BaseModel):
+    """Response when a duplicate document is detected."""
+    is_duplicate: bool
+    existing_document: Optional[DocumentResponse] = None
+    duplicate_type: Optional[str] = None  # 'exact' (same hash) or 'filename' (same name)
+    message: Optional[str] = None
+
+
+@router.post("/{project_id}/documents/check-duplicate")
+async def check_duplicate_document(
+    project_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Check if a document would be a duplicate before uploading."""
+    # Verify project exists
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Read file content
+    file_content = await file.read()
+    file_hash = s3_service.compute_file_hash(file_content)
+
+    # Check for exact duplicate (same content)
+    exact_match = db.query(Document).filter(
+        Document.project_id == project_id,
+        Document.file_hash == file_hash
+    ).first()
+
+    if exact_match:
+        return DuplicateDocumentResponse(
+            is_duplicate=True,
+            existing_document=get_document_response(exact_match, db),
+            duplicate_type="exact",
+            message=f"A file with identical content already exists: '{exact_match.original_filename}' (uploaded {exact_match.created_at.strftime('%Y-%m-%d %H:%M')})"
+        )
+
+    # Check for filename duplicate
+    filename_match = db.query(Document).filter(
+        Document.project_id == project_id,
+        Document.original_filename == file.filename
+    ).first()
+
+    if filename_match:
+        return DuplicateDocumentResponse(
+            is_duplicate=True,
+            existing_document=get_document_response(filename_match, db),
+            duplicate_type="filename",
+            message=f"A file named '{file.filename}' already exists (uploaded {filename_match.created_at.strftime('%Y-%m-%d %H:%M')}). Do you want to replace it?"
+        )
+
+    return DuplicateDocumentResponse(is_duplicate=False)
+
+
 @router.post("/{project_id}/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     project_id: str,
     file: UploadFile = File(...),
+    replace_existing: bool = False,
     db: Session = Depends(get_db)
 ):
     """Upload a new document to a project."""
@@ -168,6 +224,11 @@ async def upload_document(
     file_content = await file.read()
     file_size = len(file_content)
 
+    print(f"Upload: file={file.filename}, size={file_size}, replace={replace_existing}")
+
+    if file_size == 0:
+        raise HTTPException(status_code=400, detail="Empty file received. Please try uploading again.")
+
     # Compute hash for deduplication
     file_hash = s3_service.compute_file_hash(file_content)
 
@@ -179,7 +240,35 @@ async def upload_document(
 
     if existing_doc:
         # Return existing document instead of creating duplicate
+        print(f"Exact duplicate found: {existing_doc.id}")
         return get_document_response(existing_doc, db)
+
+    # Check for filename duplicate
+    filename_match = db.query(Document).filter(
+        Document.project_id == project_id,
+        Document.original_filename == file.filename
+    ).first()
+
+    if filename_match:
+        if replace_existing:
+            # Delete the old document first
+            print(f"Replacing existing document: {filename_match.id}")
+            try:
+                s3_service.delete_document_folder(project_id, filename_match.id)
+            except Exception as e:
+                print(f"Warning: Failed to delete S3 files for document {filename_match.id}: {e}")
+            db.delete(filename_match)
+            db.commit()
+        else:
+            print(f"Filename conflict: {file.filename}")
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": f"A file named '{file.filename}' already exists",
+                    "existing_document_id": filename_match.id,
+                    "uploaded_at": filename_match.created_at.isoformat()
+                }
+            )
 
     # Create document record first to get ID
     document = Document(
@@ -197,6 +286,7 @@ async def upload_document(
 
     # Upload to S3
     try:
+        print(f"Uploading to S3: {document.id}")
         s3_key = s3_service.upload_document(
             project_id=project_id,
             document_id=document.id,
@@ -206,8 +296,10 @@ async def upload_document(
         )
         document.s3_key = s3_key
         db.commit()
+        print(f"Upload successful: {s3_key}")
     except Exception as e:
         # Cleanup on failure
+        print(f"S3 upload failed: {e}")
         db.delete(document)
         db.commit()
         raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
