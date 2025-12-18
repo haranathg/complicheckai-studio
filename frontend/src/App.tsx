@@ -7,6 +7,7 @@ import ParseResults from './components/ParseResults';
 import ChatPanel from './components/ChatPanel';
 import CompliancePanel from './components/CompliancePanel';
 import SettingsPanel from './components/SettingsPanel';
+import ProjectDocumentPanel from './components/ProjectDocumentPanel';
 import LoginPage from './components/LoginPage';
 import type { ParseResponse, Chunk, TabType, ChatMessage } from './types/ade';
 import type { ComplianceReport, ComplianceCheck } from './types/compliance';
@@ -51,18 +52,34 @@ function App() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileUploadRef = useRef<FileUploadRef>(null);
 
-  const handleFileSelect = (uploadedFile: File) => {
+  const handleFileSelect = (uploadedFile: File, cachedResult?: ParseResponse) => {
     // Cancel any ongoing processing
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     setFile(uploadedFile);
     setError(null);
+    setParseResult(cachedResult || null);
+    setHighlightedChunk(null);
+    setPopupChunk(null);
+    setIsPdfReady(false);
+    setIsLoading(false);
+    setComplianceReport(null);
+    setTargetPage(undefined);
+    setChatMessages([]);
+  };
+
+  const handleClearDocument = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setFile(null);
     setParseResult(null);
     setHighlightedChunk(null);
     setPopupChunk(null);
     setIsPdfReady(false);
     setIsLoading(false);
+    setError(null);
     setComplianceReport(null);
     setTargetPage(undefined);
     setChatMessages([]);
@@ -280,6 +297,14 @@ function App() {
 
         {/* Right Panel - Results */}
         <div className="w-1/2 flex flex-col overflow-hidden" style={{ background: theme.panelBgAlt }}>
+          {/* Project/Document Panel */}
+          <ProjectDocumentPanel
+            onDocumentLoad={handleFileSelect}
+            onClearDocument={handleClearDocument}
+            isLoading={isLoading}
+            selectedParser={selectedParser}
+          />
+
           <TabNavigation
             activeTab={activeTab}
             onTabChange={setActiveTab}
