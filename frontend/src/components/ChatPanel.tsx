@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Chunk, ChatMessage } from '../types/ade';
 import { API_URL } from '../config';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface ChatPanelProps {
   markdown: string;
@@ -14,6 +15,7 @@ interface ChatPanelProps {
 }
 
 export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, messages, onMessagesChange, selectedModel }: ChatPanelProps) {
+  const { theme, isDark } = useTheme();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,11 +88,11 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
 
   if (disabled) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-500">
+      <div className={`flex flex-col items-center justify-center h-full ${isDark ? 'text-gray-500' : 'text-slate-400'}`}>
         <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
-        <p className="text-gray-400">Parse a document first to chat with it</p>
+        <p className={isDark ? 'text-gray-400' : 'text-slate-500'}>Parse a document first to chat with it</p>
       </div>
     );
   }
@@ -99,11 +101,11 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
     <div className="h-full flex flex-col">
       {/* Messages Header */}
       <div className="flex items-center justify-between mb-4">
-        <h4 className="text-sm font-medium text-gray-300">Chat with your document</h4>
+        <h4 className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>Chat with your document</h4>
         {messages.length > 0 && (
           <button
             onClick={clearChat}
-            className="text-sm text-gray-500 hover:text-gray-300"
+            className={`text-sm ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-slate-500 hover:text-slate-700'}`}
           >
             Clear chat
           </button>
@@ -114,9 +116,9 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
       <div className="flex-1 overflow-auto mb-4 space-y-4">
         {messages.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-gray-400 mb-4">Ask questions about your document</p>
+            <p className={`${isDark ? 'text-gray-400' : 'text-slate-500'} mb-4`}>Ask questions about your document</p>
             <div className="space-y-2">
-              <p className="text-sm text-gray-500">Try asking:</p>
+              <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-slate-400'}`}>Try asking:</p>
               <div className="flex flex-wrap justify-center gap-2">
                 {[
                   'What is this document about?',
@@ -126,7 +128,11 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
                   <button
                     key={suggestion}
                     onClick={() => setInput(suggestion)}
-                    className="px-3 py-1.5 text-sm bg-slate-700/50 hover:bg-slate-600/50 rounded-lg text-gray-300 transition-colors border border-slate-600/50"
+                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors border ${
+                      isDark
+                        ? 'bg-slate-700/50 hover:bg-slate-600/50 text-gray-300 border-slate-600/50'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                    }`}
                   >
                     {suggestion}
                   </button>
@@ -149,21 +155,23 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
                   className={`max-w-[85%] p-3 rounded-xl ${
                     msg.role === 'user'
                       ? 'text-white'
-                      : 'text-gray-200 border border-slate-700/40'
+                      : isDark
+                        ? 'text-gray-200 border border-slate-700/40'
+                        : 'text-slate-800 border border-slate-200'
                   }`}
                   style={msg.role === 'user'
                     ? { background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)' }
-                    : { background: 'rgba(2, 6, 23, 0.6)' }
+                    : { background: isDark ? 'rgba(2, 6, 23, 0.6)' : 'rgba(248, 250, 252, 0.9)' }
                   }
                 >
                   {msg.role === 'assistant' ? (
                     <>
-                      <div className="prose prose-sm prose-invert max-w-none">
+                      <div className={`prose prose-sm max-w-none ${isDark ? 'prose-invert' : ''}`}>
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
                       {relevantChunks.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-slate-700/40">
-                          <p className="text-xs text-gray-500 mb-2">
+                        <div className={`mt-3 pt-3 border-t ${isDark ? 'border-slate-700/40' : 'border-slate-200'}`}>
+                          <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-500'} mb-2`}>
                             Sources ({relevantChunks.length}) — click to view:
                           </p>
                           <div className="flex flex-wrap gap-1.5">
@@ -173,11 +181,15 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
                                 <button
                                   key={chunk.id}
                                   onClick={() => onChunkSelect([chunk.id], pageNum || undefined)}
-                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-slate-800/50 border border-slate-600/50 rounded hover:border-sky-400 hover:bg-sky-900/30 transition-colors"
+                                  className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                                    isDark
+                                      ? 'bg-slate-800/50 border border-slate-600/50 hover:border-sky-400 hover:bg-sky-900/30'
+                                      : 'bg-slate-100 border border-slate-300 hover:border-sky-500 hover:bg-sky-50'
+                                  }`}
                                 >
-                                  {pageNum && <span className="text-gray-500">p.{pageNum}</span>}
-                                  <span className="capitalize text-gray-400">{chunk.type}</span>
-                                  <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  {pageNum && <span className={isDark ? 'text-gray-500' : 'text-slate-500'}>p.{pageNum}</span>}
+                                  <span className={`capitalize ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>{chunk.type}</span>
+                                  <svg className={`w-3 h-3 ${isDark ? 'text-gray-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                                   </svg>
                                 </button>
@@ -198,10 +210,13 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
 
         {isLoading && (
           <div className="flex justify-start">
-            <div className="p-3 rounded-xl border border-slate-700/40" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
+            <div
+              className={`p-3 rounded-xl border ${isDark ? 'border-slate-700/40' : 'border-slate-200'}`}
+              style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : 'rgba(248, 250, 252, 0.9)' }}
+            >
               <div className="flex items-center gap-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-400"></div>
-                <span className="text-sm text-gray-300">Thinking...</span>
+                <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-slate-600'}`}>Thinking...</span>
               </div>
             </div>
           </div>
@@ -212,7 +227,11 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
 
       {/* Error */}
       {error && (
-        <div className="mb-4 p-3 bg-red-900/30 border border-red-700/50 rounded-xl text-red-400 text-sm">
+        <div className={`mb-4 p-3 rounded-xl text-sm ${
+          isDark
+            ? 'bg-red-900/30 border border-red-700/50 text-red-400'
+            : 'bg-red-50 border border-red-200 text-red-600'
+        }`}>
           {error}
         </div>
       )}
@@ -225,7 +244,11 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
           onKeyDown={handleKeyDown}
           placeholder="Ask a question about the document..."
           rows={1}
-          className="flex-1 bg-slate-800/60 border border-slate-600/50 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
+          className={`flex-1 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none ${
+            isDark
+              ? 'bg-slate-800/60 border border-slate-600/50 text-white placeholder-gray-500'
+              : 'bg-white border border-slate-300 text-slate-800 placeholder-slate-400'
+          }`}
         />
         <button
           onClick={sendMessage}

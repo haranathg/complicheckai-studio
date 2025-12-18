@@ -3,6 +3,7 @@ import type { Chunk } from '../types/ade';
 import type { CheckResult, ComplianceReport, ComplianceCheck } from '../types/compliance';
 import { API_URL } from '../config';
 import { getMarkdownPreview } from '../utils/cleanMarkdown';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface CompliancePanelProps {
   markdown: string;
@@ -18,48 +19,48 @@ interface CompliancePanelProps {
 
 type StatusFilter = 'all' | 'pass' | 'fail' | 'needs_review' | 'na';
 
-const statusConfig = {
+const getStatusConfig = (isDark: boolean) => ({
   pass: {
-    bg: 'bg-green-900/30',
-    border: 'border-green-700/50',
-    text: 'text-green-400',
+    bg: isDark ? 'bg-green-900/30' : 'bg-green-50',
+    border: isDark ? 'border-green-700/50' : 'border-green-200',
+    text: isDark ? 'text-green-400' : 'text-green-600',
     icon: '✓',
-    iconBg: 'bg-green-900/50',
+    iconBg: isDark ? 'bg-green-900/50' : 'bg-green-100',
     label: 'Pass',
   },
   fail: {
-    bg: 'bg-red-900/30',
-    border: 'border-red-700/50',
-    text: 'text-red-400',
+    bg: isDark ? 'bg-red-900/30' : 'bg-red-50',
+    border: isDark ? 'border-red-700/50' : 'border-red-200',
+    text: isDark ? 'text-red-400' : 'text-red-600',
     icon: '✗',
-    iconBg: 'bg-red-900/50',
+    iconBg: isDark ? 'bg-red-900/50' : 'bg-red-100',
     label: 'Fail',
   },
   needs_review: {
-    bg: 'bg-yellow-900/30',
-    border: 'border-yellow-700/50',
-    text: 'text-yellow-400',
+    bg: isDark ? 'bg-yellow-900/30' : 'bg-yellow-50',
+    border: isDark ? 'border-yellow-700/50' : 'border-yellow-200',
+    text: isDark ? 'text-yellow-400' : 'text-yellow-600',
     icon: '⚠',
-    iconBg: 'bg-yellow-900/50',
+    iconBg: isDark ? 'bg-yellow-900/50' : 'bg-yellow-100',
     label: 'Review',
   },
   na: {
-    bg: 'bg-slate-800/50',
-    border: 'border-slate-700/50',
-    text: 'text-gray-500',
+    bg: isDark ? 'bg-slate-800/50' : 'bg-slate-100',
+    border: isDark ? 'border-slate-700/50' : 'border-slate-200',
+    text: isDark ? 'text-gray-500' : 'text-slate-500',
     icon: '—',
-    iconBg: 'bg-slate-700/50',
+    iconBg: isDark ? 'bg-slate-700/50' : 'bg-slate-200',
     label: 'N/A',
   },
   pending: {
-    bg: 'bg-slate-800/50',
-    border: 'border-slate-700/50',
-    text: 'text-gray-500',
+    bg: isDark ? 'bg-slate-800/50' : 'bg-slate-100',
+    border: isDark ? 'border-slate-700/50' : 'border-slate-200',
+    text: isDark ? 'text-gray-500' : 'text-slate-500',
     icon: '○',
-    iconBg: 'bg-slate-700/50',
+    iconBg: isDark ? 'bg-slate-700/50' : 'bg-slate-200',
     label: 'Pending',
   },
-};
+});
 
 // Create pending check results from config for display before running
 function createPendingResults(checks: ComplianceCheck[], checkType: 'completeness' | 'compliance'): CheckResult[] {
@@ -88,6 +89,8 @@ export default function CompliancePanel({
   completenessChecks,
   complianceChecks,
 }: CompliancePanelProps) {
+  const { isDark } = useTheme();
+  const statusConfig = getStatusConfig(isDark);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'completeness' | 'compliance'>('completeness');
   const [error, setError] = useState<string | null>(null);
@@ -187,17 +190,23 @@ export default function CompliancePanel({
     const isPending = !report;
 
     return (
-      <div className="border border-slate-700/40 rounded-xl overflow-hidden" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
+      <div
+        className={`border rounded-xl overflow-hidden ${isDark ? 'border-slate-700/40' : 'border-slate-200'}`}
+        style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : 'rgba(248, 250, 252, 0.9)' }}
+      >
         <table className="w-full text-sm">
-          <thead className="border-b border-slate-700/40" style={{ background: 'rgba(2, 6, 23, 0.8)' }}>
+          <thead
+            className={`border-b ${isDark ? 'border-slate-700/40' : 'border-slate-200'}`}
+            style={{ background: isDark ? 'rgba(2, 6, 23, 0.8)' : 'rgba(241, 245, 249, 0.9)' }}
+          >
             <tr>
-              <th className="px-3 py-2 text-left font-medium text-gray-400 w-10">Status</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-400">Check</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-400 w-16">Source</th>
-              <th className="px-3 py-2 text-left font-medium text-gray-400 w-20">Confidence</th>
+              <th className={`px-3 py-2 text-left font-medium w-10 ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>Status</th>
+              <th className={`px-3 py-2 text-left font-medium ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>Check</th>
+              <th className={`px-3 py-2 text-left font-medium w-16 ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>Source</th>
+              <th className={`px-3 py-2 text-left font-medium w-20 ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>Confidence</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-700/40">
+          <tbody className={`divide-y ${isDark ? 'divide-slate-700/40' : 'divide-slate-200'}`}>
             {results.map((result) => {
               const status = (result.status as string) === 'pending' ? 'pending' : result.status;
               const config = statusConfig[status] || statusConfig.pending;
@@ -211,7 +220,7 @@ export default function CompliancePanel({
                   className={`
                     transition-colors
                     ${isPending ? 'cursor-default' : 'cursor-pointer'}
-                    ${isSelected ? 'bg-sky-900/30' : isPending ? '' : 'hover:bg-slate-800/50'}
+                    ${isSelected ? (isDark ? 'bg-sky-900/30' : 'bg-sky-50') : isPending ? '' : (isDark ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50')}
                     ${hasChunks || isPending ? '' : 'opacity-75'}
                   `}
                 >
@@ -219,11 +228,11 @@ export default function CompliancePanel({
                     {renderStatusIcon(status)}
                   </td>
                   <td className="px-3 py-2">
-                    <div className={`font-medium ${isPending ? 'text-gray-500' : 'text-gray-200'}`}>
+                    <div className={`font-medium ${isPending ? (isDark ? 'text-gray-500' : 'text-slate-400') : (isDark ? 'text-gray-200' : 'text-slate-800')}`}>
                       {result.check_name}
                     </div>
                     {isPending ? (
-                      <div className="text-xs text-gray-500">{result.notes}</div>
+                      <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-400'}`}>{result.notes}</div>
                     ) : result.found_value ? (
                       <div className={`text-xs ${config.text}`}>
                         Found: {result.found_value}
@@ -239,10 +248,10 @@ export default function CompliancePanel({
                         {result.chunk_ids.length}
                       </span>
                     ) : (
-                      <span className="text-gray-500">—</span>
+                      <span className={isDark ? 'text-gray-500' : 'text-slate-400'}>—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-gray-500">
+                  <td className={`px-3 py-2 ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>
                     {isPending ? '—' : result.confidence > 0 ? `${result.confidence}%` : '—'}
                   </td>
                 </tr>
@@ -257,7 +266,10 @@ export default function CompliancePanel({
   const renderDetailPanel = () => {
     if (!selectedResult) {
       return (
-        <div className="text-center text-gray-500 py-6 border border-slate-700/40 rounded-xl" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
+        <div
+          className={`text-center py-6 border rounded-xl ${isDark ? 'text-gray-500 border-slate-700/40' : 'text-slate-500 border-slate-200'}`}
+          style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : 'rgba(248, 250, 252, 0.9)' }}
+        >
           <p className="text-sm">Select a check to view details and source components</p>
         </div>
       );
@@ -277,31 +289,31 @@ export default function CompliancePanel({
             </span>
           </div>
           {selectedResult.confidence > 0 && (
-            <span className="text-sm text-gray-500">{selectedResult.confidence}% confidence</span>
+            <span className={`text-sm ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>{selectedResult.confidence}% confidence</span>
           )}
         </div>
 
         {selectedResult.found_value && (
           <div className="mb-2">
-            <span className="text-xs text-gray-500">Found: </span>
+            <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Found: </span>
             <span className={`text-sm font-medium ${config.text}`}>{selectedResult.found_value}</span>
           </div>
         )}
 
         {selectedResult.expected && (
           <div className="mb-2">
-            <span className="text-xs text-gray-500">Expected: </span>
-            <span className="text-sm text-gray-300">{selectedResult.expected}</span>
+            <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>Expected: </span>
+            <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>{selectedResult.expected}</span>
           </div>
         )}
 
         {selectedResult.notes && (
-          <p className="text-sm text-gray-400 mb-3">{selectedResult.notes}</p>
+          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-slate-600'} mb-3`}>{selectedResult.notes}</p>
         )}
 
         {relevantChunks.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-slate-700/40">
-            <p className="text-xs text-gray-500 mb-2">
+          <div className={`mt-3 pt-3 border-t ${isDark ? 'border-slate-700/40' : 'border-slate-200'}`}>
+            <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-500'} mb-2`}>
               Source components ({relevantChunks.length}) — click to view in document:
             </p>
             <div className="space-y-2 max-h-40 overflow-auto">
@@ -314,20 +326,32 @@ export default function CompliancePanel({
                       e.stopPropagation();
                       onChunkSelect([chunk.id], pageNum || undefined);
                     }}
-                    className="bg-slate-800/50 p-2 rounded-lg border border-slate-700/40 text-xs text-gray-300 cursor-pointer hover:border-sky-500/50 hover:bg-sky-900/30 transition-colors group"
+                    className={`p-2 rounded-lg border text-xs cursor-pointer transition-colors group ${
+                      isDark
+                        ? 'bg-slate-800/50 border-slate-700/40 text-gray-300 hover:border-sky-500/50 hover:bg-sky-900/30'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-sky-400 hover:bg-sky-50'
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="line-clamp-2 flex-1">{getMarkdownPreview(chunk.markdown, 150)}</span>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {pageNum && (
-                          <span className="text-[10px] px-1.5 py-0.5 bg-slate-700/50 text-gray-500 rounded group-hover:bg-sky-900/50 group-hover:text-sky-400">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                            isDark
+                              ? 'bg-slate-700/50 text-gray-500 group-hover:bg-sky-900/50 group-hover:text-sky-400'
+                              : 'bg-slate-200 text-slate-500 group-hover:bg-sky-100 group-hover:text-sky-600'
+                          }`}>
                             p.{pageNum}
                           </span>
                         )}
-                        <span className="text-[10px] px-1.5 py-0.5 bg-slate-700/50 text-gray-500 rounded capitalize group-hover:bg-sky-900/50 group-hover:text-sky-400">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded capitalize ${
+                          isDark
+                            ? 'bg-slate-700/50 text-gray-500 group-hover:bg-sky-900/50 group-hover:text-sky-400'
+                            : 'bg-slate-200 text-slate-500 group-hover:bg-sky-100 group-hover:text-sky-600'
+                        }`}>
                           {chunk.type}
                         </span>
-                        <svg className="w-3 h-3 text-gray-500 group-hover:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className={`w-3 h-3 ${isDark ? 'text-gray-500 group-hover:text-sky-400' : 'text-slate-400 group-hover:text-sky-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                         </svg>
                       </div>
@@ -351,7 +375,7 @@ export default function CompliancePanel({
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-lg text-gray-200">Compliance Checks</h3>
+        <h3 className={`font-semibold text-lg ${isDark ? 'text-gray-200' : 'text-slate-800'}`}>Compliance Checks</h3>
         <button
           onClick={runChecks}
           disabled={disabled || isLoading}
@@ -379,7 +403,11 @@ export default function CompliancePanel({
       </div>
 
       {error && (
-        <div className="mb-3 p-3 bg-red-900/30 border border-red-700/50 rounded-xl text-red-400 text-sm">
+        <div className={`mb-3 p-3 rounded-xl text-sm ${
+          isDark
+            ? 'bg-red-900/30 border border-red-700/50 text-red-400'
+            : 'bg-red-50 border border-red-200 text-red-600'
+        }`}>
           {error}
         </div>
       )}
@@ -391,78 +419,78 @@ export default function CompliancePanel({
             onClick={() => handleFilterClick('all')}
             className={`rounded-xl p-2 text-center cursor-pointer transition-all ${
               statusFilter === 'all'
-                ? 'bg-sky-900/40 border-2 border-sky-500'
-                : 'bg-sky-900/20 border border-sky-700/50 hover:border-sky-600'
+                ? (isDark ? 'bg-sky-900/40 border-2 border-sky-500' : 'bg-sky-100 border-2 border-sky-400')
+                : (isDark ? 'bg-sky-900/20 border border-sky-700/50 hover:border-sky-600' : 'bg-sky-50 border border-sky-200 hover:border-sky-300')
             }`}
           >
-            <div className="text-xl font-bold text-sky-400">
+            <div className={`text-xl font-bold ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>
               {report.summary.completeness_score}%
             </div>
-            <div className="text-xs text-sky-400">Complete</div>
+            <div className={`text-xs ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>Complete</div>
           </div>
           <div
             onClick={() => handleFilterClick('pass')}
             className={`rounded-xl p-2 text-center cursor-pointer transition-all ${
               statusFilter === 'pass'
-                ? 'bg-green-900/40 border-2 border-green-500'
-                : 'bg-green-900/20 border border-green-700/50 hover:border-green-600'
+                ? (isDark ? 'bg-green-900/40 border-2 border-green-500' : 'bg-green-100 border-2 border-green-400')
+                : (isDark ? 'bg-green-900/20 border border-green-700/50 hover:border-green-600' : 'bg-green-50 border border-green-200 hover:border-green-300')
             }`}
           >
-            <div className="text-xl font-bold text-green-400">
+            <div className={`text-xl font-bold ${isDark ? 'text-green-400' : 'text-green-600'}`}>
               {report.summary.passed}
             </div>
-            <div className="text-xs text-green-400">Passed</div>
+            <div className={`text-xs ${isDark ? 'text-green-400' : 'text-green-600'}`}>Passed</div>
           </div>
           <div
             onClick={() => handleFilterClick('fail')}
             className={`rounded-xl p-2 text-center cursor-pointer transition-all ${
               statusFilter === 'fail'
-                ? 'bg-red-900/40 border-2 border-red-500'
-                : 'bg-red-900/20 border border-red-700/50 hover:border-red-600'
+                ? (isDark ? 'bg-red-900/40 border-2 border-red-500' : 'bg-red-100 border-2 border-red-400')
+                : (isDark ? 'bg-red-900/20 border border-red-700/50 hover:border-red-600' : 'bg-red-50 border border-red-200 hover:border-red-300')
             }`}
           >
-            <div className="text-xl font-bold text-red-400">
+            <div className={`text-xl font-bold ${isDark ? 'text-red-400' : 'text-red-600'}`}>
               {report.summary.failed}
             </div>
-            <div className="text-xs text-red-400">Failed</div>
+            <div className={`text-xs ${isDark ? 'text-red-400' : 'text-red-600'}`}>Failed</div>
           </div>
           <div
             onClick={() => handleFilterClick('needs_review')}
             className={`rounded-xl p-2 text-center cursor-pointer transition-all ${
               statusFilter === 'needs_review'
-                ? 'bg-yellow-900/40 border-2 border-yellow-500'
-                : 'bg-yellow-900/20 border border-yellow-700/50 hover:border-yellow-600'
+                ? (isDark ? 'bg-yellow-900/40 border-2 border-yellow-500' : 'bg-yellow-100 border-2 border-yellow-400')
+                : (isDark ? 'bg-yellow-900/20 border border-yellow-700/50 hover:border-yellow-600' : 'bg-yellow-50 border border-yellow-200 hover:border-yellow-300')
             }`}
           >
-            <div className="text-xl font-bold text-yellow-400">
+            <div className={`text-xl font-bold ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>
               {report.summary.needs_review}
             </div>
-            <div className="text-xs text-yellow-400">Review</div>
+            <div className={`text-xs ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>Review</div>
           </div>
           <div
             onClick={() => handleFilterClick('na')}
             className={`rounded-xl p-2 text-center cursor-pointer transition-all ${
               statusFilter === 'na'
-                ? 'bg-slate-700/50 border-2 border-slate-500'
-                : 'bg-slate-800/50 border border-slate-700/50 hover:border-slate-600'
+                ? (isDark ? 'bg-slate-700/50 border-2 border-slate-500' : 'bg-slate-200 border-2 border-slate-400')
+                : (isDark ? 'bg-slate-800/50 border border-slate-700/50 hover:border-slate-600' : 'bg-slate-100 border border-slate-200 hover:border-slate-300')
             }`}
           >
-            <div className="text-xl font-bold text-gray-400">
+            <div className={`text-xl font-bold ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>
               {report.summary.na || 0}
             </div>
-            <div className="text-xs text-gray-500">N/A</div>
+            <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>N/A</div>
           </div>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-700/40 mb-3">
+      <div className={`flex border-b mb-3 ${isDark ? 'border-slate-700/40' : 'border-slate-200'}`}>
         <button
           onClick={() => { setActiveTab('completeness'); setSelectedResult(null); }}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'completeness'
               ? 'border-sky-400 text-sky-400'
-              : 'border-transparent text-gray-500 hover:text-gray-300'
+              : (isDark ? 'border-transparent text-gray-500 hover:text-gray-300' : 'border-transparent text-slate-500 hover:text-slate-700')
           }`}
         >
           Completeness ({report ? report.completeness_results.length : completenessChecks.length})
@@ -472,7 +500,7 @@ export default function CompliancePanel({
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'compliance'
               ? 'border-sky-400 text-sky-400'
-              : 'border-transparent text-gray-500 hover:text-gray-300'
+              : (isDark ? 'border-transparent text-gray-500 hover:text-gray-300' : 'border-transparent text-slate-500 hover:text-slate-700')
           }`}
         >
           Compliance ({report ? report.compliance_results.length : complianceChecks.length})
@@ -485,7 +513,7 @@ export default function CompliancePanel({
         <div className="flex-1 overflow-auto min-h-[200px]">
           {renderTable(displayResults)}
           {report && displayResults.length === 0 && (
-            <div className="text-center text-gray-500 py-8">
+            <div className={`text-center py-8 ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>
               <p className="text-sm">No {statusFilter === 'all' ? '' : statusFilter.replace('_', ' ')} checks found</p>
             </div>
           )}
@@ -499,8 +527,8 @@ export default function CompliancePanel({
 
       {/* Footer */}
       {report && (
-        <div className="mt-3 pt-3 border-t border-slate-700/40 flex items-center justify-between">
-          <p className="text-xs text-gray-500">
+        <div className={`mt-3 pt-3 border-t flex items-center justify-between ${isDark ? 'border-slate-700/40' : 'border-slate-200'}`}>
+          <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>
             {statusFilter !== 'all' && (
               <button
                 onClick={() => setStatusFilter('all')}
