@@ -352,6 +352,8 @@ export default function PDFViewer({
                     </div>
                   )}
                   {/* Annotation Overlays - rendered above chunks */}
+                  {/* When showChunks is true (Parse tab), only show stickies tied to chunks */}
+                  {/* When showChunks is false (Review tab), show all stickies */}
                   {pageSize.width > 0 && pageAnnotations.length > 0 && (
                     <div
                       className="absolute pointer-events-none"
@@ -362,7 +364,9 @@ export default function PDFViewer({
                         height: pageSize.height,
                       }}
                     >
-                      {pageAnnotations.map((annotation) => {
+                      {pageAnnotations
+                        .filter(a => !showChunks || a.chunk_id)
+                        .map((annotation) => {
                         // For chunk-linked annotations, get bbox from the linked chunk
                         let annotationWithBbox = annotation;
                         if (annotation.chunk_id && !annotation.bbox) {
