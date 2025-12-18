@@ -14,6 +14,7 @@ import { API_URL } from './config';
 import { isAuthenticated, logout } from './utils/auth';
 import { getDefaultModelForParser } from './components/ModelSelector';
 import { getParserType, getModelForParser } from './components/ParserSelector';
+import { useTheme, getThemeStyles } from './contexts/ThemeContext';
 import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
 import cognaifySymbol from './assets/cognaify-symbol.png';
 import complianceConfig from './config/complianceChecks.json';
@@ -23,6 +24,8 @@ const DEFAULT_MODEL = 'bedrock-claude-sonnet-3.5';
 const DEFAULT_PARSER = 'landing_ai';
 
 function App() {
+  const { isDark } = useTheme();
+  const theme = getThemeStyles(isDark);
   const [authenticated, setAuthenticated] = useState(isAuthenticated());
   const [file, setFile] = useState<File | null>(null);
   const [parseResult, setParseResult] = useState<ParseResponse | null>(null);
@@ -151,9 +154,9 @@ function App() {
   }
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: 'radial-gradient(circle at top, #111827 0%, #020617 55%, #000 100%)' }}>
+    <div className="h-screen flex flex-col" style={{ background: theme.pageBg }}>
       {/* Header */}
-      <header className="border-b border-slate-700/40 px-6 py-3" style={{ background: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(8px)' }}>
+      <header className={`border-b ${theme.border} px-6 py-3`} style={{ background: theme.headerBg, backdropFilter: 'blur(8px)' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img
@@ -161,17 +164,17 @@ function App() {
               alt="Cognaify Solutions"
               className="h-10 object-contain"
             />
-            <div className="h-8 w-px bg-slate-700/40"></div>
+            <div className={`h-8 w-px ${isDark ? 'bg-slate-700/40' : 'bg-slate-300/60'}`}></div>
             <div className="flex flex-col">
-              <h1 className="text-lg font-semibold text-white leading-tight">
-                CompliCheck<span className="bg-gradient-to-r from-sky-400 via-purple-500 to-orange-500 bg-clip-text text-transparent">AI</span><sup className="text-[8px] text-gray-400 ml-0.5">TM</sup>
+              <h1 className={`text-lg font-semibold ${theme.textPrimary} leading-tight`}>
+                CompliCheck<span className="bg-gradient-to-r from-sky-400 via-purple-500 to-orange-500 bg-clip-text text-transparent">AI</span><sup className={`text-[8px] ${theme.textMuted} ml-0.5`}>TM</sup>
               </h1>
-              <span className="text-xs text-gray-400">Document Compliance Studio</span>
+              <span className={`text-xs ${theme.textMuted}`}>Document Compliance Studio</span>
             </div>
           </div>
           <div className="flex items-center gap-4">
             {file && (
-              <span className="text-sm text-gray-300">
+              <span className={`text-sm ${theme.textSecondary}`}>
                 {file.name}
               </span>
             )}
@@ -205,7 +208,7 @@ function App() {
             )}
             <button
               onClick={handleLogout}
-              className="p-2 text-gray-400 hover:text-white transition-colors"
+              className={`p-2 ${theme.textMuted} hover:${theme.textPrimary} transition-colors`}
               title="Sign Out"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -218,15 +221,15 @@ function App() {
 
       {/* Error Banner */}
       {error && (
-        <div className="bg-red-900/30 border-b border-red-700/50 px-6 py-3">
-          <div className="flex items-center gap-2 text-red-400">
+        <div className={`${isDark ? 'bg-red-900/30 border-red-700/50' : 'bg-red-100 border-red-300'} border-b px-6 py-3`}>
+          <div className={`flex items-center gap-2 ${isDark ? 'text-red-400' : 'text-red-600'}`}>
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span className="text-sm">{error}</span>
             <button
               onClick={() => setError(null)}
-              className="ml-auto text-red-400 hover:text-red-300"
+              className={`ml-auto ${isDark ? 'text-red-400 hover:text-red-300' : 'text-red-600 hover:text-red-800'}`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -239,7 +242,7 @@ function App() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - PDF Viewer */}
-        <div className="w-1/2 border-r border-slate-700/40 overflow-hidden" style={{ background: 'rgba(2, 6, 23, 0.6)' }}>
+        <div className={`w-1/2 border-r ${theme.border} overflow-hidden`} style={{ background: theme.panelBg }}>
           {file ? (
             <PDFViewer
               file={file}
@@ -250,18 +253,18 @@ function App() {
               targetPage={targetPage}
             />
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-gray-500">
+            <div className={`h-full flex flex-col items-center justify-center ${theme.textSubtle}`}>
               <svg className="w-20 h-20 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
-              <p className="text-lg font-medium mb-2 text-gray-300">Upload a document</p>
+              <p className={`text-lg font-medium mb-2 ${theme.textSecondary}`}>Upload a document</p>
               <p className="text-sm">Supported formats: PDF, PNG, JPG, TIFF, BMP</p>
             </div>
           )}
         </div>
 
         {/* Right Panel - Results */}
-        <div className="w-1/2 flex flex-col overflow-hidden" style={{ background: 'rgba(2, 6, 23, 0.4)' }}>
+        <div className="w-1/2 flex flex-col overflow-hidden" style={{ background: theme.panelBgAlt }}>
           <TabNavigation
             activeTab={activeTab}
             onTabChange={setActiveTab}
@@ -370,7 +373,7 @@ function App() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-slate-700/40 px-6 py-2 text-xs text-gray-500 flex items-center justify-between" style={{ background: 'rgba(2, 6, 23, 0.8)' }}>
+      <footer className={`border-t ${theme.border} px-6 py-2 text-xs ${theme.textSubtle} flex items-center justify-between relative`} style={{ background: theme.footerBg }}>
         <span className="flex items-center gap-2">
           <span>CompliCheck<span className="bg-gradient-to-r from-sky-400 to-purple-500 bg-clip-text text-transparent font-medium">AI</span><sup className="text-[6px]">TM</sup></span>
           <span>- powered by</span>
@@ -379,7 +382,7 @@ function App() {
           </a>
         </span>
         {parseResult && (
-          <span className="text-gray-400">
+          <span className={theme.textMuted}>
             {parseResult.chunks.length} components extracted
             {parseResult.metadata.page_count && ` from ${parseResult.metadata.page_count} pages`}
           </span>

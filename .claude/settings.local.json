@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm audit:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nFix npm security vulnerabilities in pdfjs-dist\n\n- Upgraded react-pdf from v7 to v9.2.1\n- Upgraded pdfjs-dist from v3.11.174 to v4.8.69\n- Updated PDF worker URL to use dynamic version matching\n- Resolved 2 high severity vulnerabilities (CVE for arbitrary JS execution)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nFix npm security vulnerabilities in pdfjs-dist\n\n- Upgraded react-pdf from v7 to v9.2.1\n- Upgraded pdfjs-dist from v3.11.174 to v4.8.69\n- Updated PDF worker URL to use dynamic version matching\n- Resolved 2 high severity vulnerabilities (CVE for arbitrary JS execution)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []

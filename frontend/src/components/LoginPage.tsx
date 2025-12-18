@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { validateAccessKey, setAuthenticated } from '../utils/auth';
+import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 import cognaifyLogo from '../assets/Cognaify-logo-white-bg.png';
 
 interface LoginPageProps {
@@ -7,6 +8,8 @@ interface LoginPageProps {
 }
 
 export default function LoginPage({ onAuthenticated }: LoginPageProps) {
+  const { isDark, toggleTheme } = useTheme();
+  const theme = getThemeStyles(isDark);
   const [accessKey, setAccessKey] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
@@ -29,15 +32,21 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'radial-gradient(circle at top, #111827 0%, #020617 55%, #000 100%)' }}>
-      <div className="max-w-md w-full p-8 rounded-2xl border border-slate-700/40" style={{ background: 'radial-gradient(circle at top left, rgba(30, 64, 175, 0.35), #020617 65%)', boxShadow: '0 12px 35px rgba(15, 23, 42, 0.7)' }}>
+    <div className="min-h-screen flex items-center justify-center p-4 relative" style={{ background: theme.pageBg }}>
+      <div
+        className={`max-w-md w-full p-8 rounded-2xl border ${theme.border}`}
+        style={{
+          background: theme.cardBg,
+          boxShadow: isDark ? '0 12px 35px rgba(15, 23, 42, 0.7)' : '0 12px 35px rgba(100, 116, 139, 0.2)'
+        }}
+      >
         {/* Header */}
         <div className="flex flex-col items-center mb-8">
           <div className="text-center">
-            <h1 className="text-2xl font-semibold text-white">
-              CompliCheck<span className="bg-gradient-to-r from-sky-400 via-purple-500 to-orange-500 bg-clip-text text-transparent">AI</span><sup className="text-[10px] text-gray-400 ml-0.5">TM</sup>
+            <h1 className={`text-2xl font-semibold ${theme.textPrimary}`}>
+              CompliCheck<span className="bg-gradient-to-r from-sky-400 via-purple-500 to-orange-500 bg-clip-text text-transparent">AI</span><sup className={`text-[10px] ${theme.textMuted} ml-0.5`}>TM</sup>
             </h1>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className={`text-sm ${theme.textMuted} mt-1`}>
               Document Compliance Studio
             </p>
           </div>
@@ -45,10 +54,10 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
 
         {/* Description */}
         <div className="text-center mb-8">
-          <p className="text-gray-400 text-sm leading-relaxed">
+          <p className={`${theme.textMuted} text-sm leading-relaxed`}>
             AI-powered document compliance checking for building consent applications.
           </p>
-          <p className="text-gray-500 text-xs mt-3">
+          <p className={`${theme.textSubtle} text-xs mt-3`}>
             Enter your access key to continue.
           </p>
         </div>
@@ -56,7 +65,7 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="accessKey" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="accessKey" className={`block text-sm font-medium ${theme.textSecondary} mb-2`}>
               Access Key
             </label>
             <input
@@ -65,14 +74,14 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
               value={accessKey}
               onChange={(e) => setAccessKey(e.target.value)}
               placeholder="Enter your access key"
-              className="w-full px-4 py-3 bg-slate-900/60 border border-slate-600/50 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all text-white placeholder-gray-500"
+              className={`w-full px-4 py-3 ${theme.inputBg} border ${theme.inputBorder} rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all ${theme.textPrimary} ${isDark ? 'placeholder-gray-500' : 'placeholder-slate-400'}`}
               disabled={isValidating}
               autoFocus
             />
           </div>
 
           {error && (
-            <div className="p-3 bg-red-900/30 border border-red-700/50 rounded-xl text-red-400 text-sm">
+            <div className={`p-3 ${isDark ? 'bg-red-900/30 border-red-700/50 text-red-400' : 'bg-red-100 border-red-300 text-red-600'} border rounded-xl text-sm`}>
               {error}
             </div>
           )}
@@ -104,13 +113,20 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
         </form>
 
         {/* Footer */}
-        <div className="mt-8 pt-6 border-t border-slate-700/40 text-center">
-          <p className="text-xs text-gray-500">
+        <div className={`mt-8 pt-6 border-t ${theme.border} text-center relative`}>
+          <p className={`text-xs ${theme.textSubtle}`}>
             Need access? Contact your administrator.
           </p>
-          <p className="text-xs text-gray-500 mt-2 flex items-center justify-center gap-1">
+          <p className={`text-xs ${theme.textSubtle} mt-2 flex items-center justify-center gap-1`}>
             Powered by <a href="https://cognaify.com" target="_blank" rel="noopener noreferrer" className="flex items-center"><img src={cognaifyLogo} alt="Cognaify Solutions" className="h-4 object-contain" /></a>
           </p>
+          {/* Hidden theme toggle hotspot - 10x10px area below powered by */}
+          <button
+            onClick={toggleTheme}
+            className="mt-2 w-[10px] h-[10px] cursor-default opacity-0 mx-auto block"
+            title=""
+            aria-label="Toggle theme"
+          />
         </div>
       </div>
     </div>
