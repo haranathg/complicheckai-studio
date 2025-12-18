@@ -15,7 +15,7 @@ interface ChatPanelProps {
 }
 
 export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, messages, onMessagesChange, selectedModel }: ChatPanelProps) {
-  const { theme, isDark } = useTheme();
+  const { isDark } = useTheme();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -11,6 +11,7 @@ interface ParseResultsProps {
   onPopupOpen: (chunk: Chunk | null) => void;
   onChunkSelect: (chunk: Chunk) => void;
   isLoading: boolean;
+  onAddNote?: (chunk: Chunk) => void;
 }
 
 type ViewMode = 'markdown' | 'components';
@@ -22,6 +23,7 @@ export default function ParseResults({
   onPopupOpen,
   onChunkSelect,
   isLoading,
+  onAddNote,
 }: ParseResultsProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
@@ -182,6 +184,25 @@ export default function ParseResults({
                       <span className={`text-xs ${theme.textSubtle}`}>
                         Page {chunk.grounding.page + 1}
                       </span>
+                    )}
+                    <div className="flex-1" />
+                    {onAddNote && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAddNote(chunk);
+                        }}
+                        className={`p-1 rounded transition-colors ${
+                          isDark
+                            ? 'text-amber-400/60 hover:text-amber-400 hover:bg-amber-900/30'
+                            : 'text-amber-500/60 hover:text-amber-600 hover:bg-amber-50'
+                        }`}
+                        title="Add note to this component"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                        </svg>
+                      </button>
                     )}
                   </div>
                   <p className={`text-sm ${theme.textSecondary} line-clamp-3`}>

@@ -7,6 +7,7 @@ import CompliancePanel from './components/CompliancePanel';
 import SettingsPanel from './components/SettingsPanel';
 import UploadTab from './components/UploadTab';
 import ReviewTab from './components/ReviewTab';
+import AnnotationPanel from './components/AnnotationPanel';
 import type { Project, Document } from './types/project';
 import SaveToProjectDropdown from './components/SaveToProjectDropdown';
 import LoginPage from './components/LoginPage';
@@ -56,6 +57,7 @@ function App() {
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
   const [projectsAvailable, setProjectsAvailable] = useState<boolean | null>(null);
   const [defaultProject, setDefaultProject] = useState<Project | null>(null);
+  const [prefilledChunk, setPrefilledChunk] = useState<Chunk | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -356,18 +358,35 @@ function App() {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - PDF Viewer */}
-        <div className={`w-1/2 border-r ${theme.border} overflow-hidden`} style={{ background: theme.panelBg }}>
+        {/* Left Panel - PDF Viewer + Annotation Panel */}
+        <div className={`w-1/2 border-r ${theme.border} overflow-hidden flex flex-col`} style={{ background: theme.panelBg }}>
           {file ? (
-            <PDFViewer
-              file={file}
-              chunks={parseResult?.chunks || []}
-              selectedChunk={highlightedChunk}
-              onChunkClick={handleChunkClick}
-              onPdfReady={handlePdfReady}
-              targetPage={targetPage}
-              onPageChange={setCurrentPage}
-            />
+            <>
+              <div className="flex-1 overflow-hidden">
+                <PDFViewer
+                  file={file}
+                  chunks={parseResult?.chunks || []}
+                  selectedChunk={highlightedChunk}
+                  onChunkClick={handleChunkClick}
+                  onPdfReady={handlePdfReady}
+                  targetPage={targetPage}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+              {/* Annotation Panel - below PDF */}
+              <AnnotationPanel
+                currentProject={currentProject}
+                currentDocument={currentDocument}
+                currentPage={currentPage}
+                prefilledChunk={prefilledChunk}
+                onClearPrefilledChunk={() => setPrefilledChunk(null)}
+                onAnnotationClick={(annotation) => {
+                  if (annotation.page_number) {
+                    setTargetPage(annotation.page_number);
+                  }
+                }}
+              />
+            </>
           ) : (
             <label className={`h-full w-full flex flex-col items-center justify-center ${theme.textSubtle} cursor-pointer hover:opacity-80 transition-opacity`}>
               <input
@@ -425,6 +444,14 @@ function App() {
                     }
                   }}
                   isLoading={isLoading}
+                  onAddNote={(chunk) => {
+                    setPrefilledChunk(chunk);
+                    // Navigate to chunk's page so annotation panel shows the right page
+                    if (chunk.grounding) {
+                      setTargetPage(chunk.grounding.page + 1);
+                      setCurrentPage(chunk.grounding.page + 1);
+                    }
+                  }}
                 />
               </div>
             )}
