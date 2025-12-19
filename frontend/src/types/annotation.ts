@@ -64,12 +64,12 @@ export interface AnnotationListResponse {
 // Color mapping for annotation levels
 export const ANNOTATION_COLORS: Record<AnnotationLevel, string> = {
   page: 'rgba(251, 191, 36, 0.85)',     // Yellow/Amber
-  document: 'rgba(96, 165, 250, 0.85)', // Blue
-  project: 'rgba(74, 222, 128, 0.85)',  // Green
+  document: 'rgba(74, 222, 128, 0.85)', // Green
+  project: 'rgba(96, 165, 250, 0.85)',  // Blue
 };
 
 export const ANNOTATION_BORDER_COLORS: Record<AnnotationLevel, string> = {
   page: 'rgb(245, 158, 11)',     // Amber-500
-  document: 'rgb(59, 130, 246)', // Blue-500
-  project: 'rgb(34, 197, 94)',   // Green-500
+  document: 'rgb(34, 197, 94)',  // Green-500
+  project: 'rgb(59, 130, 246)',  // Blue-500
 };

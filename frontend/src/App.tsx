@@ -18,7 +18,7 @@ import { API_URL } from './config';
 import { isAuthenticated, logout } from './utils/auth';
 import { getDefaultModelForParser } from './components/ModelSelector';
 import { getParserType, getModelForParser } from './components/ParserSelector';
-import { uploadDocument, checkProjectsAvailable, getOrCreateDefaultProject } from './services/projectService';
+import { uploadDocument, checkProjectsAvailable, getOrCreateDefaultProject, listDocuments, getLatestParseResult, getDocumentDownloadUrl } from './services/projectService';
 import { listDocumentAnnotations, listProjectAnnotations } from './services/annotationService';
 import { useTheme, getThemeStyles } from './contexts/ThemeContext';
 import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
@@ -62,6 +62,7 @@ function App() {
   const [prefilledChunk, setPrefilledChunk] = useState<Chunk | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selectedAnnotation, setSelectedAnnotation] = useState<Annotation | null>(null);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -101,6 +102,75 @@ function App() {
   useEffect(() => {
     loadAnnotations();
   }, [loadAnnotations]);
+
+  // Load documents when project changes
+  const loadDocuments = useCallback(async () => {
+    const project = currentProject || defaultProject;
+    if (!project) {
+      setDocuments([]);
+      return;
+    }
+    try {
+      const response = await listDocuments(project.id);
+      setDocuments(response.documents);
+    } catch (err) {
+      console.error('Failed to load documents:', err);
+      setDocuments([]);
+    }
+  }, [currentProject, defaultProject]);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments]);
+
+  // Handle document selection from Parse tab dropdown
+  const handleParseDocumentSelect = useCallback(async (doc: Document) => {
+    const project = currentProject || defaultProject;
+    if (!project) return;
+
+    setCurrentDocument(doc);
+    setIsLoading(true);
+
+    try {
+      const fileUrl = await getDocumentDownloadUrl(project.id, doc.id);
+      const response = await fetch(fileUrl);
+      const blob = await response.blob();
+      const loadedFile = new File([blob], doc.original_filename, {
+        type: doc.content_type || 'application/pdf',
+      });
+
+      const cachedResponse = await getLatestParseResult(project.id, doc.id, selectedParser);
+
+      if (cachedResponse.cached && cachedResponse.result) {
+        const parseResultData: ParseResponse = {
+          markdown: cachedResponse.result.markdown,
+          chunks: cachedResponse.result.chunks.map(c => ({
+            id: c.id,
+            markdown: c.markdown,
+            type: c.type,
+            grounding: c.grounding || null,
+          })),
+          metadata: {
+            page_count: cachedResponse.result.metadata.page_count || null,
+            credit_usage: cachedResponse.result.metadata.credit_usage || null,
+            parser: cachedResponse.result.metadata.parser,
+            model: cachedResponse.result.metadata.model,
+            usage: cachedResponse.result.metadata.usage,
+          },
+        };
+        setFile(loadedFile);
+        setParseResult(parseResultData);
+      } else {
+        setFile(loadedFile);
+        setParseResult(null);
+      }
+    } catch (err) {
+      console.error('Failed to load document:', err);
+      setError('Failed to load document');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentProject, defaultProject, selectedParser]);
 
   const handleFileSelect = (uploadedFile: File, cachedResult?: ParseResponse) => {
     // Cancel any ongoing processing
@@ -484,7 +554,7 @@ function App() {
               />
             )}
             {activeTab === 'parse' && (
-              <div className="p-4">
+              <div className="p-4 h-full">
                 <ParseResults
                   result={parseResult}
                   highlightedChunk={highlightedChunk}
@@ -506,6 +576,10 @@ function App() {
                       setCurrentPage(chunk.grounding.page + 1);
                     }
                   }}
+                  currentPage={currentPage}
+                  documents={documents}
+                  currentDocument={currentDocument}
+                  onDocumentSelect={handleParseDocumentSelect}
                 />
               </div>
             )}

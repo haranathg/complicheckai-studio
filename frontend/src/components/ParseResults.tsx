@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { ParseResponse, Chunk } from '../types/ade';
+import type { Project, Document } from '../types/project';
 import { getChunkColor } from '../utils/boundingBox';
 import { getMarkdownPreview } from '../utils/cleanMarkdown';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
@@ -12,9 +13,14 @@ interface ParseResultsProps {
   onChunkSelect: (chunk: Chunk) => void;
   isLoading: boolean;
   onAddNote?: (chunk: Chunk) => void;
+  currentPage?: number;
+  documents?: Document[];
+  currentDocument?: Document | null;
+  onDocumentSelect?: (doc: Document) => void;
 }
 
 type ViewMode = 'markdown' | 'components';
+type ChunkFilter = 'all' | 'page';
 
 export default function ParseResults({
   result,
@@ -24,12 +30,20 @@ export default function ParseResults({
   onChunkSelect,
   isLoading,
   onAddNote,
+  currentPage = 1,
+  documents = [],
+  currentDocument,
+  onDocumentSelect,
 }: ParseResultsProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
   const [viewMode, setViewMode] = useState<ViewMode>('components');
-  const [filter, setFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [chunkFilter, setChunkFilter] = useState<ChunkFilter>('all');
   const chunkRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Filter to only processed documents
+  const processedDocs = documents.filter(d => d.has_cached_result);
 
   // Auto-scroll to highlighted chunk when it changes (from PDF click)
   useEffect(() => {
@@ -72,30 +86,65 @@ export default function ParseResults({
   }
 
   const chunkTypes = [...new Set(result.chunks.map((c) => c.type))];
-  const filteredChunks =
-    filter === 'all'
-      ? result.chunks
-      : result.chunks.filter((c) => c.type === filter);
+
+  // Apply both type and page filters
+  let filteredChunks = result.chunks;
+
+  // Filter by page if 'page' filter is selected
+  if (chunkFilter === 'page') {
+    filteredChunks = filteredChunks.filter(c =>
+      c.grounding && c.grounding.page === currentPage - 1
+    );
+  }
+
+  // Filter by type
+  if (typeFilter !== 'all') {
+    filteredChunks = filteredChunks.filter(c => c.type === typeFilter);
+  }
 
   return (
     <div className="h-full flex flex-col">
+      {/* Document selector */}
+      {processedDocs.length > 0 && onDocumentSelect && (
+        <div className={`mb-4`}>
+          <select
+            value={currentDocument?.id || ''}
+            onChange={(e) => {
+              const doc = processedDocs.find(d => d.id === e.target.value);
+              if (doc) onDocumentSelect(doc);
+            }}
+            className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+              isDark
+                ? 'bg-slate-800/60 border-slate-600/50 text-gray-300'
+                : 'bg-white border-slate-300 text-slate-700'
+            }`}
+          >
+            <option value="" disabled>Select a document...</option>
+            {processedDocs.map(doc => (
+              <option key={doc.id} value={doc.id}>
+                {doc.original_filename}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Header with metadata */}
       <div className={`rounded-xl p-4 mb-4 border ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : '#ffffff' }}>
-        <h3 className={`font-semibold ${theme.textPrimary} mb-2`}>Document Info</h3>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
+        <div className="flex items-center justify-between">
+          <h3 className={`font-semibold ${theme.textPrimary}`}>Document Info</h3>
+          <div className="flex items-center gap-2 text-sm">
             <span className={theme.textSubtle}>Pages:</span>
-            <span className={`ml-2 font-medium ${theme.textSecondary}`}>{result.metadata.page_count || 'N/A'}</span>
-          </div>
-          <div>
+            <span className={`font-medium ${theme.textSecondary}`}>{result.metadata.page_count || 'N/A'}</span>
+            <span className={`mx-2 ${theme.textSubtle}`}>|</span>
             <span className={theme.textSubtle}>Components:</span>
-            <span className={`ml-2 font-medium ${theme.textSecondary}`}>{result.chunks.length}</span>
+            <span className={`font-medium ${theme.textSecondary}`}>{result.chunks.length}</span>
           </div>
         </div>
       </div>
 
-      {/* View mode toggle and filter */}
-      <div className="flex items-center gap-4 mb-4">
+      {/* View mode toggle and filters */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className={`flex rounded-lg p-1 border ${theme.border}`} style={{ background: isDark ? 'rgba(30, 41, 59, 0.6)' : '#f1f5f9' }}>
           <button
             onClick={() => setViewMode('components')}
@@ -120,22 +169,55 @@ export default function ParseResults({
         </div>
 
         {viewMode === 'components' && (
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className={`border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 ${
-              isDark
-                ? 'bg-slate-800/60 border-slate-600/50 text-gray-300'
-                : 'bg-white border-slate-300 text-slate-700'
-            }`}
-          >
-            <option value="all">All types ({result.chunks.length})</option>
-            {chunkTypes.map((type) => (
-              <option key={type} value={type}>
-                {type} ({result.chunks.filter((c) => c.type === type).length})
-              </option>
-            ))}
-          </select>
+          <>
+            {/* Page vs All toggle */}
+            <div className={`flex rounded-lg p-1 border ${theme.border}`} style={{ background: isDark ? 'rgba(30, 41, 59, 0.6)' : '#f1f5f9' }}>
+              <button
+                onClick={() => setChunkFilter('page')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  chunkFilter === 'page'
+                    ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
+                    : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                This Page
+              </button>
+              <button
+                onClick={() => setChunkFilter('all')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  chunkFilter === 'all'
+                    ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
+                    : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                All Pages
+              </button>
+            </div>
+
+            {/* Type filter */}
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className={`border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+                isDark
+                  ? 'bg-slate-800/60 border-slate-600/50 text-gray-300'
+                  : 'bg-white border-slate-300 text-slate-700'
+              }`}
+            >
+              <option value="all">All types ({result.chunks.length})</option>
+              {chunkTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type} ({result.chunks.filter((c) => c.type === type).length})
+                </option>
+              ))}
+            </select>
+
+            {/* Show count of filtered chunks */}
+            <span className={`text-sm ${theme.textMuted}`}>
+              {filteredChunks.length} {filteredChunks.length === 1 ? 'chunk' : 'chunks'}
+              {chunkFilter === 'page' && ` on page ${currentPage}`}
+            </span>
+          </>
         )}
       </div>
 

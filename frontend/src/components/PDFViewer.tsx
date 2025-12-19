@@ -435,8 +435,8 @@ export default function PDFViewer({
             <span className="text-gray-500 font-medium">Annotation levels:</span>
             {[
               { level: 'page', color: 'rgba(251, 191, 36, 0.85)' },
-              { level: 'document', color: 'rgba(96, 165, 250, 0.85)' },
-              { level: 'project', color: 'rgba(74, 222, 128, 0.85)' },
+              { level: 'document', color: 'rgba(74, 222, 128, 0.85)' },
+              { level: 'project', color: 'rgba(96, 165, 250, 0.85)' },
             ].map(({ level, color }) => (
               <span key={level} className="flex items-center gap-1">
                 <span

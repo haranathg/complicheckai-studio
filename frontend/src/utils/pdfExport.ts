@@ -125,13 +125,13 @@ export async function exportPDFWithAnnotations(options: ExportOptions): Promise<
         // Skip if off page
         if (y + stickyHeight > viewport.height - margin) return;
 
-        // Get color based on level
+        // Get color based on level (page=yellow, document=green, project=blue)
         const borderColor = ANNOTATION_BORDER_COLORS[annotation.level] || '#fbbf24';
         const bgColor = annotation.level === 'page'
           ? 'rgba(251, 191, 36, 0.95)'
           : annotation.level === 'document'
-            ? 'rgba(96, 165, 250, 0.95)'
-            : 'rgba(74, 222, 128, 0.95)';
+            ? 'rgba(74, 222, 128, 0.95)'
+            : 'rgba(96, 165, 250, 0.95)';
 
         // Draw sticky note background with shadow
         ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
@@ -155,29 +155,18 @@ export async function exportPDFWithAnnotations(options: ExportOptions): Promise<
         ctx.lineWidth = 2 * scale;
         ctx.stroke();
 
-        // Draw text
+        // Draw text - just the annotation content, no level label
         ctx.fillStyle = '#1e293b'; // slate-800
-        ctx.font = `bold ${10 * scale}px system-ui, sans-serif`;
-
-        // Level label
-        const levelLabel = annotation.level === 'page'
-          ? `Page ${annotation.page_number}`
-          : annotation.level === 'document'
-            ? 'Document'
-            : 'Project';
-        ctx.fillText(levelLabel, startX + 8 * scale, y + 14 * scale);
-
-        // Annotation text (truncated)
         ctx.font = `${9 * scale}px system-ui, sans-serif`;
         const maxTextWidth = stickyWidth - 16 * scale;
-        const text = annotation.text.length > 80
-          ? annotation.text.substring(0, 77) + '...'
+        const text = annotation.text.length > 100
+          ? annotation.text.substring(0, 97) + '...'
           : annotation.text;
 
         // Word wrap
         const words = text.split(' ');
         let line = '';
-        let lineY = y + 28 * scale;
+        let lineY = y + 16 * scale;
         const lineHeight = 12 * scale;
 
         words.forEach(word => {
