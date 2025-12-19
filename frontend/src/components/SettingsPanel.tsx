@@ -57,6 +57,21 @@ export default function SettingsPanel({
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [projectUsage, setProjectUsage] = useState<ProjectUsageResponse | null>(null);
   const [isLoadingUsage, setIsLoadingUsage] = useState(false);
+  const [shouldRender, setShouldRender] = useState(isOpen);
+
+  // Handle mount/unmount with animation
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+    }
+  }, [isOpen]);
+
+  // Handle animation end for closing
+  const handleTransitionEnd = () => {
+    if (!isOpen) {
+      setShouldRender(false);
+    }
+  };
 
   // Fetch project usage when project changes or tab switches to usage
   useEffect(() => {
@@ -100,22 +115,25 @@ export default function SettingsPanel({
     },
   ];
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   return (
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 z-40 transition-opacity"
+        className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-300 ${
+          isOpen ? 'opacity-100' : 'opacity-0'
+        }`}
         onClick={onClose}
       />
 
       {/* Slide-out Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-[480px] z-50 shadow-2xl transform transition-transform duration-300 ${
+        className={`fixed top-0 right-0 h-full w-[480px] z-50 shadow-2xl transform transition-transform duration-300 ease-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
         style={{ background: isDark ? '#0f172a' : '#f8fafc' }}
+        onTransitionEnd={handleTransitionEnd}
       >
         {/* Header */}
         <div className={`flex items-center justify-between px-6 py-4 border-b ${theme.border}`}>
