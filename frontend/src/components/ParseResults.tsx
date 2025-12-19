@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { ParseResponse, Chunk } from '../types/ade';
-import type { Project, Document } from '../types/project';
+import type { Document } from '../types/project';
 import { getChunkColor } from '../utils/boundingBox';
 import { getMarkdownPreview } from '../utils/cleanMarkdown';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
@@ -74,13 +74,48 @@ export default function ParseResults({
     );
   }
 
+  // Show document selector even when no result is loaded
   if (!result) {
     return (
-      <div className={`flex flex-col items-center justify-center h-full ${theme.textSubtle}`}>
-        <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        <p className={theme.textMuted}>Select a processed document to review</p>
+      <div className="h-full flex flex-col">
+        {/* Document selector - always show if documents available */}
+        {processedDocs.length > 0 && onDocumentSelect && (
+          <div className="mb-4">
+            <label className={`block text-sm font-medium mb-2 ${theme.textMuted}`}>
+              Select a document to view
+            </label>
+            <select
+              value={currentDocument?.id || ''}
+              onChange={(e) => {
+                const doc = processedDocs.find(d => d.id === e.target.value);
+                if (doc) onDocumentSelect(doc);
+              }}
+              className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+                isDark
+                  ? 'bg-slate-800/60 border-slate-600/50 text-gray-300'
+                  : 'bg-white border-slate-300 text-slate-700'
+              }`}
+            >
+              <option value="">Select a document...</option>
+              {processedDocs.map(doc => (
+                <option key={doc.id} value={doc.id}>
+                  {doc.original_filename}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className={`flex flex-col items-center justify-center flex-1 ${theme.textSubtle}`}>
+          <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p className={theme.textMuted}>
+            {processedDocs.length > 0
+              ? 'Select a processed document above'
+              : 'No processed documents yet'}
+          </p>
+        </div>
       </div>
     );
   }

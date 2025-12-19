@@ -1,5 +1,7 @@
 # Landing.AI ADE Document Extraction Application
 
+## Deployed using Amplify and Apprunner
+
 A full-stack web application that provides document parsing, data extraction, and chat capabilities using the Landing.AI ADE (AI Document Extraction) platform.
 
 ## Features

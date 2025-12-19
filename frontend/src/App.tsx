@@ -74,6 +74,15 @@ function App() {
       if (available) {
         const defProject = await getOrCreateDefaultProject();
         setDefaultProject(defProject);
+        // Immediately load documents for the default project
+        if (defProject) {
+          try {
+            const response = await listDocuments(defProject.id);
+            setDocuments(response.documents);
+          } catch (err) {
+            console.error('Failed to load initial documents:', err);
+          }
+        }
       }
     };
     init();
