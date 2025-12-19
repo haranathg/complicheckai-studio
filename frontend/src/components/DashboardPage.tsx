@@ -34,14 +34,25 @@ export default function DashboardPage({
 
   // Load projects on mount
   useEffect(() => {
-    const loadProjects = async () => {
+    const loadProjectsAndDocs = async () => {
       try {
         setIsLoading(true);
         const response = await listProjects();
         setProjects(response.projects);
-        // Auto-select first project if available
-        if (response.projects.length > 0 && !selectedProject) {
-          setSelectedProject(response.projects[0]);
+        // Auto-select first project and load its documents
+        if (response.projects.length > 0) {
+          const firstProject = response.projects[0];
+          setSelectedProject(firstProject);
+          // Immediately load documents for the first project
+          try {
+            setIsLoadingDocs(true);
+            const docsResponse = await getProjectDocumentStatus(firstProject.id);
+            setDocuments(docsResponse.documents);
+          } catch (err) {
+            console.error('Failed to load documents:', err);
+          } finally {
+            setIsLoadingDocs(false);
+          }
         }
       } catch (err) {
         console.error('Failed to load projects:', err);
@@ -50,7 +61,7 @@ export default function DashboardPage({
         setIsLoading(false);
       }
     };
-    loadProjects();
+    loadProjectsAndDocs();
   }, []);
 
   // Load documents when selected project changes
