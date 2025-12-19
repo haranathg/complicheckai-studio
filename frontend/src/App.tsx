@@ -471,7 +471,7 @@ function App() {
                   onPageChange={setCurrentPage}
                   annotations={annotations}
                   selectedAnnotation={selectedAnnotation}
-                  showChunks={activeTab !== 'review'}
+                  showChunks={activeTab === 'parse'}
                   onAnnotationClick={(annotation) => {
                     setSelectedAnnotation(annotation);
                     // If annotation is linked to a chunk, navigate to that chunk
