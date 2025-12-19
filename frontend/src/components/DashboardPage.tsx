@@ -94,8 +94,16 @@ export default function DashboardPage({
     try {
       setIsUploading(true);
       await uploadDocument(selectedProject.id, file);
-      // Reload documents after upload
-      await loadDocuments();
+      // Reload documents after upload - fetch directly to ensure fresh data
+      try {
+        setIsLoadingDocs(true);
+        const response = await getProjectDocumentStatus(selectedProject.id);
+        setDocuments(response.documents);
+      } catch (err) {
+        console.error('Failed to reload documents:', err);
+      } finally {
+        setIsLoadingDocs(false);
+      }
     } catch (err) {
       console.error('Failed to upload document:', err);
       setError('Failed to upload document');
