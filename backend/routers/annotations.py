@@ -128,9 +128,10 @@ async def create_annotation(
         raise HTTPException(status_code=400, detail="Level must be 'page', 'document', or 'project'")
 
     # Set default color based on level
+    # Colors should match frontend: page=yellow, document=green, project=blue
     color = annotation.color
     if not color:
-        color_map = {"page": "yellow", "document": "blue", "project": "green"}
+        color_map = {"page": "yellow", "document": "green", "project": "blue"}
         color = color_map.get(annotation.level, "yellow")
 
     # Create annotation
@@ -224,13 +225,27 @@ async def list_document_annotations(
 
     annotations = query.order_by(DocumentAnnotation.created_at.desc()).all()
 
-    # Also include project-level annotations
+    # Also include document-level and project-level annotations
+    # These don't have a page_number but should still be visible
+    doc_level_annotations = db.query(DocumentAnnotation).filter(
+        DocumentAnnotation.project_id == project_id,
+        DocumentAnnotation.document_id == document_id,
+        DocumentAnnotation.level == "document"
+    ).all()
+
     project_annotations = db.query(DocumentAnnotation).filter(
         DocumentAnnotation.project_id == project_id,
         DocumentAnnotation.level == "project"
     ).all()
 
-    all_annotations = annotations + [a for a in project_annotations if a not in annotations]
+    # Combine all annotations, avoiding duplicates
+    all_annotations = list(annotations)
+    for a in doc_level_annotations:
+        if a not in all_annotations:
+            all_annotations.append(a)
+    for a in project_annotations:
+        if a not in all_annotations:
+            all_annotations.append(a)
 
     return AnnotationListResponse(
         annotations=[annotation_to_response(a) for a in all_annotations],
