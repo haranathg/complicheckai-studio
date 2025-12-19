@@ -192,7 +192,6 @@ async def get_documents_status(
     db: Session = Depends(get_db)
 ):
     """Get status summary for all documents in a project including annotation counts."""
-    print(f"[get_documents_status] Called for project_id={project_id}")
     # Verify project exists
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
@@ -244,7 +243,6 @@ async def get_documents_status(
             )
         ))
 
-    print(f"[get_documents_status] Returning {len(result)} documents, total={total}")
     return DocumentStatusListResponse(documents=result, total=total)
 
 

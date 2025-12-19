@@ -220,16 +220,9 @@ export async function getProjectUsage(projectId: string): Promise<ProjectUsageRe
  * Get document status summaries for a project (for dashboard)
  */
 export async function getProjectDocumentStatus(projectId: string): Promise<DocumentStatusListResponse> {
-  const url = `${API_URL}/api/projects/${projectId}/documents/status`;
-  console.log('[getProjectDocumentStatus] Fetching:', url);
-  const response = await fetch(url);
-  console.log('[getProjectDocumentStatus] Response status:', response.status);
+  const response = await fetch(`${API_URL}/api/projects/${projectId}/documents/status`);
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[getProjectDocumentStatus] Error response:', errorText);
     throw new Error('Failed to fetch document status');
   }
-  const data = await response.json();
-  console.log('[getProjectDocumentStatus] Response data:', data);
-  return data;
+  return response.json();
 }
