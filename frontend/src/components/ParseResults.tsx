@@ -40,6 +40,7 @@ export default function ParseResults({
   const [viewMode, setViewMode] = useState<ViewMode>('components');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [chunkFilter, setChunkFilter] = useState<ChunkFilter>('all');
+  const [optionsExpanded, setOptionsExpanded] = useState(false);
   const chunkRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Filter to only processed documents
@@ -164,96 +165,114 @@ export default function ParseResults({
         </div>
       )}
 
-      {/* Header with metadata */}
-      <div className={`rounded-xl p-4 mb-4 border ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : '#ffffff' }}>
-        <div className="flex items-center justify-between">
-          <h3 className={`font-semibold ${theme.textPrimary}`}>Document Info</h3>
-          <div className="flex items-center gap-2 text-sm">
-            <span className={theme.textSubtle}>Pages:</span>
-            <span className={`font-medium ${theme.textSecondary}`}>{result.metadata.page_count || 'N/A'}</span>
-            <span className={`mx-2 ${theme.textSubtle}`}>|</span>
-            <span className={theme.textSubtle}>Components:</span>
-            <span className={`font-medium ${theme.textSecondary}`}>{result.chunks.length}</span>
+      {/* Collapsible Document Info header with options */}
+      <div className={`rounded-xl mb-4 border ${theme.border} overflow-hidden`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : '#ffffff' }}>
+        {/* Header row - always visible */}
+        <div
+          className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${isDark ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}`}
+          onClick={() => setOptionsExpanded(!optionsExpanded)}
+        >
+          <div className="flex items-center gap-3">
+            <svg
+              className={`w-4 h-4 transition-transform ${optionsExpanded ? 'rotate-180' : ''} ${theme.textMuted}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+            <span className={`text-sm font-medium ${theme.textSecondary}`}>
+              {result.metadata.page_count || '?'} pages
+            </span>
+            <span className={theme.textSubtle}>•</span>
+            <span className={`text-sm font-medium ${theme.textSecondary}`}>
+              {filteredChunks.length} components
+              {chunkFilter === 'page' && <span className={theme.textMuted}> on page {currentPage}</span>}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Quick view mode indicator */}
+            <span className={`text-xs px-2 py-1 rounded ${isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
+              {viewMode === 'components' ? 'Components' : 'Markdown'}
+            </span>
           </div>
         </div>
-      </div>
 
-      {/* View mode toggle and filters */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className={`flex rounded-lg p-1 border ${theme.border}`} style={{ background: isDark ? 'rgba(30, 41, 59, 0.6)' : '#f1f5f9' }}>
-          <button
-            onClick={() => setViewMode('components')}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'components'
-                ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
-                : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Components
-          </button>
-          <button
-            onClick={() => setViewMode('markdown')}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'markdown'
-                ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
-                : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Markdown
-          </button>
-        </div>
-
-        {viewMode === 'components' && (
-          <>
-            {/* Page vs All toggle */}
-            <div className={`flex rounded-lg p-1 border ${theme.border}`} style={{ background: isDark ? 'rgba(30, 41, 59, 0.6)' : '#f1f5f9' }}>
+        {/* Expandable options section */}
+        <div className={`overflow-hidden transition-all duration-200 ease-in-out ${optionsExpanded ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`}>
+          <div className={`px-4 pb-3 pt-1 border-t ${theme.border} flex items-center gap-3 flex-wrap`}>
+            {/* View mode toggle */}
+            <div className={`flex rounded-lg p-0.5 border ${theme.border}`} style={{ background: isDark ? 'rgba(30, 41, 59, 0.6)' : '#f1f5f9' }}>
               <button
-                onClick={() => setChunkFilter('page')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  chunkFilter === 'page'
+                onClick={(e) => { e.stopPropagation(); setViewMode('components'); }}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  viewMode === 'components'
                     ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
                     : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                This Page
+                Components
               </button>
               <button
-                onClick={() => setChunkFilter('all')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  chunkFilter === 'all'
+                onClick={(e) => { e.stopPropagation(); setViewMode('markdown'); }}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  viewMode === 'markdown'
                     ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
                     : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                All Pages
+                Markdown
               </button>
             </div>
 
-            {/* Type filter */}
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className={`border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 ${
-                isDark
-                  ? 'bg-slate-800/60 border-slate-600/50 text-gray-300'
-                  : 'bg-white border-slate-300 text-slate-700'
-              }`}
-            >
-              <option value="all">All types ({result.chunks.length})</option>
-              {chunkTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type} ({result.chunks.filter((c) => c.type === type).length})
-                </option>
-              ))}
-            </select>
+            {viewMode === 'components' && (
+              <>
+                {/* Page vs All toggle */}
+                <div className={`flex rounded-lg p-0.5 border ${theme.border}`} style={{ background: isDark ? 'rgba(30, 41, 59, 0.6)' : '#f1f5f9' }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setChunkFilter('page'); }}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      chunkFilter === 'page'
+                        ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
+                        : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    This Page
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setChunkFilter('all'); }}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      chunkFilter === 'all'
+                        ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
+                        : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    All Pages
+                  </button>
+                </div>
 
-            {/* Show count of filtered chunks */}
-            <span className={`text-sm ${theme.textMuted}`}>
-              {filteredChunks.length} {filteredChunks.length === 1 ? 'chunk' : 'chunks'}
-              {chunkFilter === 'page' && ` on page ${currentPage}`}
-            </span>
-          </>
-        )}
+                {/* Type filter */}
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  className={`border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+                    isDark
+                      ? 'bg-slate-800/60 border-slate-600/50 text-gray-300'
+                      : 'bg-white border-slate-300 text-slate-700'
+                  }`}
+                >
+                  <option value="all">All types ({result.chunks.length})</option>
+                  {chunkTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type} ({result.chunks.filter((c) => c.type === type).length})
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Content */}
