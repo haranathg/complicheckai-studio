@@ -22,6 +22,7 @@ interface PDFViewerProps {
   selectedAnnotation?: Annotation | null;
   onAnnotationClick?: (annotation: Annotation) => void;
   showChunks?: boolean;
+  showAnnotations?: boolean;
 }
 
 export default function PDFViewer({
@@ -36,6 +37,7 @@ export default function PDFViewer({
   selectedAnnotation,
   onAnnotationClick,
   showChunks = true,
+  showAnnotations = true,
 }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -326,8 +328,8 @@ export default function PDFViewer({
                     }
                   />
                   {/* Chunk Overlays - positioned to match canvas exactly */}
-                  {/* When showChunks is false (Review tab), only show chunks linked to annotations */}
-                  {pageSize.width > 0 && (showChunks || pageAnnotations.some(a => a.chunk_id)) && (
+                  {/* When showChunks is false (Review tab), only show chunks linked to annotations (if overlays enabled) */}
+                  {pageSize.width > 0 && (showChunks || (showAnnotations && pageAnnotations.some(a => a.chunk_id))) && (
                     <div
                       className="absolute pointer-events-none"
                       style={{
@@ -353,8 +355,8 @@ export default function PDFViewer({
                   )}
                   {/* Annotation Overlays - rendered above chunks */}
                   {/* When showChunks is true (Parse tab), only show stickies tied to chunks */}
-                  {/* When showChunks is false (Review tab), show all stickies */}
-                  {pageSize.width > 0 && pageAnnotations.length > 0 && (
+                  {/* When showChunks is false (Review tab), show all stickies (unless toggled off) */}
+                  {pageSize.width > 0 && showAnnotations && pageAnnotations.length > 0 && (
                     <div
                       className="absolute pointer-events-none"
                       style={{

@@ -66,6 +66,7 @@ function App() {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selectedAnnotation, setSelectedAnnotation] = useState<Annotation | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [showReviewOverlays, setShowReviewOverlays] = useState(true);
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -581,6 +582,7 @@ function App() {
                   annotations={annotations}
                   selectedAnnotation={selectedAnnotation}
                   showChunks={activeTab === 'parse'}
+                  showAnnotations={activeTab === 'parse' || showReviewOverlays}
                   onAnnotationClick={(annotation) => {
                     setSelectedAnnotation(annotation);
                     // If annotation is linked to a chunk, navigate to that chunk
@@ -692,6 +694,8 @@ function App() {
                 }}
                 file={file}
                 chunks={parseResult?.chunks}
+                showOverlays={showReviewOverlays}
+                onToggleOverlays={setShowReviewOverlays}
               />
             )}
             {activeTab === 'chat' && (
