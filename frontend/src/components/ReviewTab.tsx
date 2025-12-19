@@ -98,10 +98,11 @@ export default function ReviewTab({
     if (!currentProject || !newAnnotation.text) return;
 
     try {
+      const level = newAnnotation.level || 'page';
       const annotation = await createAnnotation(currentProject.id, {
         document_id: currentDocument?.id,
-        level: newAnnotation.level || 'page',
-        page_number: newAnnotation.level === 'page' ? currentPage : undefined,
+        level,
+        page_number: level === 'page' ? currentPage : undefined,
         text: newAnnotation.text,
         title: newAnnotation.title,
         annotation_type: newAnnotation.annotation_type || 'comment',
