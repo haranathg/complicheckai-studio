@@ -9,15 +9,6 @@ interface TabNavigationProps {
 
 const TABS: { id: TabType; label: string; icon: React.ReactNode }[] = [
   {
-    id: 'upload',
-    label: 'Upload',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-      </svg>
-    ),
-  },
-  {
     id: 'parse',
     label: 'Parse Results',
     icon: (
@@ -56,7 +47,7 @@ const TABS: { id: TabType; label: string; icon: React.ReactNode }[] = [
 ];
 
 // Tabs that should always be enabled (even without a document)
-const ALWAYS_ENABLED_TABS: TabType[] = ['upload', 'parse'];
+const ALWAYS_ENABLED_TABS: TabType[] = ['parse'];
 
 export default function TabNavigation({ activeTab, onTabChange, disabled }: TabNavigationProps) {
   const { isDark } = useTheme();

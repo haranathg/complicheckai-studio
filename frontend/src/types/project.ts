@@ -102,3 +102,30 @@ export interface ProjectUsageResponse {
   estimated_total_cost: number;
   usage_by_parser: UsageByParser[];
 }
+
+// Document status summary types for dashboard
+export interface AnnotationSummary {
+  total: number;
+  open: number;
+  resolved: number;
+  last_updated_at?: string;
+  last_comment_preview?: string;
+}
+
+export interface DocumentStatusSummary {
+  id: string;
+  project_id: string;
+  original_filename: string;
+  content_type?: string;
+  file_size?: number;
+  page_count?: number;
+  created_at: string;
+  processed_at?: string;
+  parser?: string;
+  annotations: AnnotationSummary;
+}
+
+export interface DocumentStatusListResponse {
+  documents: DocumentStatusSummary[];
+  total: number;
+}

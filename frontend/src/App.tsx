@@ -5,9 +5,9 @@ import ParseResults from './components/ParseResults';
 import ChatPanel from './components/ChatPanel';
 import CompliancePanel from './components/CompliancePanel';
 import SettingsPanel from './components/SettingsPanel';
-import UploadTab from './components/UploadTab';
 import ReviewTab from './components/ReviewTab';
 import AnnotationPanel from './components/AnnotationPanel';
+import DashboardPage from './components/DashboardPage';
 import type { Project, Document } from './types/project';
 import type { Annotation } from './types/annotation';
 import SaveToProjectDropdown from './components/SaveToProjectDropdown';
@@ -25,6 +25,8 @@ import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
 import cognaifySymbol from './assets/cognaify-symbol.png';
 import complianceConfig from './config/complianceChecks.json';
 
+type ViewType = 'dashboard' | 'document';
+
 // Default model (for chat/compliance) and parser
 const DEFAULT_MODEL = 'bedrock-claude-sonnet-3.5';
 const DEFAULT_PARSER = 'landing_ai';
@@ -33,11 +35,12 @@ function App() {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
   const [authenticated, setAuthenticated] = useState(isAuthenticated());
+  const [currentView, setCurrentView] = useState<ViewType>('dashboard');
   const [file, setFile] = useState<File | null>(null);
   const [parseResult, setParseResult] = useState<ParseResponse | null>(null);
   const [highlightedChunk, setHighlightedChunk] = useState<Chunk | null>(null);
   const [popupChunk, setPopupChunk] = useState<Chunk | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('upload');
+  const [activeTab, setActiveTab] = useState<TabType>('parse');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
@@ -198,23 +201,6 @@ function App() {
     setChatMessages([]);
   };
 
-  const handleClearDocument = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    setFile(null);
-    setParseResult(null);
-    setHighlightedChunk(null);
-    setPopupChunk(null);
-    setIsPdfReady(false);
-    setIsLoading(false);
-    setError(null);
-    setComplianceReport(null);
-    setTargetPage(undefined);
-    setChatMessages([]);
-    setCurrentDocument(null);
-  };
-
   const handlePdfReady = () => {
     setIsPdfReady(true);
   };
@@ -296,6 +282,82 @@ function App() {
     setAuthenticated(false);
   };
 
+  // Handle opening a document from the dashboard
+  const handleOpenDocumentFromDashboard = useCallback(async (project: Project, documentId: string) => {
+    setCurrentProject(project);
+    setCurrentView('document');
+    setActiveTab('parse');
+
+    // Load documents for this project
+    try {
+      const response = await listDocuments(project.id);
+      setDocuments(response.documents);
+
+      // Find and load the selected document
+      const doc = response.documents.find(d => d.id === documentId);
+      if (doc) {
+        setCurrentDocument(doc);
+        setIsLoading(true);
+
+        try {
+          const fileUrl = await getDocumentDownloadUrl(project.id, doc.id);
+          const fileResponse = await fetch(fileUrl);
+          const blob = await fileResponse.blob();
+          const loadedFile = new File([blob], doc.original_filename, {
+            type: doc.content_type || 'application/pdf',
+          });
+
+          const cachedResponse = await getLatestParseResult(project.id, doc.id, selectedParser);
+
+          if (cachedResponse.cached && cachedResponse.result) {
+            const parseResultData: ParseResponse = {
+              markdown: cachedResponse.result.markdown,
+              chunks: cachedResponse.result.chunks.map(c => ({
+                id: c.id,
+                markdown: c.markdown,
+                type: c.type,
+                grounding: c.grounding || null,
+              })),
+              metadata: {
+                page_count: cachedResponse.result.metadata.page_count || null,
+                credit_usage: cachedResponse.result.metadata.credit_usage || null,
+                parser: cachedResponse.result.metadata.parser,
+                model: cachedResponse.result.metadata.model,
+                usage: cachedResponse.result.metadata.usage,
+              },
+            };
+            setFile(loadedFile);
+            setParseResult(parseResultData);
+          } else {
+            setFile(loadedFile);
+            setParseResult(null);
+          }
+        } catch (err) {
+          console.error('Failed to load document:', err);
+          setError('Failed to load document');
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load documents:', err);
+    }
+  }, [selectedParser]);
+
+  // Handle going back to dashboard
+  const handleBackToDashboard = () => {
+    setCurrentView('dashboard');
+    // Clear document state
+    setFile(null);
+    setParseResult(null);
+    setCurrentDocument(null);
+    setHighlightedChunk(null);
+    setPopupChunk(null);
+    setError(null);
+    setComplianceReport(null);
+    setChatMessages([]);
+  };
+
   const handleParserChange = (parser: string) => {
     setSelectedParser(parser);
     // Reset model to the default for the new parser
@@ -352,15 +414,53 @@ function App() {
     return <LoginPage onAuthenticated={() => setAuthenticated(true)} />;
   }
 
+  // Show Dashboard when in dashboard view
+  if (currentView === 'dashboard') {
+    return (
+      <>
+        <DashboardPage
+          onOpenDocument={handleOpenDocumentFromDashboard}
+          onLogout={handleLogout}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
+        {/* Settings Panel - available on dashboard too */}
+        <SettingsPanel
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
+          selectedParser={selectedParser}
+          onParserChange={handleParserChange}
+          completenessChecks={completenessChecks}
+          complianceChecks={complianceChecks}
+          onCompletenessChecksChange={setCompletenessChecks}
+          onComplianceChecksChange={setComplianceChecks}
+          currentProject={currentProject}
+        />
+      </>
+    );
+  }
+
   // Check if current doc is unsaved (has file but no document record)
   const isUnsavedDoc = file && !currentDocument && projectsAvailable;
 
+  // Document Viewer view
   return (
     <div className="h-screen flex flex-col" style={{ background: theme.pageBg }}>
       {/* Header */}
       <header className={`border-b ${theme.border} px-6 py-3`} style={{ background: theme.headerBg, backdropFilter: 'blur(8px)' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
+            {/* Back to Dashboard button */}
+            <button
+              onClick={handleBackToDashboard}
+              className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-700/50 text-gray-400 hover:text-gray-200' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-700'}`}
+              title="Back to Dashboard"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
             <img
               src={cognaifySymbol}
               alt="Cognaify Solutions"
@@ -549,19 +649,6 @@ function App() {
           />
 
           <div className="flex-1 overflow-auto">
-            {activeTab === 'upload' && (
-              <UploadTab
-                onDocumentLoad={handleFileSelect}
-                onClearDocument={handleClearDocument}
-                isProcessing={isLoading}
-                selectedParser={selectedParser}
-                selectedModel={selectedModel}
-                onProjectChange={setCurrentProject}
-                onDocumentChange={setCurrentDocument}
-                currentProject={currentProject}
-                currentDocument={currentDocument}
-              />
-            )}
             {activeTab === 'parse' && (
               <div className="p-4 h-full">
                 <ParseResults

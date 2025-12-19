@@ -4,9 +4,10 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from database import get_db
-from models.database_models import Project, Document, ParseResult, Chunk
+from models.database_models import Project, Document, ParseResult, Chunk, DocumentAnnotation
 from services import s3_service
 
 router = APIRouter()
@@ -571,3 +572,95 @@ async def get_latest_parse_result(
             "parse_result_id": parse_result.id
         }
     }
+
+
+# Document Status Summary models and endpoint
+class AnnotationSummary(BaseModel):
+    total: int
+    open: int
+    resolved: int
+    last_updated_at: Optional[datetime] = None
+    last_comment_preview: Optional[str] = None
+
+
+class DocumentStatusSummary(BaseModel):
+    id: str
+    project_id: str
+    original_filename: str
+    content_type: Optional[str]
+    file_size: Optional[int]
+    page_count: Optional[int]
+    created_at: datetime
+    processed_at: Optional[datetime] = None
+    parser: Optional[str] = None
+    annotations: AnnotationSummary
+
+    class Config:
+        from_attributes = True
+
+
+class DocumentStatusListResponse(BaseModel):
+    documents: List[DocumentStatusSummary]
+    total: int
+
+
+@router.get("/{project_id}/documents/status", response_model=DocumentStatusListResponse)
+async def get_documents_status(
+    project_id: str,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Get status summary for all documents in a project including annotation counts."""
+    # Verify project exists
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Get all documents for the project
+    documents = db.query(Document).filter(
+        Document.project_id == project_id
+    ).order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
+
+    total = db.query(Document).filter(Document.project_id == project_id).count()
+
+    result = []
+    for doc in documents:
+        # Get latest parse result
+        latest_parse = db.query(ParseResult).filter(
+            ParseResult.document_id == doc.id,
+            ParseResult.status == "completed"
+        ).order_by(ParseResult.created_at.desc()).first()
+
+        # Get annotation counts for this document
+        doc_annotations = db.query(DocumentAnnotation).filter(
+            DocumentAnnotation.document_id == doc.id
+        ).all()
+
+        total_annotations = len(doc_annotations)
+        open_count = sum(1 for a in doc_annotations if a.status == "open")
+        resolved_count = sum(1 for a in doc_annotations if a.status == "resolved")
+
+        # Get most recent annotation
+        last_annotation = max(doc_annotations, key=lambda a: a.updated_at) if doc_annotations else None
+
+        result.append(DocumentStatusSummary(
+            id=doc.id,
+            project_id=doc.project_id,
+            original_filename=doc.original_filename,
+            content_type=doc.content_type,
+            file_size=doc.file_size,
+            page_count=latest_parse.page_count if latest_parse else doc.page_count,
+            created_at=doc.created_at,
+            processed_at=latest_parse.created_at if latest_parse else None,
+            parser=latest_parse.parser if latest_parse else None,
+            annotations=AnnotationSummary(
+                total=total_annotations,
+                open=open_count,
+                resolved=resolved_count,
+                last_updated_at=last_annotation.updated_at if last_annotation else None,
+                last_comment_preview=last_annotation.text[:100] if last_annotation else None
+            )
+        ))
+
+    return DocumentStatusListResponse(documents=result, total=total)

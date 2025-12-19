@@ -8,7 +8,8 @@ import type {
   Document,
   DocumentListResponse,
   CachedParseResponse,
-  ProjectUsageResponse
+  ProjectUsageResponse,
+  DocumentStatusListResponse
 } from '../types/project';
 
 /**
@@ -211,6 +212,17 @@ export async function getProjectUsage(projectId: string): Promise<ProjectUsageRe
   const response = await fetch(`${API_URL}/api/projects/${projectId}/usage`);
   if (!response.ok) {
     throw new Error('Failed to fetch project usage');
+  }
+  return response.json();
+}
+
+/**
+ * Get document status summaries for a project (for dashboard)
+ */
+export async function getProjectDocumentStatus(projectId: string): Promise<DocumentStatusListResponse> {
+  const response = await fetch(`${API_URL}/api/projects/${projectId}/documents/status`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch document status');
   }
   return response.json();
 }
