@@ -191,9 +191,9 @@ export default function ParseResults({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {/* Quick view mode indicator */}
+            {/* Document Info label */}
             <span className={`text-xs px-2 py-1 rounded ${isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
-              {viewMode === 'components' ? 'Components' : 'Markdown'}
+              Document Info
             </span>
           </div>
         </div>
