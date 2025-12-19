@@ -42,6 +42,13 @@ export default function AnnotationOverlay({
   const bgColor = ANNOTATION_COLORS[annotation.level];
   const borderColor = ANNOTATION_BORDER_COLORS[annotation.level];
 
+  // Debug: log annotation level and color
+  console.log('[AnnotationOverlay]', {
+    text: annotation.text.substring(0, 30),
+    level: annotation.level,
+    bgColor,
+  });
+
   // Sticky note dimensions
   const stickyWidth = isExpanded ? 200 : 160;
   const stickyMinHeight = isExpanded ? 80 : 40;

@@ -409,7 +409,14 @@ export default function ReviewTab({
           </div>
         ) : (
           <div className="p-2 space-y-2">
-            {annotations.map(annotation => (
+            {annotations.map(annotation => {
+              // Debug: log annotation level
+              console.log('[ReviewTab tile]', {
+                text: annotation.text.substring(0, 30),
+                level: annotation.level,
+                page_number: annotation.page_number,
+              });
+              return (
               <div
                 key={annotation.id}
                 onClick={() => onAnnotationSelect?.(annotation)}
@@ -539,7 +546,8 @@ export default function ReviewTab({
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>
