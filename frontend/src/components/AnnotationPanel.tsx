@@ -185,8 +185,8 @@ export default function AnnotationPanel({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          {/* Export PDF button */}
+        <div className="flex items-center gap-2">
+          {/* Export PDF button - more visible */}
           {file && annotations.length > 0 && (
             <button
               onClick={(e) => {
@@ -194,22 +194,23 @@ export default function AnnotationPanel({
                 handleExportPDF();
               }}
               disabled={isExporting}
-              className={`p-1 rounded transition-colors ${
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
                 isExporting
                   ? 'opacity-50 cursor-not-allowed'
                   : isDark
-                    ? 'text-green-400 hover:bg-green-900/30'
-                    : 'text-green-600 hover:bg-green-50'
+                    ? 'bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 border border-emerald-700/50'
+                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
               }`}
               title="Export PDF with annotations"
             >
               {isExporting ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-green-400 border-t-transparent" />
+                <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-emerald-400 border-t-transparent" />
               ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
               )}
+              <span>Export</span>
             </button>
           )}
           {/* Add note button */}
@@ -219,7 +220,7 @@ export default function AnnotationPanel({
               setIsAddingNote(true);
               setIsExpanded(true);
             }}
-            className={`p-1 rounded transition-colors ${
+            className={`p-1.5 rounded-md transition-colors ${
               isDark
                 ? 'text-sky-400 hover:bg-sky-900/30'
                 : 'text-sky-600 hover:bg-sky-50'
