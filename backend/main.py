@@ -52,10 +52,13 @@ app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(compliance.router, prefix="/api/compliance", tags=["compliance"])
 
 # New project/document management routers
-app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
+# IMPORTANT: Order matters! More specific routes must come before general routes.
+# documents/annotations/batch have routes like /{project_id}/documents/...
+# projects has routes like /{project_id} which would catch all if registered first
 app.include_router(documents.router, prefix="/api/projects", tags=["documents"])
 app.include_router(annotations.router, prefix="/api/projects", tags=["annotations"])
 app.include_router(batch.router, prefix="/api/projects", tags=["batch"])
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 
 
 @app.get("/health")
