@@ -1,7 +1,7 @@
 services:
   # Backend API service
   - type: web
-    name: landing-pdf-parse-api
+    name: complicheckai-studio-api
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
@@ -15,7 +15,7 @@ services:
 
   # Frontend static site
   - type: web
-    name: landing-pdf-parse-frontend
+    name: complicheckai-studio-frontend
     runtime: static
     rootDir: frontend
     buildCommand: npm install --legacy-peer-deps && npm run build

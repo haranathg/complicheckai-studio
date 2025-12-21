@@ -12,6 +12,7 @@ frontend:
         - echo "VITE_ENABLE_CLAUDE_VISION=$VITE_ENABLE_CLAUDE_VISION" >> .env.production
         - echo "VITE_ENABLE_GEMINI_VISION=$VITE_ENABLE_GEMINI_VISION" >> .env.production
         - echo "VITE_ENABLE_BEDROCK_CLAUDE=$VITE_ENABLE_BEDROCK_CLAUDE" >> .env.production
+        - echo "=== .env.production contents ===" && cat .env.production
         - npm run build
   artifacts:
     baseDirectory: dist
