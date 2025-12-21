@@ -65,3 +65,7 @@ coverage/
 *.log
 *.tmp
 *.temp
+
+# Large files and samples
+*.zip
+samples/
