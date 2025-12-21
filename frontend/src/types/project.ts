@@ -42,6 +42,12 @@ export interface Document {
   parse_results: ParseResultSummary[];
   has_cached_result: boolean;
   latest_parser?: string;
+  // Classification fields (v2)
+  document_type?: string;
+  classification_confidence?: number;
+  classification_signals?: string[];
+  classification_override?: boolean;
+  classification_model?: string;
 }
 
 export interface DocumentListResponse {

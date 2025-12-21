@@ -1,0 +1,891 @@
+{
+  "version": "2.0",
+  "description": "Building consent document classification and checks - organized by document type",
+  
+  "document_types": {
+    "record_of_title": {
+      "name": "Record of Title",
+      "description": "Land ownership and interests documentation from LINZ",
+      "upload_slot": "Record of Title",
+      "classification_signals": {
+        "keywords": ["RECORD OF TITLE", "CERTIFICATE OF TITLE", "LAND TRANSFER ACT", "Fee Simple", "Land Registration District", "Registered Owners", "Freehold"],
+        "patterns": ["[A-Z]{2}\\d+[A-Z]?/\\d+"],
+        "visual_cues": ["LINZ header", "Search Copy stamp"]
+      },
+      "completeness_checks": [
+        {
+          "id": "rot_001",
+          "name": "Title Reference",
+          "question": "Is a valid title identifier present (e.g., SA21A/1371)?",
+          "required": true,
+          "search_terms": ["identifier", "title reference", "SA", "NA", "WN"]
+        },
+        {
+          "id": "rot_002",
+          "name": "Registered Owner(s)",
+          "question": "Are the registered owner name(s) clearly shown?",
+          "required": true,
+          "search_terms": ["registered owners", "proprietor"]
+        },
+        {
+          "id": "rot_003",
+          "name": "Legal Description",
+          "question": "Is the legal description (Lot/DP) present?",
+          "required": true,
+          "search_terms": ["lot", "DP", "deposited plan", "legal description"]
+        },
+        {
+          "id": "rot_004",
+          "name": "Estate Type",
+          "question": "Is the estate type shown (Fee Simple, Leasehold, etc.)?",
+          "required": true,
+          "search_terms": ["fee simple", "estate", "leasehold"]
+        },
+        {
+          "id": "rot_005",
+          "name": "Area",
+          "question": "Is the land area specified?",
+          "required": true,
+          "search_terms": ["area", "square metres", "hectares"]
+        },
+        {
+          "id": "rot_006",
+          "name": "Search Date",
+          "question": "Is the search copy date shown?",
+          "required": true,
+          "search_terms": ["search copy dated", "dated"]
+        },
+        {
+          "id": "rot_007",
+          "name": "Interests Section",
+          "question": "Is there an interests/encumbrances section?",
+          "required": true,
+          "search_terms": ["interests", "encumbrances", "memorial"]
+        }
+      ],
+      "compliance_checks": [
+        {
+          "id": "rot_c01",
+          "name": "Title Currency",
+          "question": "Is the title search dated within the last 3 months?",
+          "rule_reference": "Council requirement - current title",
+          "validation_type": "date_age",
+          "threshold": { "max_days": 90 }
+        }
+      ]
+    },
+
+    "site_plan": {
+      "name": "Site Plan / Location Plan",
+      "description": "Drawing showing property boundaries, buildings, setbacks and site layout",
+      "upload_slot": "Plans",
+      "classification_signals": {
+        "keywords": ["SITE PLAN", "SITE LAYOUT", "LOCATION PLAN", "BOUNDARY", "SETBACK"],
+        "visual_cues": ["boundary lines", "building footprints", "north arrow", "scale bar", "property dimensions"]
+      },
+      "completeness_checks": [
+        {
+          "id": "sp_001",
+          "name": "Site Address",
+          "question": "Is the full site/property address shown?",
+          "required": true,
+          "search_terms": ["address", "road", "street", "site"]
+        },
+        {
+          "id": "sp_002",
+          "name": "Legal Description",
+          "question": "Is the Lot/DP reference shown on the plan?",
+          "required": true,
+          "search_terms": ["lot", "DP", "deposited plan"]
+        },
+        {
+          "id": "sp_003",
+          "name": "Scale",
+          "question": "Is the drawing scale clearly indicated?",
+          "required": true,
+          "search_terms": ["scale", "1:"]
+        },
+        {
+          "id": "sp_004",
+          "name": "North Arrow",
+          "question": "Is the north direction indicated?",
+          "required": true,
+          "search_terms": ["north", "N"]
+        },
+        {
+          "id": "sp_005",
+          "name": "Boundary Dimensions",
+          "question": "Are all property boundary dimensions shown?",
+          "required": true,
+          "search_terms": ["boundary", "dimension", "metres"]
+        },
+        {
+          "id": "sp_006",
+          "name": "Site Area",
+          "question": "Is the total site area specified?",
+          "required": true,
+          "search_terms": ["site area", "land area", "total area", "m2"]
+        },
+        {
+          "id": "sp_007",
+          "name": "Existing Buildings",
+          "question": "Are existing buildings/structures shown and labelled?",
+          "required": true,
+          "search_terms": ["existing", "dwelling", "building", "structure"]
+        },
+        {
+          "id": "sp_008",
+          "name": "Proposed Works",
+          "question": "Are proposed works clearly identified and labelled?",
+          "required": true,
+          "search_terms": ["proposed", "new", "addition"]
+        },
+        {
+          "id": "sp_009",
+          "name": "Setback Dimensions",
+          "question": "Are setback distances from boundaries shown?",
+          "required": true,
+          "search_terms": ["setback", "from boundary", "offset"]
+        },
+        {
+          "id": "sp_010",
+          "name": "Author/Drawn By",
+          "question": "Is the author/company who prepared the plan shown?",
+          "required": true,
+          "search_terms": ["drawn by", "prepared by", "author", "designer"]
+        },
+        {
+          "id": "sp_011",
+          "name": "Date",
+          "question": "Is the drawing date or revision date shown?",
+          "required": true,
+          "search_terms": ["date", "dated", "revision"]
+        }
+      ],
+      "compliance_checks": [
+        {
+          "id": "sp_c01",
+          "name": "Site Coverage Limit",
+          "question": "Is site coverage within the permitted maximum (typically 35-40%)?",
+          "rule_reference": "District Plan - Site Coverage",
+          "validation_type": "percentage_check",
+          "threshold": { "max_percentage": 40 }
+        },
+        {
+          "id": "sp_c02",
+          "name": "Front Setback",
+          "question": "Does the front yard setback meet minimum requirements?",
+          "rule_reference": "District Plan - Yard Requirements",
+          "validation_type": "distance_check",
+          "threshold": { "min_metres": 4.5 }
+        },
+        {
+          "id": "sp_c03",
+          "name": "Side Setback",
+          "question": "Do side yard setbacks meet minimum requirements?",
+          "rule_reference": "District Plan - Yard Requirements",
+          "validation_type": "distance_check",
+          "threshold": { "min_metres": 1.5 }
+        },
+        {
+          "id": "sp_c04",
+          "name": "Vehicle Access",
+          "question": "Is vehicle access/driveway to the site shown?",
+          "rule_reference": "District Plan - Access Requirements",
+          "validation_type": "presence_check"
+        },
+        {
+          "id": "sp_c05",
+          "name": "Stormwater",
+          "question": "Is stormwater disposal indicated?",
+          "rule_reference": "Building Code E1",
+          "validation_type": "presence_check"
+        }
+      ]
+    },
+
+    "floor_plan": {
+      "name": "Floor Plan",
+      "description": "Architectural drawing showing room layout, dimensions and door/window positions",
+      "upload_slot": "Plans",
+      "classification_signals": {
+        "keywords": ["FLOOR PLAN", "GROUND FLOOR", "FIRST FLOOR", "LEVEL", "PLAN VIEW"],
+        "visual_cues": ["room labels", "door swings", "dimension chains", "wall thicknesses"]
+      },
+      "completeness_checks": [
+        {
+          "id": "fp_001",
+          "name": "Scale",
+          "question": "Is the drawing scale indicated?",
+          "required": true,
+          "search_terms": ["scale", "1:"]
+        },
+        {
+          "id": "fp_002",
+          "name": "Room Labels",
+          "question": "Are all rooms labelled with their use?",
+          "required": true,
+          "search_terms": ["bedroom", "living", "kitchen", "bathroom", "garage"]
+        },
+        {
+          "id": "fp_003",
+          "name": "Dimensions",
+          "question": "Are key room dimensions shown?",
+          "required": true,
+          "search_terms": ["mm", "metres", "dimension"]
+        },
+        {
+          "id": "fp_004",
+          "name": "Floor Level",
+          "question": "Is the floor level/storey identified?",
+          "required": true,
+          "search_terms": ["floor", "level", "ground", "first", "storey"]
+        },
+        {
+          "id": "fp_005",
+          "name": "Door Positions",
+          "question": "Are door positions and swings shown?",
+          "required": true,
+          "search_terms": ["door", "D"]
+        },
+        {
+          "id": "fp_006",
+          "name": "Window Positions",
+          "question": "Are window positions indicated?",
+          "required": true,
+          "search_terms": ["window", "W"]
+        }
+      ],
+      "compliance_checks": []
+    },
+
+    "elevation": {
+      "name": "Elevation Drawing",
+      "description": "External view of building showing height, materials, and facade details",
+      "upload_slot": "Plans",
+      "classification_signals": {
+        "keywords": ["ELEVATION", "NORTH ELEVATION", "SOUTH ELEVATION", "EAST ELEVATION", "WEST ELEVATION", "FRONT ELEVATION", "REAR ELEVATION"],
+        "visual_cues": ["building facade", "height annotations", "RL levels", "material callouts"]
+      },
+      "completeness_checks": [
+        {
+          "id": "el_001",
+          "name": "Elevation Direction",
+          "question": "Is the elevation direction identified (North, South, etc.)?",
+          "required": true,
+          "search_terms": ["north", "south", "east", "west", "front", "rear"]
+        },
+        {
+          "id": "el_002",
+          "name": "Scale",
+          "question": "Is the drawing scale indicated?",
+          "required": true,
+          "search_terms": ["scale", "1:"]
+        },
+        {
+          "id": "el_003",
+          "name": "Height Dimensions",
+          "question": "Are building heights shown (floor to ceiling, overall)?",
+          "required": true,
+          "search_terms": ["height", "RL", "level", "metres"]
+        },
+        {
+          "id": "el_004",
+          "name": "Ground Level",
+          "question": "Is the ground/finished floor level shown (RL)?",
+          "required": true,
+          "search_terms": ["RL", "ground level", "FFL", "finished floor"]
+        },
+        {
+          "id": "el_005",
+          "name": "Materials",
+          "question": "Are external materials/finishes indicated?",
+          "required": false,
+          "search_terms": ["cladding", "material", "finish", "colour"]
+        }
+      ],
+      "compliance_checks": [
+        {
+          "id": "el_c01",
+          "name": "Height Limit",
+          "question": "Is the building height within the permitted maximum?",
+          "rule_reference": "District Plan - Height Limits",
+          "validation_type": "height_check",
+          "threshold": { "max_metres": 8.0 }
+        }
+      ]
+    },
+
+    "product_specification": {
+      "name": "Product Specification / Manual",
+      "description": "Technical specifications, installation requirements and compliance data for products",
+      "upload_slot": "Specifications",
+      "classification_signals": {
+        "keywords": ["SPECIFICATION", "SPECIFICATIONS", "TECHNICAL DATA", "INSTALLATION", "MODEL", "OWNER'S MANUAL", "OPERATING INSTRUCTIONS"],
+        "visual_cues": ["manufacturer logo", "model number", "technical tables", "clearance diagrams"]
+      },
+      "completeness_checks": [
+        {
+          "id": "ps_001",
+          "name": "Manufacturer",
+          "question": "Is the manufacturer name clearly shown?",
+          "required": true,
+          "search_terms": ["manufacturer", "made by", "brand"]
+        },
+        {
+          "id": "ps_002",
+          "name": "Model Name/Number",
+          "question": "Is the product model name or number shown?",
+          "required": true,
+          "search_terms": ["model", "product", "type"]
+        },
+        {
+          "id": "ps_003",
+          "name": "Clearance Requirements",
+          "question": "Are clearance/spacing requirements specified?",
+          "required": true,
+          "search_terms": ["clearance", "spacing", "distance", "mm from"]
+        },
+        {
+          "id": "ps_004",
+          "name": "Standards Compliance",
+          "question": "Are compliance standards referenced (AS/NZS)?",
+          "required": true,
+          "search_terms": ["AS/NZS", "standard", "complies", "compliance"]
+        },
+        {
+          "id": "ps_005",
+          "name": "Installation Instructions",
+          "question": "Are installation instructions present?",
+          "required": true,
+          "search_terms": ["installation", "install", "instructions", "procedure"]
+        }
+      ],
+      "compliance_checks": [
+        {
+          "id": "ps_c01",
+          "name": "Emissions Rating",
+          "question": "Does the product meet emissions requirements (for solid fuel heaters)?",
+          "rule_reference": "ECAN Clean Air Rules",
+          "validation_type": "threshold_check",
+          "threshold": { "max_emissions_g_kg": 1.5 },
+          "applies_to": ["solid_fuel_heater"]
+        },
+        {
+          "id": "ps_c02",
+          "name": "Efficiency Rating",
+          "question": "Does the product meet minimum efficiency requirements?",
+          "rule_reference": "ECAN Clean Air Rules",
+          "validation_type": "threshold_check",
+          "threshold": { "min_efficiency_percent": 65 },
+          "applies_to": ["solid_fuel_heater"]
+        }
+      ]
+    },
+
+    "producer_statement": {
+      "name": "Producer Statement (PS1/PS3/PS4)",
+      "description": "Certification statement from qualified professional confirming design or construction compliance",
+      "upload_slot": "Manufacturer's Certificate(s)",
+      "classification_signals": {
+        "keywords": ["PRODUCER STATEMENT", "PS1", "PS2", "PS3", "PS4", "MEMORANDUM OF COMPLETION", "CONSTRUCTION REVIEW", "Section 45"],
+        "visual_cues": ["signature block", "registration number", "scope of work section", "building consent reference"]
+      },
+      "completeness_checks": [
+        {
+          "id": "pst_001",
+          "name": "Issuer Name",
+          "question": "Is the issuer's name shown?",
+          "required": true,
+          "search_terms": ["issued by", "name", "practitioner"]
+        },
+        {
+          "id": "pst_002",
+          "name": "Company Name",
+          "question": "Is the company/organisation name shown?",
+          "required": true,
+          "search_terms": ["company", "ltd", "limited"]
+        },
+        {
+          "id": "pst_003",
+          "name": "Building Consent Number",
+          "question": "Is the building consent number referenced?",
+          "required": true,
+          "search_terms": ["consent", "ABA", "BCA", "building consent"]
+        },
+        {
+          "id": "pst_004",
+          "name": "Project Address",
+          "question": "Is the project address shown?",
+          "required": true,
+          "search_terms": ["address", "project", "site", "road"]
+        },
+        {
+          "id": "pst_005",
+          "name": "Scope of Work",
+          "question": "Is the scope of work clearly defined?",
+          "required": true,
+          "search_terms": ["scope", "work covered", "description"]
+        },
+        {
+          "id": "pst_006",
+          "name": "Standards Reference",
+          "question": "Are applicable standards referenced (AS/NZS)?",
+          "required": true,
+          "search_terms": ["AS/NZS", "standard", "NZS"]
+        },
+        {
+          "id": "pst_007",
+          "name": "Registration/Accreditation",
+          "question": "Is the issuer's registration or accreditation number shown?",
+          "required": true,
+          "search_terms": ["registration", "accreditation", "LBP", "CPEng", "installer number"]
+        },
+        {
+          "id": "pst_008",
+          "name": "Signature",
+          "question": "Is the statement signed?",
+          "required": true,
+          "search_terms": ["signature", "signed"]
+        },
+        {
+          "id": "pst_009",
+          "name": "Date",
+          "question": "Is the statement dated?",
+          "required": true,
+          "search_terms": ["date", "dated"]
+        }
+      ],
+      "compliance_checks": []
+    },
+
+    "inspection_report": {
+      "name": "Inspection Report",
+      "description": "Council inspection documentation with findings, outcome and photos",
+      "upload_slot": "Supporting documents",
+      "classification_signals": {
+        "keywords": ["INSPECTION", "INSPECTION REPORT", "INSPECTION RESULTS", "INSPECTOR", "PASS", "FAIL", "BCA"],
+        "visual_cues": ["inspection checklist", "site photos", "council letterhead", "outcome stamp"]
+      },
+      "completeness_checks": [
+        {
+          "id": "ir_001",
+          "name": "Consent Reference",
+          "question": "Is the building consent reference number shown?",
+          "required": true,
+          "search_terms": ["reference", "consent", "ABA", "application"]
+        },
+        {
+          "id": "ir_002",
+          "name": "Project Address",
+          "question": "Is the project location/address shown?",
+          "required": true,
+          "search_terms": ["address", "location", "site", "road"]
+        },
+        {
+          "id": "ir_003",
+          "name": "Inspection Date",
+          "question": "Is the inspection date clearly shown?",
+          "required": true,
+          "search_terms": ["date", "inspection date"]
+        },
+        {
+          "id": "ir_004",
+          "name": "Inspector Name",
+          "question": "Is the inspector's name shown?",
+          "required": true,
+          "search_terms": ["inspector", "officer", "by"]
+        },
+        {
+          "id": "ir_005",
+          "name": "Inspection Type",
+          "question": "Is the inspection type identified (e.g., Final, Pre-line)?",
+          "required": true,
+          "search_terms": ["final", "pre-line", "foundation", "inspection type"]
+        },
+        {
+          "id": "ir_006",
+          "name": "Outcome",
+          "question": "Is the inspection outcome (Pass/Fail) clearly stated?",
+          "required": true,
+          "search_terms": ["pass", "fail", "outcome", "result"]
+        },
+        {
+          "id": "ir_007",
+          "name": "Findings/Notes",
+          "question": "Are inspection findings or notes recorded?",
+          "required": true,
+          "search_terms": ["notes", "findings", "summary", "comments"]
+        }
+      ],
+      "compliance_checks": []
+    },
+
+    "authorised_product_list": {
+      "name": "Authorised Product List",
+      "description": "Regulatory authority listing of approved/authorised products",
+      "upload_slot": "Product Certificates / Approvals from authorities",
+      "classification_signals": {
+        "keywords": ["AUTHORISED", "AUTHORIZED", "APPROVED", "ECAN", "Environment Canterbury", "BURNERS", "APPROVED LIST"],
+        "visual_cues": ["product table", "approval numbers", "emissions data"]
+      },
+      "completeness_checks": [
+        {
+          "id": "apl_001",
+          "name": "Authority Name",
+          "question": "Is the authorising body identified (e.g., Environment Canterbury)?",
+          "required": true,
+          "search_terms": ["ECAN", "Environment Canterbury", "authority", "council"]
+        },
+        {
+          "id": "apl_002",
+          "name": "Product Listed",
+          "question": "Is the specific product brand and model listed?",
+          "required": true,
+          "search_terms": ["model", "brand", "product"]
+        },
+        {
+          "id": "apl_003",
+          "name": "Authorisation Number",
+          "question": "Is an authorisation/approval number shown?",
+          "required": true,
+          "search_terms": ["authorisation", "authorization", "approval", "number"]
+        }
+      ],
+      "compliance_checks": []
+    },
+
+    "construction_detail": {
+      "name": "Construction Detail Drawing",
+      "description": "Technical detail drawing showing construction methods, materials and assemblies",
+      "upload_slot": "Specifications",
+      "classification_signals": {
+        "keywords": ["DETAIL", "CONSTRUCTION DETAIL", "TYPICAL DETAIL", "SECTION DETAIL", "FLASHING"],
+        "visual_cues": ["enlarged scale", "material annotations", "assembly diagram"]
+      },
+      "completeness_checks": [
+        {
+          "id": "cd_001",
+          "name": "Detail Title",
+          "question": "Is the detail clearly titled/labelled?",
+          "required": true,
+          "search_terms": ["detail", "section", "title"]
+        },
+        {
+          "id": "cd_002",
+          "name": "Scale",
+          "question": "Is the detail scale indicated?",
+          "required": true,
+          "search_terms": ["scale", "1:"]
+        },
+        {
+          "id": "cd_003",
+          "name": "Materials",
+          "question": "Are materials/components identified?",
+          "required": true,
+          "search_terms": ["material", "steel", "timber", "concrete"]
+        },
+        {
+          "id": "cd_004",
+          "name": "Dimensions",
+          "question": "Are key dimensions shown?",
+          "required": true,
+          "search_terms": ["mm", "dimension"]
+        }
+      ],
+      "compliance_checks": []
+    },
+
+    "building_consent_form": {
+      "name": "Building Consent Application Form",
+      "description": "Form 2 or Form 5 building consent application/grant documentation",
+      "upload_slot": "Supporting documents",
+      "classification_signals": {
+        "keywords": ["FORM 2", "FORM 5", "BUILDING CONSENT", "APPLICATION FOR BUILDING CONSENT", "Section 33", "Section 45", "Section 51", "Building Act 2004"],
+        "visual_cues": ["form fields", "council header", "consent number"]
+      },
+      "completeness_checks": [
+        {
+          "id": "bcf_001",
+          "name": "Form Type",
+          "question": "Is the form type identified (Form 2, Form 5)?",
+          "required": true,
+          "search_terms": ["form 2", "form 5", "application"]
+        },
+        {
+          "id": "bcf_002",
+          "name": "Consent Number",
+          "question": "Is a consent/application number shown?",
+          "required": true,
+          "search_terms": ["consent", "application", "reference", "ABA"]
+        },
+        {
+          "id": "bcf_003",
+          "name": "Site Address",
+          "question": "Is the site address shown?",
+          "required": true,
+          "search_terms": ["address", "site", "street", "road"]
+        },
+        {
+          "id": "bcf_004",
+          "name": "Legal Description",
+          "question": "Is the legal description (Lot/DP) shown?",
+          "required": true,
+          "search_terms": ["lot", "DP", "legal description"]
+        },
+        {
+          "id": "bcf_005",
+          "name": "Owner Details",
+          "question": "Are owner name and contact details shown?",
+          "required": true,
+          "search_terms": ["owner", "name", "contact"]
+        },
+        {
+          "id": "bcf_006",
+          "name": "Work Description",
+          "question": "Is the description of building work shown?",
+          "required": true,
+          "search_terms": ["description", "building work", "project"]
+        }
+      ],
+      "compliance_checks": []
+    },
+
+    "code_compliance_certificate": {
+      "name": "Code Compliance Certificate (CCC)",
+      "description": "Form 7 Code Compliance Certificate issued under Section 95 Building Act",
+      "upload_slot": "Supporting documents",
+      "classification_signals": {
+        "keywords": ["FORM 7", "CODE COMPLIANCE CERTIFICATE", "CCC", "Section 95", "Building Act 2004"],
+        "visual_cues": ["council seal", "official stamp", "consent reference"]
+      },
+      "completeness_checks": [
+        {
+          "id": "ccc_001",
+          "name": "Form Number",
+          "question": "Is it identified as Form 7?",
+          "required": true,
+          "search_terms": ["form 7", "code compliance"]
+        },
+        {
+          "id": "ccc_002",
+          "name": "Building Consent Number(s)",
+          "question": "Are the covered building consent numbers listed?",
+          "required": true,
+          "search_terms": ["consent", "ABA", "reference"]
+        },
+        {
+          "id": "ccc_003",
+          "name": "Site Address",
+          "question": "Is the site address shown?",
+          "required": true,
+          "search_terms": ["address", "site", "street"]
+        },
+        {
+          "id": "ccc_004",
+          "name": "Issue Date",
+          "question": "Is the CCC issue date shown?",
+          "required": true,
+          "search_terms": ["date", "issued"]
+        },
+        {
+          "id": "ccc_005",
+          "name": "Authorised Signature",
+          "question": "Is there an authorised officer signature?",
+          "required": true,
+          "search_terms": ["signature", "authorised", "officer"]
+        }
+      ],
+      "compliance_checks": []
+    },
+
+    "unknown": {
+      "name": "Unclassified Document",
+      "description": "Document type could not be determined automatically",
+      "upload_slot": "Supporting documents",
+      "classification_signals": {
+        "keywords": [],
+        "visual_cues": []
+      },
+      "completeness_checks": [
+        {
+          "id": "unk_001",
+          "name": "Document Legible",
+          "question": "Is the document legible and readable?",
+          "required": true,
+          "search_terms": []
+        },
+        {
+          "id": "unk_002",
+          "name": "Relevance Clear",
+          "question": "Is the document's purpose/relevance identifiable?",
+          "required": false,
+          "search_terms": []
+        }
+      ],
+      "compliance_checks": []
+    }
+  },
+
+  "work_types": {
+    "solid_fuel_heater": {
+      "name": "Solid Fuel Heater Installation",
+      "description": "Installation or replacement of wood burner, pellet fire, or other solid fuel heater",
+      "required_documents": [
+        "record_of_title",
+        "site_plan",
+        "product_specification",
+        "producer_statement",
+        "authorised_product_list"
+      ],
+      "optional_documents": [
+        "construction_detail",
+        "inspection_report",
+        "code_compliance_certificate"
+      ],
+      "default_settings": {
+        "vision_parser": "landing_ai",
+        "chat_model": "bedrock-claude-sonnet-3.5",
+        "compliance_model": "bedrock-claude-sonnet-3.5"
+      }
+    },
+    "new_dwelling": {
+      "name": "New Dwelling",
+      "description": "Construction of a new residential dwelling",
+      "required_documents": [
+        "record_of_title",
+        "site_plan",
+        "floor_plan",
+        "elevation"
+      ],
+      "optional_documents": [
+        "construction_detail",
+        "product_specification",
+        "producer_statement"
+      ],
+      "default_settings": {
+        "vision_parser": "landing_ai",
+        "chat_model": "bedrock-claude-sonnet-3.5",
+        "compliance_model": "bedrock-claude-sonnet-3.5"
+      }
+    },
+    "minor_works": {
+      "name": "Minor Works / Alterations",
+      "description": "Small alterations, additions or repairs to existing buildings",
+      "required_documents": [
+        "record_of_title",
+        "site_plan"
+      ],
+      "optional_documents": [
+        "floor_plan",
+        "elevation",
+        "construction_detail"
+      ],
+      "default_settings": {
+        "vision_parser": "landing_ai",
+        "chat_model": "bedrock-claude-sonnet-3.5",
+        "compliance_model": "bedrock-claude-sonnet-3.5"
+      }
+    },
+    "commercial_fitout": {
+      "name": "Commercial Fitout",
+      "description": "Interior alterations to commercial or retail premises",
+      "required_documents": [
+        "record_of_title",
+        "floor_plan"
+      ],
+      "optional_documents": [
+        "site_plan",
+        "elevation",
+        "construction_detail",
+        "product_specification"
+      ],
+      "default_settings": {
+        "vision_parser": "landing_ai",
+        "chat_model": "bedrock-claude-sonnet-3.5",
+        "compliance_model": "bedrock-claude-sonnet-3.5"
+      }
+    },
+    "demolition": {
+      "name": "Demolition",
+      "description": "Demolition of existing structures",
+      "required_documents": [
+        "record_of_title",
+        "site_plan"
+      ],
+      "optional_documents": [
+        "inspection_report"
+      ],
+      "default_settings": {
+        "vision_parser": "claude_vision",
+        "chat_model": "bedrock-claude-sonnet-3.5",
+        "compliance_model": "bedrock-claude-sonnet-3.5"
+      }
+    },
+    "custom": {
+      "name": "Custom / Other",
+      "description": "Custom project type - configure documents manually",
+      "required_documents": [],
+      "optional_documents": [
+        "record_of_title",
+        "site_plan",
+        "floor_plan",
+        "elevation",
+        "product_specification",
+        "producer_statement",
+        "inspection_report",
+        "construction_detail",
+        "building_consent_form",
+        "code_compliance_certificate",
+        "authorised_product_list"
+      ],
+      "default_settings": {
+        "vision_parser": "landing_ai",
+        "chat_model": "bedrock-claude-sonnet-3.5",
+        "compliance_model": "bedrock-claude-sonnet-3.5"
+      }
+    }
+  },
+
+  "upload_slots": {
+    "description": "Maps document types to AlphaOne upload categories",
+    "slots": [
+      {
+        "id": "record_of_title",
+        "name": "Record of Title",
+        "required": true,
+        "document_types": ["record_of_title"]
+      },
+      {
+        "id": "plans",
+        "name": "Plans",
+        "required": true,
+        "document_types": ["site_plan", "floor_plan", "elevation", "construction_detail"]
+      },
+      {
+        "id": "specifications",
+        "name": "Specifications",
+        "required": true,
+        "document_types": ["product_specification", "construction_detail"]
+      },
+      {
+        "id": "product_certificates",
+        "name": "Current Product Certificate(s)",
+        "required": false,
+        "document_types": ["authorised_product_list"]
+      },
+      {
+        "id": "manufacturer_certificates",
+        "name": "Manufacturer's Certificate(s)",
+        "required": false,
+        "document_types": ["producer_statement"]
+      },
+      {
+        "id": "supporting_documents",
+        "name": "Supporting documents",
+        "required": false,
+        "document_types": ["inspection_report", "building_consent_form", "code_compliance_certificate", "unknown"]
+      }
+    ]
+  }
+}

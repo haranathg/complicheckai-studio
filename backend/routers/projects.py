@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db
-from models.database_models import Project, Document, ParseResult
+from models.database_models import Project, Document, ParseResult, ProjectSettings
 from services import s3_service
+from services.config_service import load_default_checks_config, list_work_types, get_work_type_config
 
 router = APIRouter()
 
@@ -60,6 +61,26 @@ class ProjectUsageResponse(BaseModel):
     total_credit_usage: int
     estimated_total_cost: float
     usage_by_parser: List[UsageByParser]
+
+
+class ProjectSettingsUpdate(BaseModel):
+    work_type: Optional[str] = None
+    vision_parser: Optional[str] = None
+    vision_model: Optional[str] = None
+    chat_model: Optional[str] = None
+    compliance_model: Optional[str] = None
+
+
+class ProjectSettingsResponse(BaseModel):
+    work_type: str
+    vision_parser: str
+    vision_model: Optional[str]
+    chat_model: str
+    compliance_model: str
+    checks_config: Optional[Dict[str, Any]]
+    usage: Dict[str, int]
+    required_documents: List[str]
+    optional_documents: List[str]
 
 
 # Cost estimates per 1M tokens (approximate)
@@ -279,3 +300,134 @@ async def get_project_usage(
         estimated_total_cost=round(total_cost, 4),
         usage_by_parser=usage_by_parser,
     )
+
+
+# ============ PROJECT SETTINGS ENDPOINTS ============
+
+@router.get("/templates")
+async def get_work_type_templates():
+    """List available work type templates."""
+    return {"templates": list_work_types()}
+
+
+@router.get("/{project_id}/settings", response_model=ProjectSettingsResponse)
+async def get_project_settings(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get project settings including work type template info."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
+
+    work_type = settings.work_type if settings else "custom"
+    work_type_info = get_work_type_config(work_type)
+
+    return ProjectSettingsResponse(
+        work_type=work_type,
+        vision_parser=settings.vision_parser if settings else "landing_ai",
+        vision_model=settings.vision_model if settings else None,
+        chat_model=settings.chat_model if settings else "bedrock-claude-sonnet-3.5",
+        compliance_model=settings.compliance_model if settings else "bedrock-claude-sonnet-3.5",
+        checks_config=settings.checks_config if settings else None,
+        usage={
+            "total_parse_credits": settings.total_parse_credits if settings else 0,
+            "total_input_tokens": settings.total_input_tokens if settings else 0,
+            "total_output_tokens": settings.total_output_tokens if settings else 0
+        },
+        required_documents=work_type_info.get("required_documents", []),
+        optional_documents=work_type_info.get("optional_documents", [])
+    )
+
+
+@router.put("/{project_id}/settings")
+async def update_project_settings(
+    project_id: str,
+    body: ProjectSettingsUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update project settings."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
+    if not settings:
+        settings = ProjectSettings(project_id=project_id)
+        db.add(settings)
+
+    # If work type changing, apply template defaults
+    if body.work_type and body.work_type != settings.work_type:
+        work_type_info = get_work_type_config(body.work_type)
+        defaults = work_type_info.get("default_settings", {})
+        settings.work_type = body.work_type
+        settings.vision_parser = defaults.get("vision_parser", "landing_ai")
+        settings.chat_model = defaults.get("chat_model", "bedrock-claude-sonnet-3.5")
+        settings.compliance_model = defaults.get("compliance_model", "bedrock-claude-sonnet-3.5")
+
+    # Apply explicit overrides
+    if body.vision_parser is not None:
+        settings.vision_parser = body.vision_parser
+    if body.vision_model is not None:
+        settings.vision_model = body.vision_model
+    if body.chat_model is not None:
+        settings.chat_model = body.chat_model
+    if body.compliance_model is not None:
+        settings.compliance_model = body.compliance_model
+
+    db.commit()
+    db.refresh(settings)
+
+    work_type_info = get_work_type_config(settings.work_type)
+
+    return {
+        "status": "updated",
+        "settings": {
+            "work_type": settings.work_type,
+            "vision_parser": settings.vision_parser,
+            "vision_model": settings.vision_model,
+            "chat_model": settings.chat_model,
+            "compliance_model": settings.compliance_model,
+            "required_documents": work_type_info.get("required_documents", []),
+            "optional_documents": work_type_info.get("optional_documents", [])
+        }
+    }
+
+
+@router.get("/{project_id}/checks-config")
+async def get_project_checks_config(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get checks configuration (custom or default)."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
+    if settings and settings.checks_config:
+        return settings.checks_config
+    return load_default_checks_config()
+
+
+@router.put("/{project_id}/checks-config")
+async def update_project_checks_config(
+    project_id: str,
+    config: Dict[str, Any],
+    db: Session = Depends(get_db)
+):
+    """Update custom checks configuration."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
+    if not settings:
+        settings = ProjectSettings(project_id=project_id)
+        db.add(settings)
+
+    settings.checks_config = config
+    db.commit()
+    return {"status": "updated"}

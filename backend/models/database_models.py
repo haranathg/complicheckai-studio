@@ -29,6 +29,7 @@ class Project(Base):
 
     # Relationships
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
+    settings = relationship("ProjectSettings", back_populates="project", uselist=False, cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_projects_name", "name"),
@@ -52,14 +53,23 @@ class Document(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     uploaded_by = Column(String(255), nullable=True)
 
+    # Document classification
+    document_type = Column(String(50), nullable=True)
+    classification_confidence = Column(Integer, nullable=True)
+    classification_signals = Column(JSON, nullable=True)
+    classification_override = Column(Boolean, default=False)
+    classification_model = Column(String(100), nullable=True)
+
     # Relationships
     project = relationship("Project", back_populates="documents")
     parse_results = relationship("ParseResult", back_populates="document", cascade="all, delete-orphan")
+    check_results = relationship("CheckResult", back_populates="document", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_documents_project_id", "project_id"),
         Index("ix_documents_file_hash", "file_hash"),
         Index("ix_documents_created_at", "created_at"),
+        Index("ix_documents_document_type", "document_type"),
     )
 
 
@@ -308,4 +318,124 @@ class BatchTask(Base):
         Index("ix_batch_tasks_batch_job_id", "batch_job_id"),
         Index("ix_batch_tasks_document_id", "document_id"),
         Index("ix_batch_tasks_status", "status"),
+    )
+
+
+class ProjectSettings(Base):
+    """Project-level settings including work type template and model preferences."""
+    __tablename__ = "project_settings"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), unique=True, nullable=False)
+
+    # Work type template
+    work_type = Column(String(50), default="custom")
+
+    # Model settings
+    vision_parser = Column(String(50), default="landing_ai")
+    vision_model = Column(String(100), nullable=True)
+    chat_model = Column(String(100), default="bedrock-claude-sonnet-3.5")
+    compliance_model = Column(String(100), default="bedrock-claude-sonnet-3.5")
+
+    # Checks configuration (user customizations)
+    checks_config = Column(JSON, nullable=True)
+
+    # Usage tracking
+    total_parse_credits = Column(Integer, default=0)
+    total_input_tokens = Column(Integer, default=0)
+    total_output_tokens = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    project = relationship("Project", back_populates="settings")
+
+
+class CheckResult(Base):
+    """Individual check result for a document (supports history)."""
+    __tablename__ = "check_results"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    document_id = Column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    parse_result_id = Column(String(36), ForeignKey("parse_results.id", ondelete="SET NULL"), nullable=True)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+
+    # Run context
+    batch_run_id = Column(String(36), ForeignKey("batch_check_runs.id", ondelete="SET NULL"), nullable=True)
+    run_number = Column(Integer, default=1)
+
+    # Classification
+    document_type = Column(String(50), nullable=True)
+
+    # Results
+    completeness_results = Column(JSON, nullable=True)
+    compliance_results = Column(JSON, nullable=True)
+    summary = Column(JSON, nullable=True)
+
+    # Config snapshot
+    checks_config_snapshot = Column(JSON, nullable=True)
+
+    # Usage
+    model = Column(String(100), nullable=True)
+    input_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+
+    # Status
+    status = Column(String(20), default="completed")
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    processing_time_ms = Column(Integer, nullable=True)
+
+    document = relationship("Document", back_populates="check_results")
+    batch_run = relationship("BatchCheckRun", back_populates="results")
+
+    __table_args__ = (
+        Index("ix_check_results_document_id", "document_id"),
+        Index("ix_check_results_project_id", "project_id"),
+        Index("ix_check_results_batch_run_id", "batch_run_id"),
+        Index("ix_check_results_created_at", "created_at"),
+    )
+
+
+class BatchCheckRun(Base):
+    """Batch check run across multiple documents in a project."""
+    __tablename__ = "batch_check_runs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+
+    # Progress
+    status = Column(String(20), default="pending")  # pending, processing, completed, failed, cancelled
+    total_documents = Column(Integer, default=0)
+    completed_documents = Column(Integer, default=0)
+    failed_documents = Column(Integer, default=0)
+    skipped_documents = Column(Integer, default=0)
+
+    # Configuration
+    model = Column(String(100), nullable=True)
+    force_rerun = Column(Boolean, default=False)
+
+    # Aggregated results
+    total_passed = Column(Integer, default=0)
+    total_failed = Column(Integer, default=0)
+    total_needs_review = Column(Integer, default=0)
+
+    # Usage
+    total_input_tokens = Column(Integer, default=0)
+    total_output_tokens = Column(Integer, default=0)
+
+    # Error
+    error_message = Column(Text, nullable=True)
+
+    # Timing
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    results = relationship("CheckResult", back_populates="batch_run")
+
+    __table_args__ = (
+        Index("ix_batch_check_runs_project_id", "project_id"),
+        Index("ix_batch_check_runs_status", "status"),
     )

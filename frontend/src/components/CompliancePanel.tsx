@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import type { Chunk } from '../types/ade';
 import type { CheckResult, ComplianceReport, ComplianceCheck } from '../types/compliance';
-import { API_URL } from '../config';
+import { API_URL, API_BASE } from '../config';
 import { getMarkdownPreview } from '../utils/cleanMarkdown';
 import { useTheme } from '../contexts/ThemeContext';
+import { downloadDocumentReport } from '../services/checksService';
 
 interface CompliancePanelProps {
   markdown: string;
@@ -15,6 +16,7 @@ interface CompliancePanelProps {
   selectedModel: string;
   completenessChecks: ComplianceCheck[];
   complianceChecks: ComplianceCheck[];
+  documentId?: string; // Optional document ID for PDF export
 }
 
 type StatusFilter = 'all' | 'pass' | 'fail' | 'needs_review' | 'na';
@@ -88,6 +90,7 @@ export default function CompliancePanel({
   selectedModel,
   completenessChecks,
   complianceChecks,
+  documentId,
 }: CompliancePanelProps) {
   const { isDark } = useTheme();
   const statusConfig = getStatusConfig(isDark);
@@ -96,6 +99,7 @@ export default function CompliancePanel({
   const [error, setError] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<CheckResult | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // Pre-populated check lists from props
   const pendingCompletenessResults = useMemo(() =>
@@ -539,22 +543,55 @@ export default function CompliancePanel({
             )}
             Click on a row to see details
           </p>
-          <button
-            onClick={() => {
-              const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `compliance-report-${new Date().toISOString().split('T')[0]}.json`;
-              a.click();
-            }}
-            className="text-sm text-sky-400 hover:text-sky-300 flex items-center gap-1"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export Report
-          </button>
+          <div className="flex items-center gap-3">
+            {documentId && (
+              <button
+                onClick={async () => {
+                  setIsExportingPdf(true);
+                  try {
+                    const blob = await downloadDocumentReport(documentId);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `compliance-report-${new Date().toISOString().split('T')[0]}.pdf`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } catch (err) {
+                    console.error('Failed to download PDF:', err);
+                  } finally {
+                    setIsExportingPdf(false);
+                  }
+                }}
+                disabled={isExportingPdf}
+                className="text-sm text-sky-400 hover:text-sky-300 flex items-center gap-1 disabled:opacity-50"
+              >
+                {isExportingPdf ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-400"></div>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                )}
+                PDF
+              </button>
+            )}
+            <button
+              onClick={() => {
+                const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `compliance-report-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+              }}
+              className="text-sm text-sky-400 hover:text-sky-300 flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              JSON
+            </button>
+          </div>
         </div>
       )}
     </div>
