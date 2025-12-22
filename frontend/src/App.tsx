@@ -190,7 +190,24 @@ function App() {
       }
     } catch (err) {
       console.error('Failed to load document:', err);
-      setError('Failed to load document');
+      // Provide meaningful error messages
+      let errorMessage = 'Failed to load document';
+      if (err instanceof Error) {
+        if (err.message.includes('500')) {
+          errorMessage = 'Server error loading document. The database connection may have been interrupted. Please try again.';
+        } else if (err.message.includes('404')) {
+          errorMessage = 'Document not found. It may have been deleted.';
+        } else if (err.message.includes('403')) {
+          errorMessage = 'Access denied. You may not have permission to view this document.';
+        } else if (err.message.includes('network') || err.message.includes('fetch')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else if (err.message.includes('empty')) {
+          errorMessage = 'Document file is empty or corrupted.';
+        } else {
+          errorMessage = `Failed to load document: ${err.message}`;
+        }
+      }
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -357,13 +374,31 @@ function App() {
           }
         } catch (err) {
           console.error('Failed to load document:', err);
-          setError('Failed to load document');
+          // Provide meaningful error messages
+          let errorMessage = 'Failed to load document';
+          if (err instanceof Error) {
+            if (err.message.includes('500')) {
+              errorMessage = 'Server error loading document. The database connection may have been interrupted. Please try again.';
+            } else if (err.message.includes('404')) {
+              errorMessage = 'Document not found. It may have been deleted.';
+            } else if (err.message.includes('403')) {
+              errorMessage = 'Access denied. You may not have permission to view this document.';
+            } else if (err.message.includes('network') || err.message.includes('fetch')) {
+              errorMessage = 'Network error. Please check your internet connection and try again.';
+            } else if (err.message.includes('empty')) {
+              errorMessage = 'Document file is empty or corrupted.';
+            } else {
+              errorMessage = `Failed to load document: ${err.message}`;
+            }
+          }
+          setError(errorMessage);
         } finally {
           setIsLoading(false);
         }
       }
     } catch (err) {
       console.error('Failed to load documents:', err);
+      setError('Failed to load project documents. Please try again.');
     }
   }, [selectedParser]);
 
