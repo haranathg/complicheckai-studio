@@ -45,6 +45,7 @@ export default function DashboardPage({
   const [showReprocessModal, setShowReprocessModal] = useState(false);
   const [reprocessAction, setReprocessAction] = useState<'process' | 'check' | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const loadDocumentsRequestId = useRef(0); // Track request ID to prevent stale updates
 
   // Clear selection when documents change
   useEffect(() => {
@@ -63,20 +64,12 @@ export default function DashboardPage({
         setIsLoading(true);
         const response = await listProjects();
         setProjects(response.projects);
-        // Auto-select first project and load its documents
+        // Auto-select first project - the loadDocuments effect will handle loading docs
         if (response.projects.length > 0) {
           const firstProject = response.projects[0];
           setSelectedProject(firstProject);
-          // Immediately load documents for the first project
-          try {
-            setIsLoadingDocs(true);
-            const docsResponse = await getProjectDocumentStatus(firstProject.id);
-            setDocuments(docsResponse.documents);
-          } catch (err) {
-            console.error('Failed to load documents:', err);
-          } finally {
-            setIsLoadingDocs(false);
-          }
+          // Note: Don't load documents here - the useEffect with loadDocuments will handle it
+          // This prevents duplicate requests and race conditions
         }
       } catch (err) {
         console.error('Failed to load projects:', err);
@@ -94,15 +87,32 @@ export default function DashboardPage({
       setDocuments([]);
       return;
     }
+
+    // Increment request ID and capture it for this request
+    const requestId = ++loadDocumentsRequestId.current;
+    const projectId = selectedProject.id;
+
     try {
       setIsLoadingDocs(true);
-      const response = await getProjectDocumentStatus(selectedProject.id);
-      setDocuments(response.documents);
+      const response = await getProjectDocumentStatus(projectId);
+
+      // Only update if this is still the latest request
+      if (requestId === loadDocumentsRequestId.current) {
+        setDocuments(response.documents);
+      } else {
+        console.log('Ignoring stale document response for request', requestId);
+      }
     } catch (err) {
       console.error('Failed to load documents:', err);
-      setDocuments([]);
+      // Only clear on error if this is still the latest request
+      if (requestId === loadDocumentsRequestId.current) {
+        setDocuments([]);
+      }
     } finally {
-      setIsLoadingDocs(false);
+      // Only update loading state if this is still the latest request
+      if (requestId === loadDocumentsRequestId.current) {
+        setIsLoadingDocs(false);
+      }
     }
   }, [selectedProject]);
 
