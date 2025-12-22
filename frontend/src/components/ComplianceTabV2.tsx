@@ -409,8 +409,17 @@ export default function ComplianceTabV2({
                   {isExpanded && (
                     <div className={`px-3 pb-3 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`}>
                       <div className="pt-2 space-y-2 text-sm">
+                        {/* Check question with Q: prefix */}
+                        <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
+                          <span className={`font-semibold ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>Q: </span>
+                          <span className={isDark ? 'text-gray-200' : 'text-gray-700'}>{check.check_name}</span>
+                        </div>
+                        {/* Findings/Notes */}
                         {check.notes && (
-                          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>{check.notes}</p>
+                          <div>
+                            <span className={`font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Findings: </span>
+                            <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>{check.notes}</span>
+                          </div>
                         )}
                         {check.found_value && (
                           <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
