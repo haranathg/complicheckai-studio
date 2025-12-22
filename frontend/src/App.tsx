@@ -146,9 +146,21 @@ function App() {
     try {
       const fileUrl = await getDocumentDownloadUrl(project.id, doc.id);
       const response = await fetch(fileUrl);
+
+      if (!response.ok) {
+        throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+      }
+
       const blob = await response.blob();
+
+      // Validate that we got a valid file
+      const contentType = response.headers.get('content-type') || doc.content_type || 'application/pdf';
+      if (blob.size === 0) {
+        throw new Error('Downloaded file is empty');
+      }
+
       const loadedFile = new File([blob], doc.original_filename, {
-        type: doc.content_type || 'application/pdf',
+        type: contentType,
       });
 
       const cachedResponse = await getLatestParseResult(project.id, doc.id, selectedParser);
@@ -301,9 +313,21 @@ function App() {
         try {
           const fileUrl = await getDocumentDownloadUrl(project.id, doc.id);
           const fileResponse = await fetch(fileUrl);
+
+          if (!fileResponse.ok) {
+            throw new Error(`Failed to download file: ${fileResponse.status} ${fileResponse.statusText}`);
+          }
+
           const blob = await fileResponse.blob();
+
+          // Validate that we got a PDF (check for PDF magic bytes or content-type)
+          const contentType = fileResponse.headers.get('content-type') || doc.content_type || 'application/pdf';
+          if (blob.size === 0) {
+            throw new Error('Downloaded file is empty');
+          }
+
           const loadedFile = new File([blob], doc.original_filename, {
-            type: doc.content_type || 'application/pdf',
+            type: contentType,
           });
 
           const cachedResponse = await getLatestParseResult(project.id, doc.id, selectedParser);

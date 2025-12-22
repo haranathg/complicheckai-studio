@@ -46,6 +46,7 @@ export default function DashboardPage({
   const [reprocessAction, setReprocessAction] = useState<'process' | 'check' | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadDocumentsRequestId = useRef(0); // Track request ID to prevent stale updates
+  const checkBatchJobsRequestId = useRef(0); // Track batch jobs request ID
 
   // Clear selection when documents change
   useEffect(() => {
@@ -122,16 +123,41 @@ export default function DashboardPage({
 
   // Check for active batch jobs (processing) when project changes
   const checkActiveBatchJobs = useCallback(async () => {
-    if (!selectedProject) return;
+    if (!selectedProject) {
+      setActiveBatchJob(null);
+      setIsProcessing(false);
+      setActiveBatchRunId(null);
+      setIsRunningBatchCheck(false);
+      return;
+    }
+
+    // Increment request ID and capture it for this request
+    const requestId = ++checkBatchJobsRequestId.current;
+    const projectId = selectedProject.id;
+
     try {
       // Check for active document processing jobs
-      const response = await listBatchJobs(selectedProject.id, { status: 'processing' });
+      const response = await listBatchJobs(projectId, { status: 'processing' });
+
+      // Only update if this is still the latest request
+      if (requestId !== checkBatchJobsRequestId.current) {
+        console.log('Ignoring stale batch jobs response for request', requestId);
+        return;
+      }
+
       if (response.jobs.length > 0) {
         setActiveBatchJob(response.jobs[0]);
         setIsProcessing(true);
       } else {
         // Also check for pending jobs
-        const pendingResponse = await listBatchJobs(selectedProject.id, { status: 'pending' });
+        const pendingResponse = await listBatchJobs(projectId, { status: 'pending' });
+
+        // Check again for stale request
+        if (requestId !== checkBatchJobsRequestId.current) {
+          console.log('Ignoring stale batch jobs response for request', requestId);
+          return;
+        }
+
         if (pendingResponse.jobs.length > 0) {
           setActiveBatchJob(pendingResponse.jobs[0]);
           setIsProcessing(true);
@@ -142,13 +168,23 @@ export default function DashboardPage({
       }
 
       // Check for active batch check runs
-      const batchRuns = await getBatchRuns(selectedProject.id);
+      const batchRuns = await getBatchRuns(projectId);
+
+      // Check again for stale request
+      if (requestId !== checkBatchJobsRequestId.current) {
+        console.log('Ignoring stale batch runs response for request', requestId);
+        return;
+      }
+
       const activeCheckRun = batchRuns.runs.find(
         run => run.status === 'processing' || run.status === 'pending'
       );
       if (activeCheckRun) {
         setActiveBatchRunId(activeCheckRun.id);
         setIsRunningBatchCheck(true);
+      } else {
+        setActiveBatchRunId(null);
+        setIsRunningBatchCheck(false);
       }
     } catch (err) {
       console.error('Failed to check batch jobs:', err);
@@ -161,7 +197,7 @@ export default function DashboardPage({
 
   // Poll for batch job progress
   useEffect(() => {
-    if (!activeBatchJob || !isProcessing) return;
+    if (!activeBatchJob || !isProcessing || !selectedProject) return;
 
     const pollInterval = setInterval(async () => {
       try {
@@ -171,7 +207,9 @@ export default function DashboardPage({
         if (job.status === 'completed' || job.status === 'completed_with_errors' || job.status === 'failed' || job.status === 'cancelled') {
           setIsProcessing(false);
           setActiveBatchJob(null);
-          loadDocuments(); // Reload to show updated status
+          // Only reload if we're still on the same project
+          // Use the ref-based loadDocuments which handles stale requests
+          loadDocuments();
         }
       } catch (err) {
         console.error('Failed to poll batch job:', err);
@@ -179,7 +217,7 @@ export default function DashboardPage({
     }, 2000);
 
     return () => clearInterval(pollInterval);
-  }, [activeBatchJob, isProcessing, loadDocuments]);
+  }, [activeBatchJob?.id, activeBatchJob?.status, isProcessing, selectedProject?.id, loadDocuments]);
 
   // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -189,16 +227,8 @@ export default function DashboardPage({
     try {
       setIsUploading(true);
       await uploadDocument(selectedProject.id, file);
-      // Reload documents after upload - fetch directly to ensure fresh data
-      try {
-        setIsLoadingDocs(true);
-        const response = await getProjectDocumentStatus(selectedProject.id);
-        setDocuments(response.documents);
-      } catch (err) {
-        console.error('Failed to reload documents:', err);
-      } finally {
-        setIsLoadingDocs(false);
-      }
+      // Reload documents after upload using the tracked loadDocuments
+      await loadDocuments();
     } catch (err) {
       console.error('Failed to upload document:', err);
       setError('Failed to upload document');

@@ -121,7 +121,14 @@ export default function PDFViewer({
 
   const onDocumentLoadError = useCallback((error: Error) => {
     console.error('PDF document load error:', error);
-    setPdfError(error.message);
+    // Provide more helpful error messages for common issues
+    let errorMessage = error.message;
+    if (error.message.includes('Invalid PDF structure') || error.message.includes('Missing PDF')) {
+      errorMessage = 'Invalid PDF structure. The file may be corrupted or not a valid PDF.';
+    } else if (error.message.includes('worker')) {
+      errorMessage = 'PDF worker failed to load. Please refresh the page.';
+    }
+    setPdfError(errorMessage);
     setIsPageLoading(false);
   }, []);
 
@@ -241,7 +248,7 @@ export default function PDFViewer({
             ←
           </button>
           <span className="text-sm text-gray-600 min-w-[100px] text-center">
-            Page {currentPage} of {numPages}
+            {numPages > 0 ? `Page ${currentPage} of ${numPages}` : 'Loading...'}
           </span>
           <button
             onClick={goToNextPage}
