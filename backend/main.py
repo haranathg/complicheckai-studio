@@ -58,7 +58,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # CORS configuration - allow frontend origins
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,https://main.d3rrtadjufwebu.amplifyapp.com,https://ccai.cognaify.com.au,https://complicheckai.cognaify.com.au").split(",")
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,https://main.d3rrtadjufwebu.amplifyapp.com,https://main.d26p3q1kqg30hn.amplifyapp.com,https://ccai.cognaify.com.au,https://complicheckai.cognaify.com.au").split(",")
 # Also allow all origins in development/testing
 allow_all = os.getenv("CORS_ALLOW_ALL", "false").lower() == "true"
 app.add_middleware(
