@@ -632,6 +632,8 @@ function App() {
                 onAnnotationsChange={loadAnnotations}
                 file={file}
                 chunks={parseResult?.chunks}
+                showNotes={showReviewOverlays}
+                onToggleShowNotes={setShowReviewOverlays}
               />
             </>
           ) : (

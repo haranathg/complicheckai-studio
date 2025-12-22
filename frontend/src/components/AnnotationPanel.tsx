@@ -26,6 +26,8 @@ interface AnnotationPanelProps {
   onAnnotationsChange?: () => void;
   file?: File | null;
   chunks?: Chunk[];
+  showNotes?: boolean;
+  onToggleShowNotes?: (show: boolean) => void;
 }
 
 export default function AnnotationPanel({
@@ -38,6 +40,8 @@ export default function AnnotationPanel({
   onAnnotationsChange,
   file,
   chunks = [],
+  showNotes = true,
+  onToggleShowNotes,
 }: AnnotationPanelProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
@@ -186,6 +190,21 @@ export default function AnnotationPanel({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Show Notes toggle */}
+          {onToggleShowNotes && (
+            <label
+              className={`flex items-center gap-1.5 text-xs ${theme.textMuted} cursor-pointer`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                type="checkbox"
+                checked={showNotes}
+                onChange={(e) => onToggleShowNotes(e.target.checked)}
+                className="rounded border-gray-300 text-sky-500 focus:ring-sky-500 w-3.5 h-3.5"
+              />
+              Show Notes
+            </label>
+          )}
           {/* Export PDF button - more visible */}
           {file && annotations.length > 0 && (
             <button
