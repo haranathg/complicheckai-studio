@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+import traceback
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from routers import parse, extract, chat, compliance, projects, documents, annotations, batch, checks, reports
 import os
@@ -17,8 +19,12 @@ async def lifespan(app: FastAPI):
     if database_url:
         from database import init_database, close_database
         print("Initializing database connection...")
-        init_database(database_url)
-        print("Database initialized successfully")
+        try:
+            init_database(database_url)
+            print("Database initialized successfully")
+        except Exception as e:
+            print(f"ERROR initializing database: {e}")
+            print(traceback.format_exc())
     else:
         print("Warning: DATABASE_URL not set - project/document storage disabled")
 
@@ -32,6 +38,24 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="CompliCheckAI - Document Compliance Studio", lifespan=lifespan)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler to log and return detailed errors."""
+    error_detail = {
+        "error": str(exc),
+        "type": type(exc).__name__,
+        "path": str(request.url.path),
+        "traceback": traceback.format_exc()
+    }
+    print(f"ERROR on {request.url.path}: {exc}")
+    print(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc), "error_type": type(exc).__name__}
+    )
+
 
 # CORS configuration - allow frontend origins
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,https://main.d3rrtadjufwebu.amplifyapp.com,https://ccai.cognaify.com.au,https://complicheckai.cognaify.com.au").split(",")
