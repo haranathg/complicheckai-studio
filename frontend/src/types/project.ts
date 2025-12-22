@@ -97,6 +97,13 @@ export interface UsageByParser {
   estimated_cost: number;
 }
 
+export interface CheckUsage {
+  total_checks: number;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost: number;
+}
+
 export interface ProjectUsageResponse {
   project_id: string;
   project_name: string;
@@ -107,6 +114,7 @@ export interface ProjectUsageResponse {
   total_credit_usage: number;
   estimated_total_cost: number;
   usage_by_parser: UsageByParser[];
+  check_usage?: CheckUsage;
 }
 
 // Document status summary types for dashboard
@@ -116,6 +124,14 @@ export interface AnnotationSummary {
   resolved: number;
   last_updated_at?: string;
   last_comment_preview?: string;
+}
+
+export interface CheckSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  needs_review: number;
+  checked_at?: string;
 }
 
 export interface DocumentStatusSummary {
@@ -129,6 +145,12 @@ export interface DocumentStatusSummary {
   processed_at?: string;
   parser?: string;
   annotations: AnnotationSummary;
+  // V2 Classification fields
+  document_type?: string;
+  classification_confidence?: number;
+  classification_override?: boolean;
+  // V2 Check results summary
+  check_summary?: CheckSummary;
 }
 
 export interface DocumentStatusListResponse {

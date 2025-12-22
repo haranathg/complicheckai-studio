@@ -245,7 +245,7 @@ export default function SettingsPanel({
                     <div className={`p-4 rounded-xl border ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : 'rgba(255, 255, 255, 0.8)' }}>
                       <div className="space-y-4">
                         {/* Summary stats */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           <div className={`p-3 rounded-lg ${isDark ? 'bg-slate-800/50' : 'bg-slate-100'}`}>
                             <div className={`text-xs ${theme.textSubtle}`}>Documents</div>
                             <div className={`text-lg font-semibold ${theme.textPrimary}`}>{projectUsage.document_count}</div>
@@ -254,12 +254,16 @@ export default function SettingsPanel({
                             <div className={`text-xs ${theme.textSubtle}`}>Parses</div>
                             <div className={`text-lg font-semibold ${theme.textPrimary}`}>{projectUsage.total_parses}</div>
                           </div>
+                          <div className={`p-3 rounded-lg ${isDark ? 'bg-slate-800/50' : 'bg-slate-100'}`}>
+                            <div className={`text-xs ${theme.textSubtle}`}>Checks</div>
+                            <div className={`text-lg font-semibold ${theme.textPrimary}`}>{projectUsage.check_usage?.total_checks || 0}</div>
+                          </div>
                         </div>
 
                         {/* Usage by parser */}
                         {projectUsage.usage_by_parser.length > 0 && (
                           <div className="space-y-2">
-                            <div className={`text-xs font-medium ${theme.textMuted} uppercase tracking-wider`}>By Parser</div>
+                            <div className={`text-xs font-medium ${theme.textMuted} uppercase tracking-wider`}>Parsing</div>
                             {projectUsage.usage_by_parser.map((usage) => (
                               <div key={usage.parser} className={`flex items-center justify-between py-2 border-b ${theme.border} last:border-0`}>
                                 <div>
@@ -280,6 +284,25 @@ export default function SettingsPanel({
                                 </span>
                               </div>
                             ))}
+                          </div>
+                        )}
+
+                        {/* Check usage */}
+                        {projectUsage.check_usage && projectUsage.check_usage.total_checks > 0 && (
+                          <div className="space-y-2">
+                            <div className={`text-xs font-medium ${theme.textMuted} uppercase tracking-wider`}>Compliance Checks</div>
+                            <div className={`flex items-center justify-between py-2`}>
+                              <div>
+                                <span className={`text-sm ${theme.textSecondary}`}>Check Runs</span>
+                                <div className={`text-xs ${theme.textSubtle}`}>
+                                  {projectUsage.check_usage.total_checks} run{projectUsage.check_usage.total_checks !== 1 ? 's' : ''}
+                                  {projectUsage.check_usage.input_tokens > 0 && ` · ${((projectUsage.check_usage.input_tokens + projectUsage.check_usage.output_tokens) / 1000).toFixed(1)}k tokens`}
+                                </div>
+                              </div>
+                              <span className={`text-sm font-mono ${theme.textPrimary}`}>
+                                ${projectUsage.check_usage.estimated_cost.toFixed(4)}
+                              </span>
+                            </div>
                           </div>
                         )}
 

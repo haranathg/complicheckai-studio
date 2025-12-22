@@ -3,7 +3,7 @@ import PDFViewer from './components/PDFViewer';
 import TabNavigation from './components/TabNavigation';
 import ParseResults from './components/ParseResults';
 import ChatPanel from './components/ChatPanel';
-import CompliancePanel from './components/CompliancePanel';
+import ComplianceTabV2 from './components/ComplianceTabV2';
 import SettingsPanel from './components/SettingsPanel';
 import ReviewTab from './components/ReviewTab';
 import AnnotationPanel from './components/AnnotationPanel';
@@ -13,7 +13,7 @@ import type { Annotation } from './types/annotation';
 import SaveToProjectDropdown from './components/SaveToProjectDropdown';
 import LoginPage from './components/LoginPage';
 import type { ParseResponse, Chunk, TabType, ChatMessage } from './types/ade';
-import type { ComplianceReport, ComplianceCheck } from './types/compliance';
+import type { ComplianceCheck } from './types/compliance';
 import { API_URL } from './config';
 import { isAuthenticated, logout } from './utils/auth';
 import { getDefaultModelForParser } from './components/ModelSelector';
@@ -43,7 +43,6 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabType>('parse');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
   const [targetPage, setTargetPage] = useState<number | undefined>(undefined);
   const [currentPage, setCurrentPage] = useState(1);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -197,7 +196,6 @@ function App() {
     setPopupChunk(null);
     setIsPdfReady(false);
     setIsLoading(false);
-    setComplianceReport(null);
     setTargetPage(undefined);
     setChatMessages([]);
   };
@@ -355,7 +353,6 @@ function App() {
     setHighlightedChunk(null);
     setPopupChunk(null);
     setError(null);
-    setComplianceReport(null);
     setChatMessages([]);
   };
 
@@ -423,6 +420,7 @@ function App() {
           onOpenDocument={handleOpenDocumentFromDashboard}
           onLogout={handleLogout}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          onProjectChange={setCurrentProject}
         />
         {/* Settings Panel - available on dashboard too */}
         <SettingsPanel
@@ -521,16 +519,6 @@ function App() {
                 <span>Cancel</span>
               </button>
             )}
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className={`p-2 ${theme.textMuted} hover:${theme.textPrimary} transition-colors`}
-              title="Settings"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
             <button
               onClick={handleLogout}
               className={`p-2 ${theme.textMuted} hover:${theme.textPrimary} transition-colors`}
@@ -648,6 +636,7 @@ function App() {
             activeTab={activeTab}
             onTabChange={setActiveTab}
             disabled={!parseResult}
+            onSettingsClick={() => setIsSettingsOpen(true)}
           />
 
           <div className="flex-1 overflow-auto">
@@ -720,27 +709,20 @@ function App() {
               </div>
             )}
             {activeTab === 'compliance' && (
-              <div className="p-4 h-full">
-                <CompliancePanel
-                  markdown={parseResult?.markdown || ''}
-                  chunks={parseResult?.chunks || []}
-                  disabled={!parseResult}
-                  report={complianceReport}
-                  onReportChange={setComplianceReport}
-                  selectedModel={selectedModel}
-                  completenessChecks={completenessChecks}
-                  complianceChecks={complianceChecks}
-                  onChunkSelect={(chunkIds, pageNumber) => {
-                    const chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
-                    if (chunk) {
-                      setHighlightedChunk(chunk);
-                      if (pageNumber) {
-                        setTargetPage(pageNumber);
-                      }
+              <ComplianceTabV2
+                project={currentProject}
+                document={currentDocument}
+                chunks={parseResult?.chunks}
+                onChunkSelect={(chunkIds, pageNumber) => {
+                  const chunk = parseResult?.chunks?.find(c => chunkIds.includes(c.id));
+                  if (chunk) {
+                    setHighlightedChunk(chunk);
+                    if (pageNumber) {
+                      setTargetPage(pageNumber);
                     }
-                  }}
-                />
-              </div>
+                  }
+                }}
+              />
             )}
           </div>
         </div>
@@ -788,11 +770,7 @@ function App() {
           },
           { input_tokens: 0, output_tokens: 0, model: undefined as string | undefined }
         )}
-        complianceUsage={complianceReport?.usage ? {
-          input_tokens: complianceReport.usage.input_tokens,
-          output_tokens: complianceReport.usage.output_tokens,
-          model: complianceReport.usage.model,
-        } : undefined}
+        complianceUsage={undefined}
         parseCredits={parseResult?.metadata.credit_usage}
         parseUsage={parseResult?.metadata.usage}
         currentProject={currentProject}

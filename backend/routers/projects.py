@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db
-from models.database_models import Project, Document, ParseResult, ProjectSettings
+from models.database_models import Project, Document, ParseResult, ProjectSettings, CheckResult
 from services import s3_service
 from services.config_service import load_default_checks_config, list_work_types, get_work_type_config
 
@@ -51,6 +51,13 @@ class UsageByParser(BaseModel):
     estimated_cost: float
 
 
+class CheckUsage(BaseModel):
+    total_checks: int
+    input_tokens: int
+    output_tokens: int
+    estimated_cost: float
+
+
 class ProjectUsageResponse(BaseModel):
     project_id: str
     project_name: str
@@ -61,6 +68,7 @@ class ProjectUsageResponse(BaseModel):
     total_credit_usage: int
     estimated_total_cost: float
     usage_by_parser: List[UsageByParser]
+    check_usage: Optional[CheckUsage] = None
 
 
 class ProjectSettingsUpdate(BaseModel):
@@ -289,6 +297,30 @@ async def get_project_usage(
         total_parses += parse_count
         total_cost += cost
 
+    # Aggregate check usage (compliance checks)
+    check_usage_query = db.query(
+        func.count(CheckResult.id).label("check_count"),
+        func.coalesce(func.sum(CheckResult.input_tokens), 0).label("input_tokens"),
+        func.coalesce(func.sum(CheckResult.output_tokens), 0).label("output_tokens"),
+    ).filter(
+        CheckResult.project_id == project_id
+    ).first()
+
+    check_usage = None
+    if check_usage_query and check_usage_query.check_count > 0:
+        check_input = int(check_usage_query.input_tokens or 0)
+        check_output = int(check_usage_query.output_tokens or 0)
+        # Use bedrock_claude pricing for check usage (default model for compliance)
+        check_cost = calculate_cost("bedrock_claude", check_input, check_output, 0)
+        check_usage = CheckUsage(
+            total_checks=int(check_usage_query.check_count or 0),
+            input_tokens=check_input,
+            output_tokens=check_output,
+            estimated_cost=round(check_cost, 4),
+        )
+        # Add check costs to total
+        total_cost += check_cost
+
     return ProjectUsageResponse(
         project_id=project.id,
         project_name=project.name,
@@ -299,6 +331,7 @@ async def get_project_usage(
         total_credit_usage=total_credits,
         estimated_total_cost=round(total_cost, 4),
         usage_by_parser=usage_by_parser,
+        check_usage=check_usage,
     )
 
 

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db
-from models.database_models import Project, Document, ParseResult, Chunk, DocumentAnnotation, ProjectSettings
+from models.database_models import Project, Document, ParseResult, Chunk, DocumentAnnotation, ProjectSettings, CheckResult
 from services import s3_service
 from services.config_service import load_default_checks_config, list_document_types
 from routers.compliance import get_bedrock_client, resolve_model_id
@@ -166,6 +166,15 @@ class AnnotationSummary(BaseModel):
     last_comment_preview: Optional[str] = None
 
 
+class CheckSummary(BaseModel):
+    """Summary of check results for a document."""
+    total: int = 0
+    passed: int = 0
+    failed: int = 0
+    needs_review: int = 0
+    checked_at: Optional[datetime] = None
+
+
 class DocumentStatusSummary(BaseModel):
     id: str
     project_id: str
@@ -177,6 +186,12 @@ class DocumentStatusSummary(BaseModel):
     processed_at: Optional[datetime] = None
     parser: Optional[str] = None
     annotations: AnnotationSummary
+    # V2 Classification fields
+    document_type: Optional[str] = None
+    classification_confidence: Optional[int] = None
+    classification_override: bool = False
+    # V2 Check results summary
+    check_summary: Optional[CheckSummary] = None
 
     class Config:
         from_attributes = True
@@ -228,6 +243,23 @@ async def get_documents_status(
         # Get most recent annotation
         last_annotation = max(doc_annotations, key=lambda a: a.updated_at) if doc_annotations else None
 
+        # Get latest check result for this document
+        latest_check = db.query(CheckResult).filter(
+            CheckResult.document_id == doc.id,
+            CheckResult.status == "completed"
+        ).order_by(CheckResult.created_at.desc()).first()
+
+        check_summary = None
+        if latest_check and latest_check.summary:
+            summary = latest_check.summary
+            check_summary = CheckSummary(
+                total=summary.get("total_checks", 0),
+                passed=summary.get("passed", 0),
+                failed=summary.get("failed", 0),
+                needs_review=summary.get("needs_review", 0),
+                checked_at=latest_check.created_at
+            )
+
         result.append(DocumentStatusSummary(
             id=doc.id,
             project_id=doc.project_id,
@@ -244,7 +276,12 @@ async def get_documents_status(
                 resolved=resolved_count,
                 last_updated_at=last_annotation.updated_at if last_annotation else None,
                 last_comment_preview=last_annotation.text[:100] if last_annotation else None
-            )
+            ),
+            # V2 fields
+            document_type=doc.document_type,
+            classification_confidence=doc.classification_confidence,
+            classification_override=doc.classification_override or False,
+            check_summary=check_summary
         ))
 
     print(f"[get_documents_status] Returning {len(result)} documents, total={total}")
