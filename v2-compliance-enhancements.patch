@@ -1,0 +1,4519 @@
+From 34a499c6f3cc481d1014956a210ccbaa4f32d9b4 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 21 Dec 2025 21:28:08 +0000
+Subject: [PATCH] Implement v2 compliance checks system with document
+ classification and batch processing
+
+---
+ backend/config/compliance_checks_v2.json      | 891 ++++++++++++++++++
+ backend/main.py                               |   8 +-
+ backend/models/database_models.py             | 130 +++
+ backend/requirements.txt                      |   1 +
+ backend/routers/checks.py                     | 738 +++++++++++++++
+ backend/routers/documents.py                  | 171 +++-
+ backend/routers/projects.py                   | 154 ++-
+ backend/routers/reports.py                    | 450 +++++++++
+ backend/services/config_service.py            |  77 ++
+ .../src/components/BatchCheckProgress.tsx     | 291 ++++++
+ .../src/components/CheckResultsDisplay.tsx    | 290 ++++++
+ frontend/src/components/CompliancePanel.tsx   |  71 +-
+ frontend/src/components/DocumentTypeBadge.tsx | 160 ++++
+ .../src/components/ProjectSettingsPanel.tsx   | 360 +++++++
+ frontend/src/services/checksService.ts        | 212 +++++
+ frontend/src/types/checksV2.ts                | 263 ++++++
+ frontend/src/types/project.ts                 |   6 +
+ 17 files changed, 4253 insertions(+), 20 deletions(-)
+ create mode 100644 backend/config/compliance_checks_v2.json
+ create mode 100644 backend/routers/checks.py
+ create mode 100644 backend/routers/reports.py
+ create mode 100644 backend/services/config_service.py
+ create mode 100644 frontend/src/components/BatchCheckProgress.tsx
+ create mode 100644 frontend/src/components/CheckResultsDisplay.tsx
+ create mode 100644 frontend/src/components/DocumentTypeBadge.tsx
+ create mode 100644 frontend/src/components/ProjectSettingsPanel.tsx
+ create mode 100644 frontend/src/services/checksService.ts
+ create mode 100644 frontend/src/types/checksV2.ts
+
+diff --git a/backend/config/compliance_checks_v2.json b/backend/config/compliance_checks_v2.json
+new file mode 100644
+index 0000000..1e92c99
+--- /dev/null
++++ b/backend/config/compliance_checks_v2.json
+@@ -0,0 +1,891 @@
++{
++  "version": "2.0",
++  "description": "Building consent document classification and checks - organized by document type",
++  
++  "document_types": {
++    "record_of_title": {
++      "name": "Record of Title",
++      "description": "Land ownership and interests documentation from LINZ",
++      "upload_slot": "Record of Title",
++      "classification_signals": {
++        "keywords": ["RECORD OF TITLE", "CERTIFICATE OF TITLE", "LAND TRANSFER ACT", "Fee Simple", "Land Registration District", "Registered Owners", "Freehold"],
++        "patterns": ["[A-Z]{2}\\d+[A-Z]?/\\d+"],
++        "visual_cues": ["LINZ header", "Search Copy stamp"]
++      },
++      "completeness_checks": [
++        {
++          "id": "rot_001",
++          "name": "Title Reference",
++          "question": "Is a valid title identifier present (e.g., SA21A/1371)?",
++          "required": true,
++          "search_terms": ["identifier", "title reference", "SA", "NA", "WN"]
++        },
++        {
++          "id": "rot_002",
++          "name": "Registered Owner(s)",
++          "question": "Are the registered owner name(s) clearly shown?",
++          "required": true,
++          "search_terms": ["registered owners", "proprietor"]
++        },
++        {
++          "id": "rot_003",
++          "name": "Legal Description",
++          "question": "Is the legal description (Lot/DP) present?",
++          "required": true,
++          "search_terms": ["lot", "DP", "deposited plan", "legal description"]
++        },
++        {
++          "id": "rot_004",
++          "name": "Estate Type",
++          "question": "Is the estate type shown (Fee Simple, Leasehold, etc.)?",
++          "required": true,
++          "search_terms": ["fee simple", "estate", "leasehold"]
++        },
++        {
++          "id": "rot_005",
++          "name": "Area",
++          "question": "Is the land area specified?",
++          "required": true,
++          "search_terms": ["area", "square metres", "hectares"]
++        },
++        {
++          "id": "rot_006",
++          "name": "Search Date",
++          "question": "Is the search copy date shown?",
++          "required": true,
++          "search_terms": ["search copy dated", "dated"]
++        },
++        {
++          "id": "rot_007",
++          "name": "Interests Section",
++          "question": "Is there an interests/encumbrances section?",
++          "required": true,
++          "search_terms": ["interests", "encumbrances", "memorial"]
++        }
++      ],
++      "compliance_checks": [
++        {
++          "id": "rot_c01",
++          "name": "Title Currency",
++          "question": "Is the title search dated within the last 3 months?",
++          "rule_reference": "Council requirement - current title",
++          "validation_type": "date_age",
++          "threshold": { "max_days": 90 }
++        }
++      ]
++    },
++
++    "site_plan": {
++      "name": "Site Plan / Location Plan",
++      "description": "Drawing showing property boundaries, buildings, setbacks and site layout",
++      "upload_slot": "Plans",
++      "classification_signals": {
++        "keywords": ["SITE PLAN", "SITE LAYOUT", "LOCATION PLAN", "BOUNDARY", "SETBACK"],
++        "visual_cues": ["boundary lines", "building footprints", "north arrow", "scale bar", "property dimensions"]
++      },
++      "completeness_checks": [
++        {
++          "id": "sp_001",
++          "name": "Site Address",
++          "question": "Is the full site/property address shown?",
++          "required": true,
++          "search_terms": ["address", "road", "street", "site"]
++        },
++        {
++          "id": "sp_002",
++          "name": "Legal Description",
++          "question": "Is the Lot/DP reference shown on the plan?",
++          "required": true,
++          "search_terms": ["lot", "DP", "deposited plan"]
++        },
++        {
++          "id": "sp_003",
++          "name": "Scale",
++          "question": "Is the drawing scale clearly indicated?",
++          "required": true,
++          "search_terms": ["scale", "1:"]
++        },
++        {
++          "id": "sp_004",
++          "name": "North Arrow",
++          "question": "Is the north direction indicated?",
++          "required": true,
++          "search_terms": ["north", "N"]
++        },
++        {
++          "id": "sp_005",
++          "name": "Boundary Dimensions",
++          "question": "Are all property boundary dimensions shown?",
++          "required": true,
++          "search_terms": ["boundary", "dimension", "metres"]
++        },
++        {
++          "id": "sp_006",
++          "name": "Site Area",
++          "question": "Is the total site area specified?",
++          "required": true,
++          "search_terms": ["site area", "land area", "total area", "m2"]
++        },
++        {
++          "id": "sp_007",
++          "name": "Existing Buildings",
++          "question": "Are existing buildings/structures shown and labelled?",
++          "required": true,
++          "search_terms": ["existing", "dwelling", "building", "structure"]
++        },
++        {
++          "id": "sp_008",
++          "name": "Proposed Works",
++          "question": "Are proposed works clearly identified and labelled?",
++          "required": true,
++          "search_terms": ["proposed", "new", "addition"]
++        },
++        {
++          "id": "sp_009",
++          "name": "Setback Dimensions",
++          "question": "Are setback distances from boundaries shown?",
++          "required": true,
++          "search_terms": ["setback", "from boundary", "offset"]
++        },
++        {
++          "id": "sp_010",
++          "name": "Author/Drawn By",
++          "question": "Is the author/company who prepared the plan shown?",
++          "required": true,
++          "search_terms": ["drawn by", "prepared by", "author", "designer"]
++        },
++        {
++          "id": "sp_011",
++          "name": "Date",
++          "question": "Is the drawing date or revision date shown?",
++          "required": true,
++          "search_terms": ["date", "dated", "revision"]
++        }
++      ],
++      "compliance_checks": [
++        {
++          "id": "sp_c01",
++          "name": "Site Coverage Limit",
++          "question": "Is site coverage within the permitted maximum (typically 35-40%)?",
++          "rule_reference": "District Plan - Site Coverage",
++          "validation_type": "percentage_check",
++          "threshold": { "max_percentage": 40 }
++        },
++        {
++          "id": "sp_c02",
++          "name": "Front Setback",
++          "question": "Does the front yard setback meet minimum requirements?",
++          "rule_reference": "District Plan - Yard Requirements",
++          "validation_type": "distance_check",
++          "threshold": { "min_metres": 4.5 }
++        },
++        {
++          "id": "sp_c03",
++          "name": "Side Setback",
++          "question": "Do side yard setbacks meet minimum requirements?",
++          "rule_reference": "District Plan - Yard Requirements",
++          "validation_type": "distance_check",
++          "threshold": { "min_metres": 1.5 }
++        },
++        {
++          "id": "sp_c04",
++          "name": "Vehicle Access",
++          "question": "Is vehicle access/driveway to the site shown?",
++          "rule_reference": "District Plan - Access Requirements",
++          "validation_type": "presence_check"
++        },
++        {
++          "id": "sp_c05",
++          "name": "Stormwater",
++          "question": "Is stormwater disposal indicated?",
++          "rule_reference": "Building Code E1",
++          "validation_type": "presence_check"
++        }
++      ]
++    },
++
++    "floor_plan": {
++      "name": "Floor Plan",
++      "description": "Architectural drawing showing room layout, dimensions and door/window positions",
++      "upload_slot": "Plans",
++      "classification_signals": {
++        "keywords": ["FLOOR PLAN", "GROUND FLOOR", "FIRST FLOOR", "LEVEL", "PLAN VIEW"],
++        "visual_cues": ["room labels", "door swings", "dimension chains", "wall thicknesses"]
++      },
++      "completeness_checks": [
++        {
++          "id": "fp_001",
++          "name": "Scale",
++          "question": "Is the drawing scale indicated?",
++          "required": true,
++          "search_terms": ["scale", "1:"]
++        },
++        {
++          "id": "fp_002",
++          "name": "Room Labels",
++          "question": "Are all rooms labelled with their use?",
++          "required": true,
++          "search_terms": ["bedroom", "living", "kitchen", "bathroom", "garage"]
++        },
++        {
++          "id": "fp_003",
++          "name": "Dimensions",
++          "question": "Are key room dimensions shown?",
++          "required": true,
++          "search_terms": ["mm", "metres", "dimension"]
++        },
++        {
++          "id": "fp_004",
++          "name": "Floor Level",
++          "question": "Is the floor level/storey identified?",
++          "required": true,
++          "search_terms": ["floor", "level", "ground", "first", "storey"]
++        },
++        {
++          "id": "fp_005",
++          "name": "Door Positions",
++          "question": "Are door positions and swings shown?",
++          "required": true,
++          "search_terms": ["door", "D"]
++        },
++        {
++          "id": "fp_006",
++          "name": "Window Positions",
++          "question": "Are window positions indicated?",
++          "required": true,
++          "search_terms": ["window", "W"]
++        }
++      ],
++      "compliance_checks": []
++    },
++
++    "elevation": {
++      "name": "Elevation Drawing",
++      "description": "External view of building showing height, materials, and facade details",
++      "upload_slot": "Plans",
++      "classification_signals": {
++        "keywords": ["ELEVATION", "NORTH ELEVATION", "SOUTH ELEVATION", "EAST ELEVATION", "WEST ELEVATION", "FRONT ELEVATION", "REAR ELEVATION"],
++        "visual_cues": ["building facade", "height annotations", "RL levels", "material callouts"]
++      },
++      "completeness_checks": [
++        {
++          "id": "el_001",
++          "name": "Elevation Direction",
++          "question": "Is the elevation direction identified (North, South, etc.)?",
++          "required": true,
++          "search_terms": ["north", "south", "east", "west", "front", "rear"]
++        },
++        {
++          "id": "el_002",
++          "name": "Scale",
++          "question": "Is the drawing scale indicated?",
++          "required": true,
++          "search_terms": ["scale", "1:"]
++        },
++        {
++          "id": "el_003",
++          "name": "Height Dimensions",
++          "question": "Are building heights shown (floor to ceiling, overall)?",
++          "required": true,
++          "search_terms": ["height", "RL", "level", "metres"]
++        },
++        {
++          "id": "el_004",
++          "name": "Ground Level",
++          "question": "Is the ground/finished floor level shown (RL)?",
++          "required": true,
++          "search_terms": ["RL", "ground level", "FFL", "finished floor"]
++        },
++        {
++          "id": "el_005",
++          "name": "Materials",
++          "question": "Are external materials/finishes indicated?",
++          "required": false,
++          "search_terms": ["cladding", "material", "finish", "colour"]
++        }
++      ],
++      "compliance_checks": [
++        {
++          "id": "el_c01",
++          "name": "Height Limit",
++          "question": "Is the building height within the permitted maximum?",
++          "rule_reference": "District Plan - Height Limits",
++          "validation_type": "height_check",
++          "threshold": { "max_metres": 8.0 }
++        }
++      ]
++    },
++
++    "product_specification": {
++      "name": "Product Specification / Manual",
++      "description": "Technical specifications, installation requirements and compliance data for products",
++      "upload_slot": "Specifications",
++      "classification_signals": {
++        "keywords": ["SPECIFICATION", "SPECIFICATIONS", "TECHNICAL DATA", "INSTALLATION", "MODEL", "OWNER'S MANUAL", "OPERATING INSTRUCTIONS"],
++        "visual_cues": ["manufacturer logo", "model number", "technical tables", "clearance diagrams"]
++      },
++      "completeness_checks": [
++        {
++          "id": "ps_001",
++          "name": "Manufacturer",
++          "question": "Is the manufacturer name clearly shown?",
++          "required": true,
++          "search_terms": ["manufacturer", "made by", "brand"]
++        },
++        {
++          "id": "ps_002",
++          "name": "Model Name/Number",
++          "question": "Is the product model name or number shown?",
++          "required": true,
++          "search_terms": ["model", "product", "type"]
++        },
++        {
++          "id": "ps_003",
++          "name": "Clearance Requirements",
++          "question": "Are clearance/spacing requirements specified?",
++          "required": true,
++          "search_terms": ["clearance", "spacing", "distance", "mm from"]
++        },
++        {
++          "id": "ps_004",
++          "name": "Standards Compliance",
++          "question": "Are compliance standards referenced (AS/NZS)?",
++          "required": true,
++          "search_terms": ["AS/NZS", "standard", "complies", "compliance"]
++        },
++        {
++          "id": "ps_005",
++          "name": "Installation Instructions",
++          "question": "Are installation instructions present?",
++          "required": true,
++          "search_terms": ["installation", "install", "instructions", "procedure"]
++        }
++      ],
++      "compliance_checks": [
++        {
++          "id": "ps_c01",
++          "name": "Emissions Rating",
++          "question": "Does the product meet emissions requirements (for solid fuel heaters)?",
++          "rule_reference": "ECAN Clean Air Rules",
++          "validation_type": "threshold_check",
++          "threshold": { "max_emissions_g_kg": 1.5 },
++          "applies_to": ["solid_fuel_heater"]
++        },
++        {
++          "id": "ps_c02",
++          "name": "Efficiency Rating",
++          "question": "Does the product meet minimum efficiency requirements?",
++          "rule_reference": "ECAN Clean Air Rules",
++          "validation_type": "threshold_check",
++          "threshold": { "min_efficiency_percent": 65 },
++          "applies_to": ["solid_fuel_heater"]
++        }
++      ]
++    },
++
++    "producer_statement": {
++      "name": "Producer Statement (PS1/PS3/PS4)",
++      "description": "Certification statement from qualified professional confirming design or construction compliance",
++      "upload_slot": "Manufacturer's Certificate(s)",
++      "classification_signals": {
++        "keywords": ["PRODUCER STATEMENT", "PS1", "PS2", "PS3", "PS4", "MEMORANDUM OF COMPLETION", "CONSTRUCTION REVIEW", "Section 45"],
++        "visual_cues": ["signature block", "registration number", "scope of work section", "building consent reference"]
++      },
++      "completeness_checks": [
++        {
++          "id": "pst_001",
++          "name": "Issuer Name",
++          "question": "Is the issuer's name shown?",
++          "required": true,
++          "search_terms": ["issued by", "name", "practitioner"]
++        },
++        {
++          "id": "pst_002",
++          "name": "Company Name",
++          "question": "Is the company/organisation name shown?",
++          "required": true,
++          "search_terms": ["company", "ltd", "limited"]
++        },
++        {
++          "id": "pst_003",
++          "name": "Building Consent Number",
++          "question": "Is the building consent number referenced?",
++          "required": true,
++          "search_terms": ["consent", "ABA", "BCA", "building consent"]
++        },
++        {
++          "id": "pst_004",
++          "name": "Project Address",
++          "question": "Is the project address shown?",
++          "required": true,
++          "search_terms": ["address", "project", "site", "road"]
++        },
++        {
++          "id": "pst_005",
++          "name": "Scope of Work",
++          "question": "Is the scope of work clearly defined?",
++          "required": true,
++          "search_terms": ["scope", "work covered", "description"]
++        },
++        {
++          "id": "pst_006",
++          "name": "Standards Reference",
++          "question": "Are applicable standards referenced (AS/NZS)?",
++          "required": true,
++          "search_terms": ["AS/NZS", "standard", "NZS"]
++        },
++        {
++          "id": "pst_007",
++          "name": "Registration/Accreditation",
++          "question": "Is the issuer's registration or accreditation number shown?",
++          "required": true,
++          "search_terms": ["registration", "accreditation", "LBP", "CPEng", "installer number"]
++        },
++        {
++          "id": "pst_008",
++          "name": "Signature",
++          "question": "Is the statement signed?",
++          "required": true,
++          "search_terms": ["signature", "signed"]
++        },
++        {
++          "id": "pst_009",
++          "name": "Date",
++          "question": "Is the statement dated?",
++          "required": true,
++          "search_terms": ["date", "dated"]
++        }
++      ],
++      "compliance_checks": []
++    },
++
++    "inspection_report": {
++      "name": "Inspection Report",
++      "description": "Council inspection documentation with findings, outcome and photos",
++      "upload_slot": "Supporting documents",
++      "classification_signals": {
++        "keywords": ["INSPECTION", "INSPECTION REPORT", "INSPECTION RESULTS", "INSPECTOR", "PASS", "FAIL", "BCA"],
++        "visual_cues": ["inspection checklist", "site photos", "council letterhead", "outcome stamp"]
++      },
++      "completeness_checks": [
++        {
++          "id": "ir_001",
++          "name": "Consent Reference",
++          "question": "Is the building consent reference number shown?",
++          "required": true,
++          "search_terms": ["reference", "consent", "ABA", "application"]
++        },
++        {
++          "id": "ir_002",
++          "name": "Project Address",
++          "question": "Is the project location/address shown?",
++          "required": true,
++          "search_terms": ["address", "location", "site", "road"]
++        },
++        {
++          "id": "ir_003",
++          "name": "Inspection Date",
++          "question": "Is the inspection date clearly shown?",
++          "required": true,
++          "search_terms": ["date", "inspection date"]
++        },
++        {
++          "id": "ir_004",
++          "name": "Inspector Name",
++          "question": "Is the inspector's name shown?",
++          "required": true,
++          "search_terms": ["inspector", "officer", "by"]
++        },
++        {
++          "id": "ir_005",
++          "name": "Inspection Type",
++          "question": "Is the inspection type identified (e.g., Final, Pre-line)?",
++          "required": true,
++          "search_terms": ["final", "pre-line", "foundation", "inspection type"]
++        },
++        {
++          "id": "ir_006",
++          "name": "Outcome",
++          "question": "Is the inspection outcome (Pass/Fail) clearly stated?",
++          "required": true,
++          "search_terms": ["pass", "fail", "outcome", "result"]
++        },
++        {
++          "id": "ir_007",
++          "name": "Findings/Notes",
++          "question": "Are inspection findings or notes recorded?",
++          "required": true,
++          "search_terms": ["notes", "findings", "summary", "comments"]
++        }
++      ],
++      "compliance_checks": []
++    },
++
++    "authorised_product_list": {
++      "name": "Authorised Product List",
++      "description": "Regulatory authority listing of approved/authorised products",
++      "upload_slot": "Product Certificates / Approvals from authorities",
++      "classification_signals": {
++        "keywords": ["AUTHORISED", "AUTHORIZED", "APPROVED", "ECAN", "Environment Canterbury", "BURNERS", "APPROVED LIST"],
++        "visual_cues": ["product table", "approval numbers", "emissions data"]
++      },
++      "completeness_checks": [
++        {
++          "id": "apl_001",
++          "name": "Authority Name",
++          "question": "Is the authorising body identified (e.g., Environment Canterbury)?",
++          "required": true,
++          "search_terms": ["ECAN", "Environment Canterbury", "authority", "council"]
++        },
++        {
++          "id": "apl_002",
++          "name": "Product Listed",
++          "question": "Is the specific product brand and model listed?",
++          "required": true,
++          "search_terms": ["model", "brand", "product"]
++        },
++        {
++          "id": "apl_003",
++          "name": "Authorisation Number",
++          "question": "Is an authorisation/approval number shown?",
++          "required": true,
++          "search_terms": ["authorisation", "authorization", "approval", "number"]
++        }
++      ],
++      "compliance_checks": []
++    },
++
++    "construction_detail": {
++      "name": "Construction Detail Drawing",
++      "description": "Technical detail drawing showing construction methods, materials and assemblies",
++      "upload_slot": "Specifications",
++      "classification_signals": {
++        "keywords": ["DETAIL", "CONSTRUCTION DETAIL", "TYPICAL DETAIL", "SECTION DETAIL", "FLASHING"],
++        "visual_cues": ["enlarged scale", "material annotations", "assembly diagram"]
++      },
++      "completeness_checks": [
++        {
++          "id": "cd_001",
++          "name": "Detail Title",
++          "question": "Is the detail clearly titled/labelled?",
++          "required": true,
++          "search_terms": ["detail", "section", "title"]
++        },
++        {
++          "id": "cd_002",
++          "name": "Scale",
++          "question": "Is the detail scale indicated?",
++          "required": true,
++          "search_terms": ["scale", "1:"]
++        },
++        {
++          "id": "cd_003",
++          "name": "Materials",
++          "question": "Are materials/components identified?",
++          "required": true,
++          "search_terms": ["material", "steel", "timber", "concrete"]
++        },
++        {
++          "id": "cd_004",
++          "name": "Dimensions",
++          "question": "Are key dimensions shown?",
++          "required": true,
++          "search_terms": ["mm", "dimension"]
++        }
++      ],
++      "compliance_checks": []
++    },
++
++    "building_consent_form": {
++      "name": "Building Consent Application Form",
++      "description": "Form 2 or Form 5 building consent application/grant documentation",
++      "upload_slot": "Supporting documents",
++      "classification_signals": {
++        "keywords": ["FORM 2", "FORM 5", "BUILDING CONSENT", "APPLICATION FOR BUILDING CONSENT", "Section 33", "Section 45", "Section 51", "Building Act 2004"],
++        "visual_cues": ["form fields", "council header", "consent number"]
++      },
++      "completeness_checks": [
++        {
++          "id": "bcf_001",
++          "name": "Form Type",
++          "question": "Is the form type identified (Form 2, Form 5)?",
++          "required": true,
++          "search_terms": ["form 2", "form 5", "application"]
++        },
++        {
++          "id": "bcf_002",
++          "name": "Consent Number",
++          "question": "Is a consent/application number shown?",
++          "required": true,
++          "search_terms": ["consent", "application", "reference", "ABA"]
++        },
++        {
++          "id": "bcf_003",
++          "name": "Site Address",
++          "question": "Is the site address shown?",
++          "required": true,
++          "search_terms": ["address", "site", "street", "road"]
++        },
++        {
++          "id": "bcf_004",
++          "name": "Legal Description",
++          "question": "Is the legal description (Lot/DP) shown?",
++          "required": true,
++          "search_terms": ["lot", "DP", "legal description"]
++        },
++        {
++          "id": "bcf_005",
++          "name": "Owner Details",
++          "question": "Are owner name and contact details shown?",
++          "required": true,
++          "search_terms": ["owner", "name", "contact"]
++        },
++        {
++          "id": "bcf_006",
++          "name": "Work Description",
++          "question": "Is the description of building work shown?",
++          "required": true,
++          "search_terms": ["description", "building work", "project"]
++        }
++      ],
++      "compliance_checks": []
++    },
++
++    "code_compliance_certificate": {
++      "name": "Code Compliance Certificate (CCC)",
++      "description": "Form 7 Code Compliance Certificate issued under Section 95 Building Act",
++      "upload_slot": "Supporting documents",
++      "classification_signals": {
++        "keywords": ["FORM 7", "CODE COMPLIANCE CERTIFICATE", "CCC", "Section 95", "Building Act 2004"],
++        "visual_cues": ["council seal", "official stamp", "consent reference"]
++      },
++      "completeness_checks": [
++        {
++          "id": "ccc_001",
++          "name": "Form Number",
++          "question": "Is it identified as Form 7?",
++          "required": true,
++          "search_terms": ["form 7", "code compliance"]
++        },
++        {
++          "id": "ccc_002",
++          "name": "Building Consent Number(s)",
++          "question": "Are the covered building consent numbers listed?",
++          "required": true,
++          "search_terms": ["consent", "ABA", "reference"]
++        },
++        {
++          "id": "ccc_003",
++          "name": "Site Address",
++          "question": "Is the site address shown?",
++          "required": true,
++          "search_terms": ["address", "site", "street"]
++        },
++        {
++          "id": "ccc_004",
++          "name": "Issue Date",
++          "question": "Is the CCC issue date shown?",
++          "required": true,
++          "search_terms": ["date", "issued"]
++        },
++        {
++          "id": "ccc_005",
++          "name": "Authorised Signature",
++          "question": "Is there an authorised officer signature?",
++          "required": true,
++          "search_terms": ["signature", "authorised", "officer"]
++        }
++      ],
++      "compliance_checks": []
++    },
++
++    "unknown": {
++      "name": "Unclassified Document",
++      "description": "Document type could not be determined automatically",
++      "upload_slot": "Supporting documents",
++      "classification_signals": {
++        "keywords": [],
++        "visual_cues": []
++      },
++      "completeness_checks": [
++        {
++          "id": "unk_001",
++          "name": "Document Legible",
++          "question": "Is the document legible and readable?",
++          "required": true,
++          "search_terms": []
++        },
++        {
++          "id": "unk_002",
++          "name": "Relevance Clear",
++          "question": "Is the document's purpose/relevance identifiable?",
++          "required": false,
++          "search_terms": []
++        }
++      ],
++      "compliance_checks": []
++    }
++  },
++
++  "work_types": {
++    "solid_fuel_heater": {
++      "name": "Solid Fuel Heater Installation",
++      "description": "Installation or replacement of wood burner, pellet fire, or other solid fuel heater",
++      "required_documents": [
++        "record_of_title",
++        "site_plan",
++        "product_specification",
++        "producer_statement",
++        "authorised_product_list"
++      ],
++      "optional_documents": [
++        "construction_detail",
++        "inspection_report",
++        "code_compliance_certificate"
++      ],
++      "default_settings": {
++        "vision_parser": "landing_ai",
++        "chat_model": "bedrock-claude-sonnet-3.5",
++        "compliance_model": "bedrock-claude-sonnet-3.5"
++      }
++    },
++    "new_dwelling": {
++      "name": "New Dwelling",
++      "description": "Construction of a new residential dwelling",
++      "required_documents": [
++        "record_of_title",
++        "site_plan",
++        "floor_plan",
++        "elevation"
++      ],
++      "optional_documents": [
++        "construction_detail",
++        "product_specification",
++        "producer_statement"
++      ],
++      "default_settings": {
++        "vision_parser": "landing_ai",
++        "chat_model": "bedrock-claude-sonnet-3.5",
++        "compliance_model": "bedrock-claude-sonnet-3.5"
++      }
++    },
++    "minor_works": {
++      "name": "Minor Works / Alterations",
++      "description": "Small alterations, additions or repairs to existing buildings",
++      "required_documents": [
++        "record_of_title",
++        "site_plan"
++      ],
++      "optional_documents": [
++        "floor_plan",
++        "elevation",
++        "construction_detail"
++      ],
++      "default_settings": {
++        "vision_parser": "landing_ai",
++        "chat_model": "bedrock-claude-sonnet-3.5",
++        "compliance_model": "bedrock-claude-sonnet-3.5"
++      }
++    },
++    "commercial_fitout": {
++      "name": "Commercial Fitout",
++      "description": "Interior alterations to commercial or retail premises",
++      "required_documents": [
++        "record_of_title",
++        "floor_plan"
++      ],
++      "optional_documents": [
++        "site_plan",
++        "elevation",
++        "construction_detail",
++        "product_specification"
++      ],
++      "default_settings": {
++        "vision_parser": "landing_ai",
++        "chat_model": "bedrock-claude-sonnet-3.5",
++        "compliance_model": "bedrock-claude-sonnet-3.5"
++      }
++    },
++    "demolition": {
++      "name": "Demolition",
++      "description": "Demolition of existing structures",
++      "required_documents": [
++        "record_of_title",
++        "site_plan"
++      ],
++      "optional_documents": [
++        "inspection_report"
++      ],
++      "default_settings": {
++        "vision_parser": "claude_vision",
++        "chat_model": "bedrock-claude-sonnet-3.5",
++        "compliance_model": "bedrock-claude-sonnet-3.5"
++      }
++    },
++    "custom": {
++      "name": "Custom / Other",
++      "description": "Custom project type - configure documents manually",
++      "required_documents": [],
++      "optional_documents": [
++        "record_of_title",
++        "site_plan",
++        "floor_plan",
++        "elevation",
++        "product_specification",
++        "producer_statement",
++        "inspection_report",
++        "construction_detail",
++        "building_consent_form",
++        "code_compliance_certificate",
++        "authorised_product_list"
++      ],
++      "default_settings": {
++        "vision_parser": "landing_ai",
++        "chat_model": "bedrock-claude-sonnet-3.5",
++        "compliance_model": "bedrock-claude-sonnet-3.5"
++      }
++    }
++  },
++
++  "upload_slots": {
++    "description": "Maps document types to AlphaOne upload categories",
++    "slots": [
++      {
++        "id": "record_of_title",
++        "name": "Record of Title",
++        "required": true,
++        "document_types": ["record_of_title"]
++      },
++      {
++        "id": "plans",
++        "name": "Plans",
++        "required": true,
++        "document_types": ["site_plan", "floor_plan", "elevation", "construction_detail"]
++      },
++      {
++        "id": "specifications",
++        "name": "Specifications",
++        "required": true,
++        "document_types": ["product_specification", "construction_detail"]
++      },
++      {
++        "id": "product_certificates",
++        "name": "Current Product Certificate(s)",
++        "required": false,
++        "document_types": ["authorised_product_list"]
++      },
++      {
++        "id": "manufacturer_certificates",
++        "name": "Manufacturer's Certificate(s)",
++        "required": false,
++        "document_types": ["producer_statement"]
++      },
++      {
++        "id": "supporting_documents",
++        "name": "Supporting documents",
++        "required": false,
++        "document_types": ["inspection_report", "building_consent_form", "code_compliance_certificate", "unknown"]
++      }
++    ]
++  }
++}
+diff --git a/backend/main.py b/backend/main.py
+index f341cba..20c9de9 100644
+--- a/backend/main.py
++++ b/backend/main.py
+@@ -3,7 +3,7 @@ from fastapi import FastAPI
+ from fastapi.middleware.cors import CORSMiddleware
+ from fastapi.staticfiles import StaticFiles
+ from dotenv import load_dotenv
+-from routers import parse, extract, chat, compliance, projects, documents, annotations, batch
++from routers import parse, extract, chat, compliance, projects, documents, annotations, batch, checks, reports
+ import os
+ 
+ load_dotenv()
+@@ -60,6 +60,12 @@ app.include_router(annotations.router, prefix="/api/projects", tags=["annotation
+ app.include_router(batch.router, prefix="/api/projects", tags=["batch"])
+ app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
+ 
++# New checks router for document compliance checks
++app.include_router(checks.router, prefix="/api/checks", tags=["checks"])
++
++# Reports router for PDF generation
++app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
++
+ 
+ @app.get("/health")
+ def health_check():
+diff --git a/backend/models/database_models.py b/backend/models/database_models.py
+index 95d19da..1078656 100644
+--- a/backend/models/database_models.py
++++ b/backend/models/database_models.py
+@@ -29,6 +29,7 @@ class Project(Base):
+ 
+     # Relationships
+     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
++    settings = relationship("ProjectSettings", back_populates="project", uselist=False, cascade="all, delete-orphan")
+ 
+     __table_args__ = (
+         Index("ix_projects_name", "name"),
+@@ -52,14 +53,23 @@ class Document(Base):
+     created_at = Column(DateTime, default=datetime.utcnow)
+     uploaded_by = Column(String(255), nullable=True)
+ 
++    # Document classification
++    document_type = Column(String(50), nullable=True)
++    classification_confidence = Column(Integer, nullable=True)
++    classification_signals = Column(JSON, nullable=True)
++    classification_override = Column(Boolean, default=False)
++    classification_model = Column(String(100), nullable=True)
++
+     # Relationships
+     project = relationship("Project", back_populates="documents")
+     parse_results = relationship("ParseResult", back_populates="document", cascade="all, delete-orphan")
++    check_results = relationship("CheckResult", back_populates="document", cascade="all, delete-orphan")
+ 
+     __table_args__ = (
+         Index("ix_documents_project_id", "project_id"),
+         Index("ix_documents_file_hash", "file_hash"),
+         Index("ix_documents_created_at", "created_at"),
++        Index("ix_documents_document_type", "document_type"),
+     )
+ 
+ 
+@@ -309,3 +319,123 @@ class BatchTask(Base):
+         Index("ix_batch_tasks_document_id", "document_id"),
+         Index("ix_batch_tasks_status", "status"),
+     )
++
++
++class ProjectSettings(Base):
++    """Project-level settings including work type template and model preferences."""
++    __tablename__ = "project_settings"
++
++    id = Column(String(36), primary_key=True, default=generate_uuid)
++    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), unique=True, nullable=False)
++
++    # Work type template
++    work_type = Column(String(50), default="custom")
++
++    # Model settings
++    vision_parser = Column(String(50), default="landing_ai")
++    vision_model = Column(String(100), nullable=True)
++    chat_model = Column(String(100), default="bedrock-claude-sonnet-3.5")
++    compliance_model = Column(String(100), default="bedrock-claude-sonnet-3.5")
++
++    # Checks configuration (user customizations)
++    checks_config = Column(JSON, nullable=True)
++
++    # Usage tracking
++    total_parse_credits = Column(Integer, default=0)
++    total_input_tokens = Column(Integer, default=0)
++    total_output_tokens = Column(Integer, default=0)
++
++    created_at = Column(DateTime, default=datetime.utcnow)
++    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
++
++    project = relationship("Project", back_populates="settings")
++
++
++class CheckResult(Base):
++    """Individual check result for a document (supports history)."""
++    __tablename__ = "check_results"
++
++    id = Column(String(36), primary_key=True, default=generate_uuid)
++    document_id = Column(String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
++    parse_result_id = Column(String(36), ForeignKey("parse_results.id", ondelete="SET NULL"), nullable=True)
++    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
++
++    # Run context
++    batch_run_id = Column(String(36), ForeignKey("batch_check_runs.id", ondelete="SET NULL"), nullable=True)
++    run_number = Column(Integer, default=1)
++
++    # Classification
++    document_type = Column(String(50), nullable=True)
++
++    # Results
++    completeness_results = Column(JSON, nullable=True)
++    compliance_results = Column(JSON, nullable=True)
++    summary = Column(JSON, nullable=True)
++
++    # Config snapshot
++    checks_config_snapshot = Column(JSON, nullable=True)
++
++    # Usage
++    model = Column(String(100), nullable=True)
++    input_tokens = Column(Integer, nullable=True)
++    output_tokens = Column(Integer, nullable=True)
++
++    # Status
++    status = Column(String(20), default="completed")
++    error_message = Column(Text, nullable=True)
++
++    created_at = Column(DateTime, default=datetime.utcnow)
++    processing_time_ms = Column(Integer, nullable=True)
++
++    document = relationship("Document", back_populates="check_results")
++    batch_run = relationship("BatchCheckRun", back_populates="results")
++
++    __table_args__ = (
++        Index("ix_check_results_document_id", "document_id"),
++        Index("ix_check_results_project_id", "project_id"),
++        Index("ix_check_results_batch_run_id", "batch_run_id"),
++        Index("ix_check_results_created_at", "created_at"),
++    )
++
++
++class BatchCheckRun(Base):
++    """Batch check run across multiple documents in a project."""
++    __tablename__ = "batch_check_runs"
++
++    id = Column(String(36), primary_key=True, default=generate_uuid)
++    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
++
++    # Progress
++    status = Column(String(20), default="pending")  # pending, processing, completed, failed, cancelled
++    total_documents = Column(Integer, default=0)
++    completed_documents = Column(Integer, default=0)
++    failed_documents = Column(Integer, default=0)
++    skipped_documents = Column(Integer, default=0)
++
++    # Configuration
++    model = Column(String(100), nullable=True)
++    force_rerun = Column(Boolean, default=False)
++
++    # Aggregated results
++    total_passed = Column(Integer, default=0)
++    total_failed = Column(Integer, default=0)
++    total_needs_review = Column(Integer, default=0)
++
++    # Usage
++    total_input_tokens = Column(Integer, default=0)
++    total_output_tokens = Column(Integer, default=0)
++
++    # Error
++    error_message = Column(Text, nullable=True)
++
++    # Timing
++    created_at = Column(DateTime, default=datetime.utcnow)
++    started_at = Column(DateTime, nullable=True)
++    completed_at = Column(DateTime, nullable=True)
++
++    results = relationship("CheckResult", back_populates="batch_run")
++
++    __table_args__ = (
++        Index("ix_batch_check_runs_project_id", "project_id"),
++        Index("ix_batch_check_runs_status", "status"),
++    )
+diff --git a/backend/requirements.txt b/backend/requirements.txt
+index b523caf..a24d98c 100644
+--- a/backend/requirements.txt
++++ b/backend/requirements.txt
+@@ -11,3 +11,4 @@ boto3
+ sqlalchemy>=2.0
+ psycopg2-binary
+ alembic
++reportlab>=4.0.0
+diff --git a/backend/routers/checks.py b/backend/routers/checks.py
+new file mode 100644
+index 0000000..b39f6ce
+--- /dev/null
++++ b/backend/routers/checks.py
+@@ -0,0 +1,738 @@
++"""API endpoints for running compliance checks on documents."""
++from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
++from sqlalchemy.orm import Session
++from pydantic import BaseModel
++from typing import Optional, List, Dict, Any
++from datetime import datetime
++import json
++import threading
++
++from database import get_db
++from models.database_models import (
++    Document, ParseResult, Chunk, Project, ProjectSettings,
++    CheckResult, BatchCheckRun
++)
++from services.config_service import load_default_checks_config, get_document_type_config
++from routers.compliance import get_bedrock_client, resolve_model_id
++
++router = APIRouter()
++
++
++class RunChecksRequest(BaseModel):
++    force_reclassify: bool = False
++
++
++class BatchCheckRequest(BaseModel):
++    force_rerun: bool = False
++    skip_unparsed: bool = True
++
++
++# ============ SINGLE DOCUMENT CHECKS ============
++
++@router.post("/documents/{document_id}/run")
++async def run_document_checks(
++    document_id: str,
++    body: RunChecksRequest = RunChecksRequest(),
++    db: Session = Depends(get_db)
++):
++    """Run checks on a single document."""
++    document = db.query(Document).filter(Document.id == document_id).first()
++    if not document:
++        raise HTTPException(status_code=404, detail="Document not found")
++
++    # Get parse result
++    parse_result = db.query(ParseResult).filter(
++        ParseResult.document_id == document_id,
++        ParseResult.status == "completed"
++    ).order_by(ParseResult.created_at.desc()).first()
++
++    if not parse_result:
++        raise HTTPException(status_code=400, detail="Document must be parsed first")
++
++    # Auto-classify if needed
++    if not document.document_type or body.force_reclassify:
++        await classify_document_internal(document, parse_result, db)
++
++    # Get project settings
++    settings = db.query(ProjectSettings).filter(
++        ProjectSettings.project_id == document.project_id
++    ).first()
++
++    checks_config = settings.checks_config if settings else load_default_checks_config()
++    model = settings.compliance_model if settings else "bedrock-claude-sonnet-3.5"
++
++    # Get checks for this document type
++    doc_type_config = get_document_type_config(
++        document.document_type or "unknown",
++        checks_config
++    )
++    completeness_checks = doc_type_config.get("completeness_checks", [])
++    compliance_checks = doc_type_config.get("compliance_checks", [])
++
++    # Get chunks
++    chunks = db.query(Chunk).filter(Chunk.parse_result_id == parse_result.id).all()
++    chunk_data = [
++        {"id": c.chunk_id, "type": c.chunk_type, "content_preview": (c.markdown or "")[:300]}
++        for c in chunks
++    ]
++
++    # Get run number
++    run_count = db.query(CheckResult).filter(CheckResult.document_id == document_id).count()
++
++    start_time = datetime.utcnow()
++
++    # Run checks via AI
++    result = await run_checks_ai(
++        markdown=parse_result.markdown,
++        chunks=chunk_data,
++        completeness_checks=completeness_checks,
++        compliance_checks=compliance_checks,
++        document_type=document.document_type,
++        model=model
++    )
++
++    processing_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
++
++    # Save result
++    check_result = CheckResult(
++        document_id=document_id,
++        parse_result_id=parse_result.id,
++        project_id=document.project_id,
++        run_number=run_count + 1,
++        document_type=document.document_type,
++        completeness_results=result["completeness_results"],
++        compliance_results=result["compliance_results"],
++        summary=result["summary"],
++        checks_config_snapshot={
++            "document_type": document.document_type,
++            "completeness_checks": completeness_checks,
++            "compliance_checks": compliance_checks
++        },
++        model=model,
++        input_tokens=result.get("usage", {}).get("input_tokens"),
++        output_tokens=result.get("usage", {}).get("output_tokens"),
++        status="completed",
++        processing_time_ms=processing_time
++    )
++    db.add(check_result)
++
++    # Update project usage
++    if settings:
++        settings.total_input_tokens = (settings.total_input_tokens or 0) + (result.get("usage", {}).get("input_tokens") or 0)
++        settings.total_output_tokens = (settings.total_output_tokens or 0) + (result.get("usage", {}).get("output_tokens") or 0)
++
++    db.commit()
++
++    return {
++        "id": check_result.id,
++        "run_number": check_result.run_number,
++        "document_type": document.document_type,
++        "completeness_results": result["completeness_results"],
++        "compliance_results": result["compliance_results"],
++        "summary": result["summary"],
++        "checked_at": check_result.created_at.isoformat(),
++        "usage": result.get("usage")
++    }
++
++
++# ============ CHECK HISTORY ============
++
++@router.get("/documents/{document_id}/history")
++async def get_document_check_history(
++    document_id: str,
++    limit: int = 10,
++    db: Session = Depends(get_db)
++):
++    """Get check run history for a document."""
++    results = db.query(CheckResult).filter(
++        CheckResult.document_id == document_id
++    ).order_by(CheckResult.created_at.desc()).limit(limit).all()
++
++    total = db.query(CheckResult).filter(CheckResult.document_id == document_id).count()
++
++    return {
++        "document_id": document_id,
++        "total_runs": total,
++        "history": [
++            {
++                "id": r.id,
++                "run_number": r.run_number,
++                "document_type": r.document_type,
++                "summary": r.summary,
++                "model": r.model,
++                "batch_run_id": r.batch_run_id,
++                "created_at": r.created_at.isoformat(),
++                "processing_time_ms": r.processing_time_ms
++            }
++            for r in results
++        ]
++    }
++
++
++@router.get("/documents/{document_id}/results/latest")
++async def get_latest_check_results(document_id: str, db: Session = Depends(get_db)):
++    """Get most recent check results for a document."""
++    result = db.query(CheckResult).filter(
++        CheckResult.document_id == document_id
++    ).order_by(CheckResult.created_at.desc()).first()
++
++    if not result:
++        return {"has_results": False}
++
++    return {
++        "has_results": True,
++        "id": result.id,
++        "run_number": result.run_number,
++        "document_type": result.document_type,
++        "completeness_results": result.completeness_results,
++        "compliance_results": result.compliance_results,
++        "summary": result.summary,
++        "checked_at": result.created_at.isoformat(),
++        "checks_config": result.checks_config_snapshot,
++        "usage": {
++            "input_tokens": result.input_tokens,
++            "output_tokens": result.output_tokens,
++            "model": result.model
++        }
++    }
++
++
++@router.get("/results/{result_id}")
++async def get_check_result_by_id(result_id: str, db: Session = Depends(get_db)):
++    """Get a specific check result by ID."""
++    result = db.query(CheckResult).filter(CheckResult.id == result_id).first()
++    if not result:
++        raise HTTPException(status_code=404, detail="Check result not found")
++
++    return {
++        "id": result.id,
++        "document_id": result.document_id,
++        "run_number": result.run_number,
++        "document_type": result.document_type,
++        "completeness_results": result.completeness_results,
++        "compliance_results": result.compliance_results,
++        "summary": result.summary,
++        "checks_config": result.checks_config_snapshot,
++        "usage": {
++            "model": result.model,
++            "input_tokens": result.input_tokens,
++            "output_tokens": result.output_tokens
++        },
++        "created_at": result.created_at.isoformat(),
++        "processing_time_ms": result.processing_time_ms
++    }
++
++
++# ============ BATCH OPERATIONS ============
++
++@router.post("/projects/{project_id}/run-all")
++async def run_checks_all_documents(
++    project_id: str,
++    body: BatchCheckRequest,
++    background_tasks: BackgroundTasks,
++    db: Session = Depends(get_db)
++):
++    """Run checks on all documents in a project (batch)."""
++    project = db.query(Project).filter(Project.id == project_id).first()
++    if not project:
++        raise HTTPException(status_code=404, detail="Project not found")
++
++    documents = db.query(Document).filter(Document.project_id == project_id).all()
++    if not documents:
++        raise HTTPException(status_code=400, detail="No documents in project")
++
++    settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
++    model = settings.compliance_model if settings else "bedrock-claude-sonnet-3.5"
++
++    # Create batch run record
++    batch_run = BatchCheckRun(
++        project_id=project_id,
++        status="pending",
++        total_documents=len(documents),
++        model=model,
++        force_rerun=body.force_rerun
++    )
++    db.add(batch_run)
++    db.commit()
++    db.refresh(batch_run)
++
++    # Queue background processing
++    background_tasks.add_task(
++        process_batch_checks,
++        batch_run_id=batch_run.id,
++        project_id=project_id,
++        force_rerun=body.force_rerun,
++        skip_unparsed=body.skip_unparsed
++    )
++
++    return {
++        "batch_run_id": batch_run.id,
++        "status": "pending",
++        "total_documents": len(documents),
++        "message": "Batch check run started"
++    }
++
++
++@router.get("/projects/{project_id}/batch-runs")
++async def list_batch_runs(project_id: str, db: Session = Depends(get_db)):
++    """List all batch check runs for a project."""
++    runs = db.query(BatchCheckRun).filter(
++        BatchCheckRun.project_id == project_id
++    ).order_by(BatchCheckRun.created_at.desc()).all()
++
++    return {
++        "runs": [
++            {
++                "id": r.id,
++                "status": r.status,
++                "total_documents": r.total_documents,
++                "completed_documents": r.completed_documents,
++                "failed_documents": r.failed_documents,
++                "skipped_documents": r.skipped_documents,
++                "total_passed": r.total_passed,
++                "total_failed": r.total_failed,
++                "total_needs_review": r.total_needs_review,
++                "created_at": r.created_at.isoformat(),
++                "completed_at": r.completed_at.isoformat() if r.completed_at else None
++            }
++            for r in runs
++        ]
++    }
++
++
++@router.get("/batch-runs/{batch_run_id}")
++async def get_batch_run_status(batch_run_id: str, db: Session = Depends(get_db)):
++    """Get status and results of a batch check run."""
++    batch_run = db.query(BatchCheckRun).filter(BatchCheckRun.id == batch_run_id).first()
++    if not batch_run:
++        raise HTTPException(status_code=404, detail="Batch run not found")
++
++    results = db.query(CheckResult).filter(CheckResult.batch_run_id == batch_run_id).all()
++
++    return {
++        "id": batch_run.id,
++        "status": batch_run.status,
++        "progress": {
++            "total": batch_run.total_documents,
++            "completed": batch_run.completed_documents,
++            "failed": batch_run.failed_documents,
++            "skipped": batch_run.skipped_documents,
++            "percent": int((batch_run.completed_documents / batch_run.total_documents) * 100) if batch_run.total_documents > 0 else 0
++        },
++        "summary": {
++            "total_passed": batch_run.total_passed,
++            "total_failed": batch_run.total_failed,
++            "total_needs_review": batch_run.total_needs_review
++        },
++        "usage": {
++            "input_tokens": batch_run.total_input_tokens,
++            "output_tokens": batch_run.total_output_tokens
++        },
++        "results": [
++            {
++                "document_id": r.document_id,
++                "document_type": r.document_type,
++                "status": r.status,
++                "summary": r.summary
++            }
++            for r in results
++        ],
++        "created_at": batch_run.created_at.isoformat(),
++        "started_at": batch_run.started_at.isoformat() if batch_run.started_at else None,
++        "completed_at": batch_run.completed_at.isoformat() if batch_run.completed_at else None
++    }
++
++
++# ============ HELPER FUNCTIONS ============
++
++async def classify_document_internal(document: Document, parse_result: ParseResult, db: Session):
++    """Internal function to classify a document."""
++    from services.config_service import load_default_checks_config
++
++    settings = db.query(ProjectSettings).filter(
++        ProjectSettings.project_id == document.project_id
++    ).first()
++
++    model = settings.compliance_model if settings else "bedrock-claude-sonnet-3.5"
++    checks_config = settings.checks_config if settings else load_default_checks_config()
++
++    doc_types_desc = "\n".join([
++        f"- {dt_id}: {dt.get('name')} - {dt.get('description')}"
++        for dt_id, dt in checks_config.get("document_types", {}).items()
++    ])
++
++    prompt = f"""Classify this document into one of these types:
++
++{doc_types_desc}
++
++Document content (first 5000 chars):
++{parse_result.markdown[:5000] if parse_result.markdown else "No content"}
++
++Respond with JSON only:
++{{
++    "document_type": "type_id",
++    "confidence": 0-100,
++    "signals_found": ["list", "of", "signals"]
++}}"""
++
++    client = get_bedrock_client()
++    model_id = resolve_model_id(model)
++
++    body = {
++        "anthropic_version": "bedrock-2023-05-31",
++        "max_tokens": 500,
++        "messages": [{"role": "user", "content": prompt}]
++    }
++
++    try:
++        response = client.invoke_model(
++            modelId=model_id,
++            contentType="application/json",
++            accept="application/json",
++            body=json.dumps(body)
++        )
++
++        response_body = json.loads(response["body"].read())
++        response_text = response_body["content"][0]["text"]
++
++        try:
++            if "```json" in response_text:
++                response_text = response_text.split("```json")[1].split("```")[0]
++            result = json.loads(response_text.strip())
++        except:
++            result = {"document_type": "unknown", "confidence": 0, "signals_found": []}
++
++        document.document_type = result.get("document_type", "unknown")
++        document.classification_confidence = result.get("confidence", 0)
++        document.classification_signals = result.get("signals_found", [])
++        document.classification_model = model
++        document.classification_override = False
++
++        db.commit()
++    except Exception as e:
++        print(f"Classification failed: {e}")
++        document.document_type = "unknown"
++        db.commit()
++
++
++async def run_checks_ai(
++    markdown: str,
++    chunks: List[Dict],
++    completeness_checks: List[Dict],
++    compliance_checks: List[Dict],
++    document_type: str,
++    model: str
++) -> Dict[str, Any]:
++    """Run checks using AI - adapted from existing compliance.py logic."""
++
++    client = get_bedrock_client()
++
++    # Build the prompt
++    completeness_list = "\n".join([
++        f"- {c.get('id')}: {c.get('name')} - {c.get('question')}"
++        for c in completeness_checks
++    ])
++
++    compliance_list = "\n".join([
++        f"- {c.get('id')}: {c.get('name')} - {c.get('question')}" +
++        (f" (Rule: {c.get('rule_reference')})" if c.get('rule_reference') else "")
++        for c in compliance_checks
++    ])
++
++    prompt = f"""Analyze this {document_type} document and evaluate each check.
++
++DOCUMENT CONTENT:
++{markdown[:15000] if markdown else "No content"}
++
++AVAILABLE CHUNKS (use these IDs to reference where you found information):
++{json.dumps(chunks[:20], indent=2)[:4000]}
++
++COMPLETENESS CHECKS TO EVALUATE:
++{completeness_list if completeness_list else "None"}
++
++COMPLIANCE CHECKS TO EVALUATE:
++{compliance_list if compliance_list else "None"}
++
++For each check, determine:
++- status: "pass" (found and meets criteria), "fail" (not found or doesn't meet criteria), "needs_review" (found but unclear/needs human verification), or "na" (not applicable to this document type)
++- confidence: 0-100 (how confident you are in the assessment)
++- found_value: the actual value/text found in the document (if any)
++- notes: brief explanation of your finding
++- chunk_ids: array of chunk IDs where you found this information
++
++IMPORTANT:
++1. Be thorough - search the entire document content for each check
++2. For pass/needs_review, ALWAYS include chunk_ids where the information was found
++3. If you find partial information, mark as needs_review
++4. Be conservative - if uncertain, use needs_review rather than pass
++
++Respond ONLY with valid JSON in this exact format:
++{{
++  "completeness_results": [
++    {{"check_id": "id", "status": "pass", "confidence": 95, "found_value": "value", "notes": "explanation", "chunk_ids": ["chunk-0"]}}
++  ],
++  "compliance_results": [
++    {{"check_id": "id", "status": "pass", "confidence": 90, "found_value": "value", "notes": "explanation", "chunk_ids": ["chunk-2"]}}
++  ]
++}}"""
++
++    model_id = resolve_model_id(model)
++
++    try:
++        body = {
++            "anthropic_version": "bedrock-2023-05-31",
++            "max_tokens": 4096,
++            "messages": [{"role": "user", "content": prompt}]
++        }
++
++        response = client.invoke_model(
++            modelId=model_id,
++            contentType="application/json",
++            accept="application/json",
++            body=json.dumps(body)
++        )
++
++        response_body = json.loads(response["body"].read())
++        response_text = response_body["content"][0]["text"]
++
++        # Extract JSON from response
++        try:
++            if "```json" in response_text:
++                response_text = response_text.split("```json")[1].split("```")[0]
++            elif "```" in response_text:
++                response_text = response_text.split("```")[1].split("```")[0]
++
++            results = json.loads(response_text.strip())
++        except json.JSONDecodeError as e:
++            print(f"JSON parse error: {e}")
++            results = {"completeness_results": [], "compliance_results": []}
++
++        # Build full results with check metadata
++        completeness_results = []
++        for check in completeness_checks:
++            result = next(
++                (r for r in results.get("completeness_results", []) if r.get("check_id") == check.get("id")),
++                {
++                    "check_id": check.get("id"),
++                    "status": "fail",
++                    "confidence": 0,
++                    "found_value": None,
++                    "notes": "Not found in document",
++                    "chunk_ids": []
++                }
++            )
++            completeness_results.append({
++                "check_id": check.get("id"),
++                "check_name": check.get("name"),
++                "check_type": "completeness",
++                "status": result.get("status", "fail"),
++                "confidence": result.get("confidence", 0),
++                "found_value": result.get("found_value"),
++                "notes": result.get("notes", ""),
++                "chunk_ids": result.get("chunk_ids", []),
++            })
++
++        compliance_results = []
++        for check in compliance_checks:
++            result = next(
++                (r for r in results.get("compliance_results", []) if r.get("check_id") == check.get("id")),
++                {
++                    "check_id": check.get("id"),
++                    "status": "fail",
++                    "confidence": 0,
++                    "found_value": None,
++                    "notes": "Could not verify",
++                    "chunk_ids": []
++                }
++            )
++
++            compliance_results.append({
++                "check_id": check.get("id"),
++                "check_name": check.get("name"),
++                "check_type": "compliance",
++                "status": result.get("status", "fail"),
++                "confidence": result.get("confidence", 0),
++                "found_value": result.get("found_value"),
++                "notes": result.get("notes", ""),
++                "rule_reference": check.get("rule_reference"),
++                "chunk_ids": result.get("chunk_ids", []),
++            })
++
++        # Calculate summary
++        all_results = completeness_results + compliance_results
++        passed = sum(1 for r in all_results if r["status"] == "pass")
++        failed = sum(1 for r in all_results if r["status"] == "fail")
++        needs_review = sum(1 for r in all_results if r["status"] == "needs_review")
++        na = sum(1 for r in all_results if r["status"] == "na")
++
++        return {
++            "completeness_results": completeness_results,
++            "compliance_results": compliance_results,
++            "summary": {
++                "total_checks": len(all_results),
++                "passed": passed,
++                "failed": failed,
++                "needs_review": needs_review,
++                "na": na,
++            },
++            "usage": {
++                "input_tokens": response_body.get("usage", {}).get("input_tokens", 0),
++                "output_tokens": response_body.get("usage", {}).get("output_tokens", 0),
++                "model": model_id,
++            }
++        }
++
++    except Exception as e:
++        print(f"Error running checks: {e}")
++        raise HTTPException(status_code=500, detail=str(e))
++
++
++def process_batch_checks(batch_run_id: str, project_id: str, force_rerun: bool, skip_unparsed: bool):
++    """Background task to process batch checks."""
++    from database import SessionLocal
++
++    db = SessionLocal()
++    try:
++        batch_run = db.query(BatchCheckRun).filter(BatchCheckRun.id == batch_run_id).first()
++        if not batch_run:
++            return
++
++        batch_run.status = "processing"
++        batch_run.started_at = datetime.utcnow()
++        db.commit()
++
++        documents = db.query(Document).filter(Document.project_id == project_id).all()
++        settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
++
++        total_passed = 0
++        total_failed = 0
++        total_needs_review = 0
++        total_input_tokens = 0
++        total_output_tokens = 0
++
++        for doc in documents:
++            try:
++                # Get parse result
++                parse_result = db.query(ParseResult).filter(
++                    ParseResult.document_id == doc.id,
++                    ParseResult.status == "completed"
++                ).order_by(ParseResult.created_at.desc()).first()
++
++                if not parse_result:
++                    if skip_unparsed:
++                        batch_run.skipped_documents += 1
++                        db.commit()
++                        continue
++                    else:
++                        batch_run.failed_documents += 1
++                        db.commit()
++                        continue
++
++                # Check if already has results and not forcing rerun
++                if not force_rerun:
++                    existing = db.query(CheckResult).filter(
++                        CheckResult.document_id == doc.id
++                    ).first()
++                    if existing:
++                        batch_run.skipped_documents += 1
++                        db.commit()
++                        continue
++
++                # Classify if needed
++                if not doc.document_type:
++                    import asyncio
++                    loop = asyncio.new_event_loop()
++                    asyncio.set_event_loop(loop)
++                    loop.run_until_complete(classify_document_internal(doc, parse_result, db))
++
++                # Get checks config
++                checks_config = settings.checks_config if settings else load_default_checks_config()
++                model = settings.compliance_model if settings else "bedrock-claude-sonnet-3.5"
++
++                doc_type_config = get_document_type_config(doc.document_type or "unknown", checks_config)
++                completeness_checks = doc_type_config.get("completeness_checks", [])
++                compliance_checks = doc_type_config.get("compliance_checks", [])
++
++                chunks = db.query(Chunk).filter(Chunk.parse_result_id == parse_result.id).all()
++                chunk_data = [
++                    {"id": c.chunk_id, "type": c.chunk_type, "content_preview": (c.markdown or "")[:300]}
++                    for c in chunks
++                ]
++
++                # Run checks
++                import asyncio
++                loop = asyncio.new_event_loop()
++                asyncio.set_event_loop(loop)
++                result = loop.run_until_complete(run_checks_ai(
++                    markdown=parse_result.markdown,
++                    chunks=chunk_data,
++                    completeness_checks=completeness_checks,
++                    compliance_checks=compliance_checks,
++                    document_type=doc.document_type,
++                    model=model
++                ))
++
++                # Save result
++                run_count = db.query(CheckResult).filter(CheckResult.document_id == doc.id).count()
++                check_result = CheckResult(
++                    document_id=doc.id,
++                    parse_result_id=parse_result.id,
++                    project_id=project_id,
++                    batch_run_id=batch_run_id,
++                    run_number=run_count + 1,
++                    document_type=doc.document_type,
++                    completeness_results=result["completeness_results"],
++                    compliance_results=result["compliance_results"],
++                    summary=result["summary"],
++                    checks_config_snapshot={
++                        "document_type": doc.document_type,
++                        "completeness_checks": completeness_checks,
++                        "compliance_checks": compliance_checks
++                    },
++                    model=model,
++                    input_tokens=result.get("usage", {}).get("input_tokens"),
++                    output_tokens=result.get("usage", {}).get("output_tokens"),
++                    status="completed"
++                )
++                db.add(check_result)
++
++                # Update totals
++                summary = result.get("summary", {})
++                total_passed += summary.get("passed", 0)
++                total_failed += summary.get("failed", 0)
++                total_needs_review += summary.get("needs_review", 0)
++                total_input_tokens += result.get("usage", {}).get("input_tokens", 0)
++                total_output_tokens += result.get("usage", {}).get("output_tokens", 0)
++
++                batch_run.completed_documents += 1
++                db.commit()
++
++            except Exception as e:
++                print(f"Error processing document {doc.id}: {e}")
++                batch_run.failed_documents += 1
++                db.commit()
++
++        # Finalize batch run
++        batch_run.status = "completed"
++        batch_run.completed_at = datetime.utcnow()
++        batch_run.total_passed = total_passed
++        batch_run.total_failed = total_failed
++        batch_run.total_needs_review = total_needs_review
++        batch_run.total_input_tokens = total_input_tokens
++        batch_run.total_output_tokens = total_output_tokens
++
++        # Update project settings usage
++        if settings:
++            settings.total_input_tokens = (settings.total_input_tokens or 0) + total_input_tokens
++            settings.total_output_tokens = (settings.total_output_tokens or 0) + total_output_tokens
++
++        db.commit()
++
++    except Exception as e:
++        print(f"Batch processing error: {e}")
++        if batch_run:
++            batch_run.status = "failed"
++            batch_run.error_message = str(e)
++            db.commit()
++    finally:
++        db.close()
+diff --git a/backend/routers/documents.py b/backend/routers/documents.py
+index 4318b38..ebe6d9f 100644
+--- a/backend/routers/documents.py
++++ b/backend/routers/documents.py
+@@ -7,8 +7,11 @@ from sqlalchemy.orm import Session
+ from sqlalchemy import func
+ 
+ from database import get_db
+-from models.database_models import Project, Document, ParseResult, Chunk, DocumentAnnotation
++from models.database_models import Project, Document, ParseResult, Chunk, DocumentAnnotation, ProjectSettings
+ from services import s3_service
++from services.config_service import load_default_checks_config, list_document_types
++from routers.compliance import get_bedrock_client, resolve_model_id
++import json
+ 
+ router = APIRouter()
+ 
+@@ -667,3 +670,169 @@ async def get_latest_parse_result(
+             "parse_result_id": parse_result.id
+         }
+     }
++
++
++# ============ DOCUMENT CLASSIFICATION ENDPOINTS ============
++
++class ClassificationOverride(BaseModel):
++    document_type: str
++
++
++class ClassificationResult(BaseModel):
++    document_type: str
++    confidence: int
++    signals_found: List[str]
++
++
++@router.get("/document-types")
++async def get_document_types():
++    """List available document types for classification."""
++    return {"document_types": list_document_types()}
++
++
++@router.post("/{project_id}/documents/{document_id}/classify", response_model=ClassificationResult)
++async def classify_document(
++    project_id: str,
++    document_id: str,
++    db: Session = Depends(get_db)
++):
++    """Auto-classify a document using AI."""
++    document = db.query(Document).filter(
++        Document.id == document_id,
++        Document.project_id == project_id
++    ).first()
++    if not document:
++        raise HTTPException(status_code=404, detail="Document not found")
++
++    # Get latest parse result
++    parse_result = db.query(ParseResult).filter(
++        ParseResult.document_id == document_id,
++        ParseResult.status == "completed"
++    ).order_by(ParseResult.created_at.desc()).first()
++
++    if not parse_result:
++        raise HTTPException(status_code=400, detail="Document must be parsed first")
++
++    # Get project settings
++    settings = db.query(ProjectSettings).filter(
++        ProjectSettings.project_id == project_id
++    ).first()
++
++    model = settings.compliance_model if settings else "bedrock-claude-sonnet-3.5"
++    checks_config = settings.checks_config if settings else load_default_checks_config()
++
++    # Build classification prompt
++    doc_types_desc = "\n".join([
++        f"- {dt_id}: {dt.get('name')} - {dt.get('description')}"
++        for dt_id, dt in checks_config.get("document_types", {}).items()
++    ])
++
++    prompt = f"""Classify this document into one of these types:
++
++{doc_types_desc}
++
++Document content (first 5000 chars):
++{parse_result.markdown[:5000] if parse_result.markdown else "No content"}
++
++Respond with JSON only:
++{{
++    "document_type": "type_id",
++    "confidence": 0-100,
++    "signals_found": ["list", "of", "signals"]
++}}"""
++
++    # Call AI using existing Bedrock client pattern
++    client = get_bedrock_client()
++    model_id = resolve_model_id(model)
++
++    body = {
++        "anthropic_version": "bedrock-2023-05-31",
++        "max_tokens": 500,
++        "messages": [{"role": "user", "content": prompt}]
++    }
++
++    try:
++        response = client.invoke_model(
++            modelId=model_id,
++            contentType="application/json",
++            accept="application/json",
++            body=json.dumps(body)
++        )
++
++        response_body = json.loads(response["body"].read())
++        response_text = response_body["content"][0]["text"]
++
++        # Parse response
++        try:
++            if "```json" in response_text:
++                response_text = response_text.split("```json")[1].split("```")[0]
++            elif "```" in response_text:
++                response_text = response_text.split("```")[1].split("```")[0]
++            result = json.loads(response_text.strip())
++        except:
++            result = {"document_type": "unknown", "confidence": 0, "signals_found": []}
++
++        # Update document
++        document.document_type = result.get("document_type", "unknown")
++        document.classification_confidence = result.get("confidence", 0)
++        document.classification_signals = result.get("signals_found", [])
++        document.classification_model = model
++        document.classification_override = False
++
++        db.commit()
++
++        return ClassificationResult(
++            document_type=document.document_type,
++            confidence=document.classification_confidence,
++            signals_found=document.classification_signals or []
++        )
++
++    except Exception as e:
++        raise HTTPException(status_code=500, detail=f"Classification failed: {str(e)}")
++
++
++@router.patch("/{project_id}/documents/{document_id}/classification")
++async def override_classification(
++    project_id: str,
++    document_id: str,
++    body: ClassificationOverride,
++    db: Session = Depends(get_db)
++):
++    """Manually override document classification."""
++    document = db.query(Document).filter(
++        Document.id == document_id,
++        Document.project_id == project_id
++    ).first()
++    if not document:
++        raise HTTPException(status_code=404, detail="Document not found")
++
++    document.document_type = body.document_type
++    document.classification_override = True
++    document.classification_confidence = 100
++
++    db.commit()
++
++    return {"status": "updated", "document_type": body.document_type}
++
++
++@router.get("/{project_id}/documents/{document_id}/classification")
++async def get_document_classification(
++    project_id: str,
++    document_id: str,
++    db: Session = Depends(get_db)
++):
++    """Get current document classification."""
++    document = db.query(Document).filter(
++        Document.id == document_id,
++        Document.project_id == project_id
++    ).first()
++    if not document:
++        raise HTTPException(status_code=404, detail="Document not found")
++
++    return {
++        "document_type": document.document_type,
++        "confidence": document.classification_confidence,
++        "signals_found": document.classification_signals,
++        "is_override": document.classification_override,
++        "model": document.classification_model
++    }
+diff --git a/backend/routers/projects.py b/backend/routers/projects.py
+index e9ad6e2..53504df 100644
+--- a/backend/routers/projects.py
++++ b/backend/routers/projects.py
+@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
+ from sqlalchemy import func
+ 
+ from database import get_db
+-from models.database_models import Project, Document, ParseResult
++from models.database_models import Project, Document, ParseResult, ProjectSettings
+ from services import s3_service
++from services.config_service import load_default_checks_config, list_work_types, get_work_type_config
+ 
+ router = APIRouter()
+ 
+@@ -62,6 +63,26 @@ class ProjectUsageResponse(BaseModel):
+     usage_by_parser: List[UsageByParser]
+ 
+ 
++class ProjectSettingsUpdate(BaseModel):
++    work_type: Optional[str] = None
++    vision_parser: Optional[str] = None
++    vision_model: Optional[str] = None
++    chat_model: Optional[str] = None
++    compliance_model: Optional[str] = None
++
++
++class ProjectSettingsResponse(BaseModel):
++    work_type: str
++    vision_parser: str
++    vision_model: Optional[str]
++    chat_model: str
++    compliance_model: str
++    checks_config: Optional[Dict[str, Any]]
++    usage: Dict[str, int]
++    required_documents: List[str]
++    optional_documents: List[str]
++
++
+ # Cost estimates per 1M tokens (approximate)
+ COST_PER_MILLION_TOKENS = {
+     "landing_ai": {"input": 0.0, "output": 0.0, "credit_cost": 0.01},  # Per credit
+@@ -279,3 +300,134 @@ async def get_project_usage(
+         estimated_total_cost=round(total_cost, 4),
+         usage_by_parser=usage_by_parser,
+     )
++
++
++# ============ PROJECT SETTINGS ENDPOINTS ============
++
++@router.get("/templates")
++async def get_work_type_templates():
++    """List available work type templates."""
++    return {"templates": list_work_types()}
++
++
++@router.get("/{project_id}/settings", response_model=ProjectSettingsResponse)
++async def get_project_settings(
++    project_id: str,
++    db: Session = Depends(get_db)
++):
++    """Get project settings including work type template info."""
++    project = db.query(Project).filter(Project.id == project_id).first()
++    if not project:
++        raise HTTPException(status_code=404, detail="Project not found")
++
++    settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
++
++    work_type = settings.work_type if settings else "custom"
++    work_type_info = get_work_type_config(work_type)
++
++    return ProjectSettingsResponse(
++        work_type=work_type,
++        vision_parser=settings.vision_parser if settings else "landing_ai",
++        vision_model=settings.vision_model if settings else None,
++        chat_model=settings.chat_model if settings else "bedrock-claude-sonnet-3.5",
++        compliance_model=settings.compliance_model if settings else "bedrock-claude-sonnet-3.5",
++        checks_config=settings.checks_config if settings else None,
++        usage={
++            "total_parse_credits": settings.total_parse_credits if settings else 0,
++            "total_input_tokens": settings.total_input_tokens if settings else 0,
++            "total_output_tokens": settings.total_output_tokens if settings else 0
++        },
++        required_documents=work_type_info.get("required_documents", []),
++        optional_documents=work_type_info.get("optional_documents", [])
++    )
++
++
++@router.put("/{project_id}/settings")
++async def update_project_settings(
++    project_id: str,
++    body: ProjectSettingsUpdate,
++    db: Session = Depends(get_db)
++):
++    """Update project settings."""
++    project = db.query(Project).filter(Project.id == project_id).first()
++    if not project:
++        raise HTTPException(status_code=404, detail="Project not found")
++
++    settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
++    if not settings:
++        settings = ProjectSettings(project_id=project_id)
++        db.add(settings)
++
++    # If work type changing, apply template defaults
++    if body.work_type and body.work_type != settings.work_type:
++        work_type_info = get_work_type_config(body.work_type)
++        defaults = work_type_info.get("default_settings", {})
++        settings.work_type = body.work_type
++        settings.vision_parser = defaults.get("vision_parser", "landing_ai")
++        settings.chat_model = defaults.get("chat_model", "bedrock-claude-sonnet-3.5")
++        settings.compliance_model = defaults.get("compliance_model", "bedrock-claude-sonnet-3.5")
++
++    # Apply explicit overrides
++    if body.vision_parser is not None:
++        settings.vision_parser = body.vision_parser
++    if body.vision_model is not None:
++        settings.vision_model = body.vision_model
++    if body.chat_model is not None:
++        settings.chat_model = body.chat_model
++    if body.compliance_model is not None:
++        settings.compliance_model = body.compliance_model
++
++    db.commit()
++    db.refresh(settings)
++
++    work_type_info = get_work_type_config(settings.work_type)
++
++    return {
++        "status": "updated",
++        "settings": {
++            "work_type": settings.work_type,
++            "vision_parser": settings.vision_parser,
++            "vision_model": settings.vision_model,
++            "chat_model": settings.chat_model,
++            "compliance_model": settings.compliance_model,
++            "required_documents": work_type_info.get("required_documents", []),
++            "optional_documents": work_type_info.get("optional_documents", [])
++        }
++    }
++
++
++@router.get("/{project_id}/checks-config")
++async def get_project_checks_config(
++    project_id: str,
++    db: Session = Depends(get_db)
++):
++    """Get checks configuration (custom or default)."""
++    project = db.query(Project).filter(Project.id == project_id).first()
++    if not project:
++        raise HTTPException(status_code=404, detail="Project not found")
++
++    settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
++    if settings and settings.checks_config:
++        return settings.checks_config
++    return load_default_checks_config()
++
++
++@router.put("/{project_id}/checks-config")
++async def update_project_checks_config(
++    project_id: str,
++    config: Dict[str, Any],
++    db: Session = Depends(get_db)
++):
++    """Update custom checks configuration."""
++    project = db.query(Project).filter(Project.id == project_id).first()
++    if not project:
++        raise HTTPException(status_code=404, detail="Project not found")
++
++    settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
++    if not settings:
++        settings = ProjectSettings(project_id=project_id)
++        db.add(settings)
++
++    settings.checks_config = config
++    db.commit()
++    return {"status": "updated"}
+diff --git a/backend/routers/reports.py b/backend/routers/reports.py
+new file mode 100644
+index 0000000..17fe7e3
+--- /dev/null
++++ b/backend/routers/reports.py
+@@ -0,0 +1,450 @@
++"""API endpoints for generating PDF reports."""
++from fastapi import APIRouter, HTTPException, Depends
++from fastapi.responses import StreamingResponse
++from sqlalchemy.orm import Session
++from pydantic import BaseModel
++from typing import Optional, List
++import io
++from datetime import datetime
++
++from reportlab.lib import colors
++from reportlab.lib.pagesizes import A4
++from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
++from reportlab.lib.units import mm
++from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
++from reportlab.lib.enums import TA_CENTER, TA_LEFT
++
++from database import get_db
++from models.database_models import Document, Project, CheckResult, BatchCheckRun
++
++router = APIRouter()
++
++
++class ReportRequest(BaseModel):
++    title: Optional[str] = None
++    include_details: bool = True
++    generated_by: Optional[str] = None
++
++
++@router.post("/documents/{document_id}/report")
++async def generate_document_report(
++    document_id: str,
++    body: ReportRequest = ReportRequest(),
++    db: Session = Depends(get_db)
++):
++    """Generate PDF report for a document's check results."""
++    document = db.query(Document).filter(Document.id == document_id).first()
++    if not document:
++        raise HTTPException(status_code=404, detail="Document not found")
++
++    result = db.query(CheckResult).filter(
++        CheckResult.document_id == document_id
++    ).order_by(CheckResult.created_at.desc()).first()
++
++    if not result:
++        raise HTTPException(status_code=400, detail="No check results for document")
++
++    pdf_buffer = generate_document_pdf(
++        title=body.title or f"Compliance Report - {document.original_filename}",
++        document=document,
++        result=result,
++        include_details=body.include_details,
++        generated_by=body.generated_by
++    )
++
++    return StreamingResponse(
++        io.BytesIO(pdf_buffer),
++        media_type="application/pdf",
++        headers={"Content-Disposition": f"attachment; filename=check_report_{document_id[:8]}.pdf"}
++    )
++
++
++@router.post("/projects/{project_id}/report")
++async def generate_project_report(
++    project_id: str,
++    body: ReportRequest = ReportRequest(),
++    db: Session = Depends(get_db)
++):
++    """Generate PDF report for all documents in a project."""
++    project = db.query(Project).filter(Project.id == project_id).first()
++    if not project:
++        raise HTTPException(status_code=404, detail="Project not found")
++
++    documents = db.query(Document).filter(Document.project_id == project_id).all()
++
++    results = []
++    for doc in documents:
++        result = db.query(CheckResult).filter(
++            CheckResult.document_id == doc.id
++        ).order_by(CheckResult.created_at.desc()).first()
++        if result:
++            results.append((doc, result))
++
++    if not results:
++        raise HTTPException(status_code=400, detail="No check results for any documents in project")
++
++    pdf_buffer = generate_project_pdf(
++        title=body.title or f"Compliance Report - {project.name}",
++        project=project,
++        documents_results=results,
++        include_details=body.include_details,
++        generated_by=body.generated_by
++    )
++
++    return StreamingResponse(
++        io.BytesIO(pdf_buffer),
++        media_type="application/pdf",
++        headers={"Content-Disposition": f"attachment; filename=project_report_{project_id[:8]}.pdf"}
++    )
++
++
++@router.post("/batch-runs/{batch_run_id}/report")
++async def generate_batch_report(
++    batch_run_id: str,
++    body: ReportRequest = ReportRequest(),
++    db: Session = Depends(get_db)
++):
++    """Generate PDF report for a batch check run."""
++    batch_run = db.query(BatchCheckRun).filter(BatchCheckRun.id == batch_run_id).first()
++    if not batch_run:
++        raise HTTPException(status_code=404, detail="Batch run not found")
++
++    results = db.query(CheckResult).filter(CheckResult.batch_run_id == batch_run_id).all()
++
++    # Get documents for each result
++    results_with_docs = []
++    for result in results:
++        doc = db.query(Document).filter(Document.id == result.document_id).first()
++        if doc:
++            results_with_docs.append((doc, result))
++
++    pdf_buffer = generate_batch_pdf(
++        title=body.title or "Batch Compliance Report",
++        batch_run=batch_run,
++        results=results_with_docs,
++        include_details=body.include_details,
++        generated_by=body.generated_by
++    )
++
++    return StreamingResponse(
++        io.BytesIO(pdf_buffer),
++        media_type="application/pdf",
++        headers={"Content-Disposition": f"attachment; filename=batch_report_{batch_run_id[:8]}.pdf"}
++    )
++
++
++def generate_document_pdf(title: str, document, result, include_details: bool = True, generated_by: str = None) -> bytes:
++    """Generate PDF for single document."""
++    buffer = io.BytesIO()
++    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm, leftMargin=15*mm, rightMargin=15*mm)
++
++    styles = getSampleStyleSheet()
++    title_style = ParagraphStyle('Title', parent=styles['Heading1'], alignment=TA_CENTER, spaceAfter=10*mm, fontSize=16)
++    heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], fontSize=12, spaceAfter=5*mm, spaceBefore=8*mm)
++    normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontSize=10, leading=14)
++    small_style = ParagraphStyle('Small', parent=styles['Normal'], fontSize=8, leading=10, textColor=colors.grey)
++
++    story = []
++
++    # Title
++    story.append(Paragraph(title, title_style))
++    story.append(Spacer(1, 5*mm))
++
++    # Document Info
++    story.append(Paragraph(f"<b>Document:</b> {document.original_filename}", normal_style))
++    story.append(Paragraph(f"<b>Type:</b> {document.document_type or 'Not classified'}", normal_style))
++    story.append(Paragraph(f"<b>Report Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}", normal_style))
++    story.append(Paragraph(f"<b>Check Run:</b> #{result.run_number} ({result.created_at.strftime('%Y-%m-%d %H:%M')})", normal_style))
++    if generated_by:
++        story.append(Paragraph(f"<b>Generated by:</b> {generated_by}", normal_style))
++    story.append(Spacer(1, 10*mm))
++
++    # Summary table
++    summary = result.summary or {}
++    story.append(Paragraph("Summary", heading_style))
++
++    summary_data = [
++        ["Status", "Count"],
++        ["Passed", str(summary.get("passed", 0))],
++        ["Failed", str(summary.get("failed", 0))],
++        ["Needs Review", str(summary.get("needs_review", 0))],
++        ["N/A", str(summary.get("na", 0))],
++        ["Total", str(summary.get("total_checks", 0))],
++    ]
++    t = Table(summary_data, colWidths=[80*mm, 40*mm])
++    t.setStyle(TableStyle([
++        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0ea5e9')),
++        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
++        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
++        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
++        ('FONTSIZE', (0, 0), (-1, -1), 10),
++        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
++        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#f0f9ff')),
++    ]))
++    story.append(t)
++    story.append(Spacer(1, 10*mm))
++
++    if include_details:
++        # Completeness checks
++        if result.completeness_results:
++            story.append(Paragraph("Completeness Checks", heading_style))
++            for check in result.completeness_results:
++                status = check.get("status", "unknown")
++                icon = get_status_icon(status)
++                color = get_status_color(status)
++                check_text = f'<font color="{color}">{icon}</font> <b>{check.get("check_name", "Unknown")}</b>'
++                if check.get("notes"):
++                    check_text += f': {check.get("notes")}'
++                if check.get("found_value"):
++                    check_text += f' <i>(Found: {check.get("found_value")})</i>'
++                story.append(Paragraph(check_text, normal_style))
++            story.append(Spacer(1, 5*mm))
++
++        # Compliance checks
++        if result.compliance_results:
++            story.append(Paragraph("Compliance Checks", heading_style))
++            for check in result.compliance_results:
++                status = check.get("status", "unknown")
++                icon = get_status_icon(status)
++                color = get_status_color(status)
++                check_text = f'<font color="{color}">{icon}</font> <b>{check.get("check_name", "Unknown")}</b>'
++                if check.get("rule_reference"):
++                    check_text += f' <font color="gray">[{check.get("rule_reference")}]</font>'
++                if check.get("notes"):
++                    check_text += f': {check.get("notes")}'
++                if check.get("found_value"):
++                    check_text += f' <i>(Found: {check.get("found_value")})</i>'
++                story.append(Paragraph(check_text, normal_style))
++
++    # Footer
++    story.append(Spacer(1, 15*mm))
++    story.append(Paragraph("Generated by CompliCheckAI", small_style))
++
++    doc.build(story)
++    buffer.seek(0)
++    return buffer.getvalue()
++
++
++def generate_project_pdf(title: str, project, documents_results: list, include_details: bool = True, generated_by: str = None) -> bytes:
++    """Generate PDF for entire project."""
++    buffer = io.BytesIO()
++    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm, leftMargin=15*mm, rightMargin=15*mm)
++
++    styles = getSampleStyleSheet()
++    title_style = ParagraphStyle('Title', parent=styles['Heading1'], alignment=TA_CENTER, spaceAfter=10*mm, fontSize=16)
++    heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], fontSize=12, spaceAfter=5*mm, spaceBefore=8*mm)
++    subheading_style = ParagraphStyle('Subheading', parent=styles['Heading3'], fontSize=11, spaceAfter=3*mm, spaceBefore=5*mm)
++    normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontSize=10, leading=14)
++    small_style = ParagraphStyle('Small', parent=styles['Normal'], fontSize=8, leading=10, textColor=colors.grey)
++
++    story = []
++
++    # Title
++    story.append(Paragraph(title, title_style))
++    story.append(Paragraph(f"<b>Project:</b> {project.name}", normal_style))
++    story.append(Paragraph(f"<b>Report Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}", normal_style))
++    story.append(Paragraph(f"<b>Documents:</b> {len(documents_results)}", normal_style))
++    if generated_by:
++        story.append(Paragraph(f"<b>Generated by:</b> {generated_by}", normal_style))
++    story.append(Spacer(1, 10*mm))
++
++    # Overall summary
++    total_passed = sum(r.summary.get("passed", 0) for _, r in documents_results if r.summary)
++    total_failed = sum(r.summary.get("failed", 0) for _, r in documents_results if r.summary)
++    total_review = sum(r.summary.get("needs_review", 0) for _, r in documents_results if r.summary)
++    total_na = sum(r.summary.get("na", 0) for _, r in documents_results if r.summary)
++
++    story.append(Paragraph("Overall Summary", heading_style))
++    summary_data = [
++        ["Status", "Count"],
++        ["Passed", str(total_passed)],
++        ["Failed", str(total_failed)],
++        ["Needs Review", str(total_review)],
++        ["N/A", str(total_na)],
++    ]
++    t = Table(summary_data, colWidths=[80*mm, 40*mm])
++    t.setStyle(TableStyle([
++        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0ea5e9')),
++        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
++        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
++        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
++        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
++    ]))
++    story.append(t)
++    story.append(Spacer(1, 10*mm))
++
++    # Document status overview
++    story.append(Paragraph("Documents Overview", heading_style))
++    doc_data = [["Document", "Type", "Passed", "Failed", "Review"]]
++    for doc, result in documents_results:
++        summary = result.summary or {}
++        doc_data.append([
++            doc.original_filename[:30] + "..." if len(doc.original_filename) > 30 else doc.original_filename,
++            (doc.document_type or "unknown")[:15],
++            str(summary.get("passed", 0)),
++            str(summary.get("failed", 0)),
++            str(summary.get("needs_review", 0))
++        ])
++
++    if len(doc_data) > 1:
++        t = Table(doc_data, colWidths=[70*mm, 35*mm, 20*mm, 20*mm, 20*mm])
++        t.setStyle(TableStyle([
++            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0ea5e9')),
++            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
++            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
++            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
++            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
++            ('FONTSIZE', (0, 0), (-1, -1), 9),
++            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
++            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
++        ]))
++        story.append(t)
++
++    # Per-document details if requested
++    if include_details:
++        story.append(Spacer(1, 10*mm))
++        story.append(Paragraph("Document Details", heading_style))
++
++        for doc, result in documents_results:
++            story.append(Paragraph(f"<b>{doc.original_filename}</b> ({doc.document_type or 'unclassified'})", subheading_style))
++            summary = result.summary or {}
++            story.append(Paragraph(
++                f"Passed: {summary.get('passed', 0)} | "
++                f"Failed: {summary.get('failed', 0)} | "
++                f"Review: {summary.get('needs_review', 0)}",
++                normal_style
++            ))
++            story.append(Spacer(1, 3*mm))
++
++    # Footer
++    story.append(Spacer(1, 15*mm))
++    story.append(Paragraph("Generated by CompliCheckAI", small_style))
++
++    doc.build(story)
++    buffer.seek(0)
++    return buffer.getvalue()
++
++
++def generate_batch_pdf(title: str, batch_run, results: list, include_details: bool = True, generated_by: str = None) -> bytes:
++    """Generate PDF for batch run."""
++    buffer = io.BytesIO()
++    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm, leftMargin=15*mm, rightMargin=15*mm)
++
++    styles = getSampleStyleSheet()
++    title_style = ParagraphStyle('Title', parent=styles['Heading1'], alignment=TA_CENTER, spaceAfter=10*mm, fontSize=16)
++    heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], fontSize=12, spaceAfter=5*mm, spaceBefore=8*mm)
++    normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontSize=10, leading=14)
++    small_style = ParagraphStyle('Small', parent=styles['Normal'], fontSize=8, leading=10, textColor=colors.grey)
++
++    story = []
++
++    # Title
++    story.append(Paragraph(title, title_style))
++    story.append(Paragraph(f"<b>Batch Run ID:</b> {batch_run.id[:8]}...", normal_style))
++    story.append(Paragraph(f"<b>Status:</b> {batch_run.status}", normal_style))
++    story.append(Paragraph(f"<b>Report Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}", normal_style))
++    if batch_run.started_at:
++        story.append(Paragraph(f"<b>Started:</b> {batch_run.started_at.strftime('%Y-%m-%d %H:%M')}", normal_style))
++    if batch_run.completed_at:
++        story.append(Paragraph(f"<b>Completed:</b> {batch_run.completed_at.strftime('%Y-%m-%d %H:%M')}", normal_style))
++    if generated_by:
++        story.append(Paragraph(f"<b>Generated by:</b> {generated_by}", normal_style))
++    story.append(Spacer(1, 10*mm))
++
++    # Progress summary
++    story.append(Paragraph("Processing Summary", heading_style))
++    progress_data = [
++        ["Metric", "Count"],
++        ["Total Documents", str(batch_run.total_documents)],
++        ["Completed", str(batch_run.completed_documents)],
++        ["Failed", str(batch_run.failed_documents)],
++        ["Skipped", str(batch_run.skipped_documents)],
++    ]
++    t = Table(progress_data, colWidths=[80*mm, 40*mm])
++    t.setStyle(TableStyle([
++        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0ea5e9')),
++        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
++        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
++        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
++        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
++    ]))
++    story.append(t)
++    story.append(Spacer(1, 10*mm))
++
++    # Check results summary
++    story.append(Paragraph("Check Results Summary", heading_style))
++    results_data = [
++        ["Status", "Count"],
++        ["Passed", str(batch_run.total_passed)],
++        ["Failed", str(batch_run.total_failed)],
++        ["Needs Review", str(batch_run.total_needs_review)],
++    ]
++    t = Table(results_data, colWidths=[80*mm, 40*mm])
++    t.setStyle(TableStyle([
++        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#10b981')),
++        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
++        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
++        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
++        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
++    ]))
++    story.append(t)
++
++    # Document list
++    if results and include_details:
++        story.append(Spacer(1, 10*mm))
++        story.append(Paragraph("Documents Processed", heading_style))
++
++        doc_data = [["Document", "Type", "Status", "Passed", "Failed"]]
++        for doc, result in results:
++            summary = result.summary or {}
++            doc_data.append([
++                doc.original_filename[:25] + "..." if len(doc.original_filename) > 25 else doc.original_filename,
++                (doc.document_type or "unknown")[:12],
++                result.status,
++                str(summary.get("passed", 0)),
++                str(summary.get("failed", 0))
++            ])
++
++        if len(doc_data) > 1:
++            t = Table(doc_data, colWidths=[55*mm, 30*mm, 25*mm, 20*mm, 20*mm])
++            t.setStyle(TableStyle([
++                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0ea5e9')),
++                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
++                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
++                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
++                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
++                ('FONTSIZE', (0, 0), (-1, -1), 8),
++                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
++                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
++            ]))
++            story.append(t)
++
++    # Footer
++    story.append(Spacer(1, 15*mm))
++    story.append(Paragraph("Generated by CompliCheckAI", small_style))
++
++    doc.build(story)
++    buffer.seek(0)
++    return buffer.getvalue()
++
++
++def get_status_icon(status: str) -> str:
++    """Get icon character for status."""
++    icons = {
++        "pass": "[PASS]",
++        "fail": "[FAIL]",
++        "needs_review": "[REVIEW]",
++        "na": "[N/A]"
++    }
++    return icons.get(status, "[?]")
++
++
++def get_status_color(status: str) -> str:
++    """Get color for status."""
++    colors_map = {
++        "pass": "#10b981",
++        "fail": "#ef4444",
++        "needs_review": "#f59e0b",
++        "na": "#6b7280"
++    }
++    return colors_map.get(status, "#6b7280")
+diff --git a/backend/services/config_service.py b/backend/services/config_service.py
+new file mode 100644
+index 0000000..069adba
+--- /dev/null
++++ b/backend/services/config_service.py
+@@ -0,0 +1,77 @@
++"""Configuration service for loading and managing compliance checks configuration."""
++import json
++import os
++from functools import lru_cache
++from typing import Dict, Any, Optional, List
++
++CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'compliance_checks_v2.json')
++
++
++@lru_cache()
++def load_default_checks_config() -> Dict[str, Any]:
++    """Load the default checks configuration."""
++    with open(CONFIG_PATH, 'r') as f:
++        return json.load(f)
++
++
++def get_document_type_config(doc_type: str, custom_config: Optional[Dict] = None) -> Dict[str, Any]:
++    """Get checks config for a specific document type."""
++    config = custom_config or load_default_checks_config()
++    return config.get("document_types", {}).get(doc_type, {})
++
++
++def get_work_type_config(work_type: str) -> Dict[str, Any]:
++    """Get work type template configuration."""
++    config = load_default_checks_config()
++    return config.get("work_types", {}).get(work_type, {})
++
++
++def list_document_types() -> List[Dict[str, Any]]:
++    """List all available document types."""
++    config = load_default_checks_config()
++    return [
++        {
++            "id": dt_id,
++            "name": dt.get("name"),
++            "description": dt.get("description"),
++            "upload_slot": dt.get("upload_slot")
++        }
++        for dt_id, dt in config.get("document_types", {}).items()
++    ]
++
++
++def list_work_types() -> List[Dict[str, Any]]:
++    """List all available work type templates."""
++    config = load_default_checks_config()
++    return [
++        {
++            "id": wt_id,
++            "name": wt.get("name"),
++            "description": wt.get("description"),
++            "required_documents": wt.get("required_documents", []),
++            "optional_documents": wt.get("optional_documents", []),
++            "default_settings": wt.get("default_settings", {})
++        }
++        for wt_id, wt in config.get("work_types", {}).items()
++    ]
++
++
++def get_upload_slots() -> List[Dict[str, Any]]:
++    """Get upload slot definitions."""
++    config = load_default_checks_config()
++    return config.get("upload_slots", {}).get("slots", [])
++
++
++def get_checks_for_document_type(doc_type: str, custom_config: Optional[Dict] = None) -> Dict[str, List]:
++    """Get completeness and compliance checks for a document type."""
++    doc_config = get_document_type_config(doc_type, custom_config)
++    return {
++        "completeness_checks": doc_config.get("completeness_checks", []),
++        "compliance_checks": doc_config.get("compliance_checks", [])
++    }
++
++
++def get_classification_signals(doc_type: str) -> Dict[str, Any]:
++    """Get classification signals for a document type."""
++    doc_config = get_document_type_config(doc_type)
++    return doc_config.get("classification_signals", {})
+diff --git a/frontend/src/components/BatchCheckProgress.tsx b/frontend/src/components/BatchCheckProgress.tsx
+new file mode 100644
+index 0000000..6d7061c
+--- /dev/null
++++ b/frontend/src/components/BatchCheckProgress.tsx
+@@ -0,0 +1,291 @@
++/**
++ * Component for displaying batch check progress and results
++ */
++import { useState, useEffect } from 'react';
++import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
++import type { BatchCheckRun, BatchCheckRunSummary } from '../types/checksV2';
++import { getBatchRunStatus, downloadBatchReport } from '../services/checksService';
++
++interface BatchCheckProgressProps {
++  batchRunId: string;
++  onComplete?: () => void;
++  onClose?: () => void;
++}
++
++export default function BatchCheckProgress({
++  batchRunId,
++  onComplete,
++  onClose,
++}: BatchCheckProgressProps) {
++  const { isDark } = useTheme();
++  const [batchRun, setBatchRun] = useState<BatchCheckRun | null>(null);
++  const [isPolling, setIsPolling] = useState(true);
++  const [isDownloading, setIsDownloading] = useState(false);
++
++  useEffect(() => {
++    let pollInterval: NodeJS.Timeout;
++
++    const fetchStatus = async () => {
++      try {
++        const status = await getBatchRunStatus(batchRunId);
++        setBatchRun(status);
++
++        if (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled') {
++          setIsPolling(false);
++          onComplete?.();
++        }
++      } catch (error) {
++        console.error('Failed to fetch batch status:', error);
++      }
++    };
++
++    fetchStatus();
++
++    if (isPolling) {
++      pollInterval = setInterval(fetchStatus, 2000);
++    }
++
++    return () => {
++      if (pollInterval) clearInterval(pollInterval);
++    };
++  }, [batchRunId, isPolling, onComplete]);
++
++  const handleDownloadReport = async () => {
++    setIsDownloading(true);
++    try {
++      const blob = await downloadBatchReport(batchRunId);
++      const url = URL.createObjectURL(blob);
++      const a = document.createElement('a');
++      a.href = url;
++      a.download = `batch_report_${batchRunId.slice(0, 8)}.pdf`;
++      a.click();
++      URL.revokeObjectURL(url);
++    } catch (error) {
++      console.error('Failed to download report:', error);
++    } finally {
++      setIsDownloading(false);
++    }
++  };
++
++  if (!batchRun) {
++    return (
++      <div className={`
++        rounded-lg p-4
++        ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}
++      `}>
++        <div className="flex items-center gap-3">
++          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-sky-500" />
++          <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>Loading batch status...</span>
++        </div>
++      </div>
++    );
++  }
++
++  const isRunning = batchRun.status === 'pending' || batchRun.status === 'processing';
++  const isComplete = batchRun.status === 'completed';
++  const isFailed = batchRun.status === 'failed';
++
++  return (
++    <div className={`
++      rounded-lg overflow-hidden
++      ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}
++    `}>
++      {/* Header */}
++      <div className={`
++        px-4 py-3 flex items-center justify-between
++        ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}
++      `}>
++        <div className="flex items-center gap-2">
++          {isRunning && (
++            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-500" />
++          )}
++          {isComplete && (
++            <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
++            </svg>
++          )}
++          {isFailed && (
++            <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
++            </svg>
++          )}
++          <span className={`font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
++            Batch Compliance Check
++          </span>
++        </div>
++        {onClose && !isRunning && (
++          <button
++            onClick={onClose}
++            className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}
++          >
++            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
++            </svg>
++          </button>
++        )}
++      </div>
++
++      {/* Progress */}
++      <div className="p-4 space-y-4">
++        {/* Progress bar */}
++        <div>
++          <div className="flex justify-between text-sm mb-1">
++            <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>
++              {isRunning ? 'Processing documents...' :
++               isComplete ? 'Complete' :
++               isFailed ? 'Failed' : batchRun.status}
++            </span>
++            <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
++              {batchRun.progress.completed} / {batchRun.progress.total}
++            </span>
++          </div>
++          <div className="h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
++            <div
++              className={`h-full transition-all duration-300 ${
++                isFailed ? 'bg-red-500' : isComplete ? 'bg-green-500' : 'bg-sky-500'
++              }`}
++              style={{ width: `${batchRun.progress.percent}%` }}
++            />
++          </div>
++        </div>
++
++        {/* Stats grid */}
++        <div className="grid grid-cols-4 gap-3 text-center">
++          <div className={`p-2 rounded ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
++            <div className="text-lg font-bold text-green-500">{batchRun.progress.completed}</div>
++            <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Completed</div>
++          </div>
++          <div className={`p-2 rounded ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
++            <div className="text-lg font-bold text-red-500">{batchRun.progress.failed}</div>
++            <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Failed</div>
++          </div>
++          <div className={`p-2 rounded ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
++            <div className="text-lg font-bold text-gray-500">{batchRun.progress.skipped}</div>
++            <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Skipped</div>
++          </div>
++          <div className={`p-2 rounded ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
++            <div className="text-lg font-bold text-sky-500">{batchRun.progress.total}</div>
++            <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Total</div>
++          </div>
++        </div>
++
++        {/* Results summary (when complete) */}
++        {isComplete && (
++          <div className={`p-3 rounded ${isDark ? 'bg-gray-700/30' : 'bg-gray-50'}`}>
++            <div className="text-sm font-medium mb-2">Check Results</div>
++            <div className="flex gap-4 text-sm">
++              <span className="flex items-center gap-1">
++                <span className="w-2 h-2 rounded-full bg-green-500" />
++                Passed: {batchRun.summary.total_passed}
++              </span>
++              <span className="flex items-center gap-1">
++                <span className="w-2 h-2 rounded-full bg-red-500" />
++                Failed: {batchRun.summary.total_failed}
++              </span>
++              <span className="flex items-center gap-1">
++                <span className="w-2 h-2 rounded-full bg-amber-400" />
++                Review: {batchRun.summary.total_needs_review}
++              </span>
++            </div>
++          </div>
++        )}
++
++        {/* Actions */}
++        {isComplete && (
++          <div className="flex gap-2 pt-2">
++            <button
++              onClick={handleDownloadReport}
++              disabled={isDownloading}
++              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors disabled:opacity-50"
++            >
++              {isDownloading ? (
++                <>
++                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
++                  Generating...
++                </>
++              ) : (
++                <>
++                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
++                  </svg>
++                  Download PDF Report
++                </>
++              )}
++            </button>
++          </div>
++        )}
++
++        {/* Timestamps */}
++        <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'} space-y-1`}>
++          {batchRun.started_at && (
++            <div>Started: {new Date(batchRun.started_at).toLocaleString()}</div>
++          )}
++          {batchRun.completed_at && (
++            <div>Completed: {new Date(batchRun.completed_at).toLocaleString()}</div>
++          )}
++        </div>
++      </div>
++    </div>
++  );
++}
++
++
++// Compact list view for showing batch run history
++interface BatchRunsListProps {
++  runs: BatchCheckRunSummary[];
++  onSelect?: (runId: string) => void;
++}
++
++export function BatchRunsList({ runs, onSelect }: BatchRunsListProps) {
++  const { isDark } = useTheme();
++
++  if (runs.length === 0) {
++    return (
++      <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
++        No batch runs yet
++      </div>
++    );
++  }
++
++  return (
++    <div className="space-y-2">
++      {runs.map((run) => {
++        const isComplete = run.status === 'completed';
++        const isFailed = run.status === 'failed';
++        const isRunning = run.status === 'pending' || run.status === 'processing';
++
++        return (
++          <button
++            key={run.id}
++            onClick={() => onSelect?.(run.id)}
++            className={`
++              w-full text-left p-3 rounded-lg border transition-colors
++              ${isDark
++                ? 'bg-gray-800 border-gray-700 hover:bg-gray-700'
++                : 'bg-white border-gray-200 hover:bg-gray-50'}
++            `}
++          >
++            <div className="flex items-center justify-between mb-1">
++              <div className="flex items-center gap-2">
++                {isRunning && <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-sky-500" />}
++                {isComplete && <span className="w-3 h-3 rounded-full bg-green-500" />}
++                {isFailed && <span className="w-3 h-3 rounded-full bg-red-500" />}
++                <span className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
++                  {run.completed_documents} / {run.total_documents} documents
++                </span>
++              </div>
++              <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
++                {new Date(run.created_at).toLocaleDateString()}
++              </span>
++            </div>
++            {isComplete && (
++              <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
++                {run.total_passed} passed, {run.total_failed} failed, {run.total_needs_review} review
++              </div>
++            )}
++          </button>
++        );
++      })}
++    </div>
++  );
++}
+diff --git a/frontend/src/components/CheckResultsDisplay.tsx b/frontend/src/components/CheckResultsDisplay.tsx
+new file mode 100644
+index 0000000..8d852d6
+--- /dev/null
++++ b/frontend/src/components/CheckResultsDisplay.tsx
+@@ -0,0 +1,290 @@
++/**
++ * Component for displaying document check results
++ */
++import { useState } from 'react';
++import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
++import type { CheckResultItem, CheckResultSummary, DocumentCheckResult } from '../types/checksV2';
++
++interface CheckResultsDisplayProps {
++  results: DocumentCheckResult | null;
++  onChunkClick?: (chunkIds: string[]) => void;
++  onDownloadReport?: () => void;
++  isLoading?: boolean;
++}
++
++const STATUS_CONFIG: Record<string, { icon: string; color: string; bgColor: string; label: string }> = {
++  pass: { icon: '✓', color: 'text-green-600', bgColor: 'bg-green-100', label: 'Pass' },
++  fail: { icon: '✗', color: 'text-red-600', bgColor: 'bg-red-100', label: 'Fail' },
++  needs_review: { icon: '?', color: 'text-amber-600', bgColor: 'bg-amber-100', label: 'Review' },
++  na: { icon: '—', color: 'text-gray-500', bgColor: 'bg-gray-100', label: 'N/A' },
++};
++
++function StatusBadge({ status }: { status: string }) {
++  const config = STATUS_CONFIG[status] || STATUS_CONFIG.na;
++  return (
++    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config.color} ${config.bgColor}`}>
++      <span>{config.icon}</span>
++      <span>{config.label}</span>
++    </span>
++  );
++}
++
++function SummaryBar({ summary }: { summary: CheckResultSummary }) {
++  const total = summary.total_checks || 1;
++  const passPercent = (summary.passed / total) * 100;
++  const failPercent = (summary.failed / total) * 100;
++  const reviewPercent = (summary.needs_review / total) * 100;
++
++  return (
++    <div className="mb-4">
++      <div className="flex justify-between text-sm mb-1">
++        <span className="font-medium">Overall Progress</span>
++        <span className="text-gray-500">
++          {summary.passed} passed / {summary.total_checks} checks
++        </span>
++      </div>
++      <div className="h-3 rounded-full bg-gray-200 overflow-hidden flex">
++        <div className="bg-green-500 h-full" style={{ width: `${passPercent}%` }} title={`Passed: ${summary.passed}`} />
++        <div className="bg-red-500 h-full" style={{ width: `${failPercent}%` }} title={`Failed: ${summary.failed}`} />
++        <div className="bg-amber-400 h-full" style={{ width: `${reviewPercent}%` }} title={`Needs Review: ${summary.needs_review}`} />
++      </div>
++      <div className="flex gap-4 mt-2 text-xs">
++        <span className="flex items-center gap-1">
++          <span className="w-2 h-2 rounded-full bg-green-500" /> Pass: {summary.passed}
++        </span>
++        <span className="flex items-center gap-1">
++          <span className="w-2 h-2 rounded-full bg-red-500" /> Fail: {summary.failed}
++        </span>
++        <span className="flex items-center gap-1">
++          <span className="w-2 h-2 rounded-full bg-amber-400" /> Review: {summary.needs_review}
++        </span>
++        {summary.na > 0 && (
++          <span className="flex items-center gap-1">
++            <span className="w-2 h-2 rounded-full bg-gray-400" /> N/A: {summary.na}
++          </span>
++        )}
++      </div>
++    </div>
++  );
++}
++
++function CheckItem({
++  check,
++  onChunkClick,
++}: {
++  check: CheckResultItem;
++  onChunkClick?: (chunkIds: string[]) => void;
++}) {
++  const [isExpanded, setIsExpanded] = useState(false);
++  const { isDark } = useTheme();
++
++  return (
++    <div className={`
++      border rounded-lg mb-2 overflow-hidden
++      ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'}
++    `}>
++      <button
++        onClick={() => setIsExpanded(!isExpanded)}
++        className={`
++          w-full px-3 py-2 flex items-center justify-between text-left
++          ${isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}
++        `}
++      >
++        <div className="flex items-center gap-2 flex-1 min-w-0">
++          <StatusBadge status={check.status} />
++          <span className={`font-medium text-sm truncate ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
++            {check.check_name}
++          </span>
++        </div>
++        <svg
++          className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
++          fill="none"
++          stroke="currentColor"
++          viewBox="0 0 24 24"
++        >
++          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
++        </svg>
++      </button>
++
++      {isExpanded && (
++        <div className={`px-3 pb-3 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`}>
++          <div className="pt-2 space-y-2 text-sm">
++            {check.notes && (
++              <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>{check.notes}</p>
++            )}
++            {check.found_value && (
++              <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
++                <span className="font-medium">Found:</span> {check.found_value}
++              </p>
++            )}
++            {check.rule_reference && (
++              <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
++                <span className="font-medium">Rule:</span> {check.rule_reference}
++              </p>
++            )}
++            {check.confidence !== undefined && (
++              <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
++                <span className="font-medium">Confidence:</span> {check.confidence}%
++              </p>
++            )}
++            {check.chunk_ids && check.chunk_ids.length > 0 && onChunkClick && (
++              <button
++                onClick={() => onChunkClick(check.chunk_ids)}
++                className="text-sky-500 hover:text-sky-600 text-xs flex items-center gap-1"
++              >
++                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
++                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
++                </svg>
++                View in document ({check.chunk_ids.length} location{check.chunk_ids.length > 1 ? 's' : ''})
++              </button>
++            )}
++          </div>
++        </div>
++      )}
++    </div>
++  );
++}
++
++export default function CheckResultsDisplay({
++  results,
++  onChunkClick,
++  onDownloadReport,
++  isLoading = false,
++}: CheckResultsDisplayProps) {
++  const { isDark } = useTheme();
++  const [activeTab, setActiveTab] = useState<'completeness' | 'compliance'>('completeness');
++  const [statusFilter, setStatusFilter] = useState<string | null>(null);
++
++  if (isLoading) {
++    return (
++      <div className="flex items-center justify-center py-12">
++        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500" />
++      </div>
++    );
++  }
++
++  if (!results) {
++    return (
++      <div className={`text-center py-12 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
++        <svg className="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
++        </svg>
++        <p>No check results yet</p>
++        <p className="text-sm mt-1 opacity-75">Run compliance checks to see results here</p>
++      </div>
++    );
++  }
++
++  const currentChecks = activeTab === 'completeness'
++    ? results.completeness_results
++    : results.compliance_results;
++
++  const filteredChecks = statusFilter
++    ? currentChecks.filter(c => c.status === statusFilter)
++    : currentChecks;
++
++  return (
++    <div className="space-y-4">
++      {/* Header */}
++      <div className="flex items-center justify-between">
++        <div className="text-sm text-gray-500">
++          Run #{results.run_number} - {new Date(results.checked_at).toLocaleString()}
++        </div>
++        {onDownloadReport && (
++          <button
++            onClick={onDownloadReport}
++            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-sky-500 text-white hover:bg-sky-600 transition-colors"
++          >
++            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
++            </svg>
++            PDF Report
++          </button>
++        )}
++      </div>
++
++      {/* Summary */}
++      <SummaryBar summary={results.summary} />
++
++      {/* Tabs */}
++      <div className="flex border-b border-gray-200 dark:border-gray-700">
++        <button
++          onClick={() => setActiveTab('completeness')}
++          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
++            activeTab === 'completeness'
++              ? 'border-sky-500 text-sky-600'
++              : 'border-transparent text-gray-500 hover:text-gray-700'
++          }`}
++        >
++          Completeness ({results.completeness_results.length})
++        </button>
++        <button
++          onClick={() => setActiveTab('compliance')}
++          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
++            activeTab === 'compliance'
++              ? 'border-sky-500 text-sky-600'
++              : 'border-transparent text-gray-500 hover:text-gray-700'
++          }`}
++        >
++          Compliance ({results.compliance_results.length})
++        </button>
++      </div>
++
++      {/* Status filter */}
++      <div className="flex gap-2">
++        {['pass', 'fail', 'needs_review', 'na'].map(status => {
++          const config = STATUS_CONFIG[status];
++          const count = currentChecks.filter(c => c.status === status).length;
++          if (count === 0) return null;
++          return (
++            <button
++              key={status}
++              onClick={() => setStatusFilter(statusFilter === status ? null : status)}
++              className={`
++                px-2 py-1 rounded text-xs font-medium transition-colors
++                ${statusFilter === status
++                  ? `${config.bgColor} ${config.color} ring-2 ring-offset-1 ring-current`
++                  : `${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} hover:opacity-80`
++                }
++              `}
++            >
++              {config.label} ({count})
++            </button>
++          );
++        })}
++        {statusFilter && (
++          <button
++            onClick={() => setStatusFilter(null)}
++            className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
++          >
++            Clear
++          </button>
++        )}
++      </div>
++
++      {/* Check items */}
++      <div className="space-y-1">
++        {filteredChecks.map((check) => (
++          <CheckItem
++            key={check.check_id}
++            check={check}
++            onChunkClick={onChunkClick}
++          />
++        ))}
++        {filteredChecks.length === 0 && (
++          <p className={`text-center py-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
++            No checks match the current filter
++          </p>
++        )}
++      </div>
++
++      {/* Usage info */}
++      {results.usage && (
++        <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'} pt-2 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
++          Model: {results.usage.model} | Tokens: {results.usage.input_tokens?.toLocaleString()} in / {results.usage.output_tokens?.toLocaleString()} out
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/frontend/src/components/CompliancePanel.tsx b/frontend/src/components/CompliancePanel.tsx
+index e557957..501652a 100644
+--- a/frontend/src/components/CompliancePanel.tsx
++++ b/frontend/src/components/CompliancePanel.tsx
+@@ -1,9 +1,10 @@
+ import { useState, useMemo } from 'react';
+ import type { Chunk } from '../types/ade';
+ import type { CheckResult, ComplianceReport, ComplianceCheck } from '../types/compliance';
+-import { API_URL } from '../config';
++import { API_URL, API_BASE } from '../config';
+ import { getMarkdownPreview } from '../utils/cleanMarkdown';
+ import { useTheme } from '../contexts/ThemeContext';
++import { downloadDocumentReport } from '../services/checksService';
+ 
+ interface CompliancePanelProps {
+   markdown: string;
+@@ -15,6 +16,7 @@ interface CompliancePanelProps {
+   selectedModel: string;
+   completenessChecks: ComplianceCheck[];
+   complianceChecks: ComplianceCheck[];
++  documentId?: string; // Optional document ID for PDF export
+ }
+ 
+ type StatusFilter = 'all' | 'pass' | 'fail' | 'needs_review' | 'na';
+@@ -88,6 +90,7 @@ export default function CompliancePanel({
+   selectedModel,
+   completenessChecks,
+   complianceChecks,
++  documentId,
+ }: CompliancePanelProps) {
+   const { isDark } = useTheme();
+   const statusConfig = getStatusConfig(isDark);
+@@ -96,6 +99,7 @@ export default function CompliancePanel({
+   const [error, setError] = useState<string | null>(null);
+   const [selectedResult, setSelectedResult] = useState<CheckResult | null>(null);
+   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
++  const [isExportingPdf, setIsExportingPdf] = useState(false);
+ 
+   // Pre-populated check lists from props
+   const pendingCompletenessResults = useMemo(() =>
+@@ -539,22 +543,55 @@ export default function CompliancePanel({
+             )}
+             Click on a row to see details
+           </p>
+-          <button
+-            onClick={() => {
+-              const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+-              const url = URL.createObjectURL(blob);
+-              const a = document.createElement('a');
+-              a.href = url;
+-              a.download = `compliance-report-${new Date().toISOString().split('T')[0]}.json`;
+-              a.click();
+-            }}
+-            className="text-sm text-sky-400 hover:text-sky-300 flex items-center gap-1"
+-          >
+-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+-            </svg>
+-            Export Report
+-          </button>
++          <div className="flex items-center gap-3">
++            {documentId && (
++              <button
++                onClick={async () => {
++                  setIsExportingPdf(true);
++                  try {
++                    const blob = await downloadDocumentReport(documentId);
++                    const url = URL.createObjectURL(blob);
++                    const a = document.createElement('a');
++                    a.href = url;
++                    a.download = `compliance-report-${new Date().toISOString().split('T')[0]}.pdf`;
++                    a.click();
++                    URL.revokeObjectURL(url);
++                  } catch (err) {
++                    console.error('Failed to download PDF:', err);
++                  } finally {
++                    setIsExportingPdf(false);
++                  }
++                }}
++                disabled={isExportingPdf}
++                className="text-sm text-sky-400 hover:text-sky-300 flex items-center gap-1 disabled:opacity-50"
++              >
++                {isExportingPdf ? (
++                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-sky-400"></div>
++                ) : (
++                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
++                  </svg>
++                )}
++                PDF
++              </button>
++            )}
++            <button
++              onClick={() => {
++                const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
++                const url = URL.createObjectURL(blob);
++                const a = document.createElement('a');
++                a.href = url;
++                a.download = `compliance-report-${new Date().toISOString().split('T')[0]}.json`;
++                a.click();
++              }}
++              className="text-sm text-sky-400 hover:text-sky-300 flex items-center gap-1"
++            >
++              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
++              </svg>
++              JSON
++            </button>
++          </div>
+         </div>
+       )}
+     </div>
+diff --git a/frontend/src/components/DocumentTypeBadge.tsx b/frontend/src/components/DocumentTypeBadge.tsx
+new file mode 100644
+index 0000000..5662ed3
+--- /dev/null
++++ b/frontend/src/components/DocumentTypeBadge.tsx
+@@ -0,0 +1,160 @@
++/**
++ * Badge component for displaying document type classification
++ */
++import { useState } from 'react';
++import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
++import type { DocumentClassification } from '../types/checksV2';
++
++interface DocumentTypeBadgeProps {
++  documentType?: string;
++  confidence?: number;
++  isOverride?: boolean;
++  onClassify?: () => void;
++  onChangeType?: (type: string) => void;
++  availableTypes?: Array<{ id: string; name: string }>;
++  isClassifying?: boolean;
++}
++
++const DOCUMENT_TYPE_LABELS: Record<string, string> = {
++  record_of_title: 'Record of Title',
++  site_plan: 'Site Plan',
++  floor_plan: 'Floor Plan',
++  elevation: 'Elevation',
++  product_specification: 'Product Spec',
++  producer_statement: 'Producer Statement',
++  inspection_report: 'Inspection Report',
++  authorised_product_list: 'Authorised Products',
++  construction_detail: 'Construction Detail',
++  building_consent_form: 'Building Consent Form',
++  code_compliance_certificate: 'CCC',
++  unknown: 'Unclassified',
++};
++
++const DOCUMENT_TYPE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
++  record_of_title: { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-300' },
++  site_plan: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300' },
++  floor_plan: { bg: 'bg-cyan-100', text: 'text-cyan-800', border: 'border-cyan-300' },
++  elevation: { bg: 'bg-teal-100', text: 'text-teal-800', border: 'border-teal-300' },
++  product_specification: { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-300' },
++  producer_statement: { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300' },
++  inspection_report: { bg: 'bg-yellow-100', text: 'text-yellow-800', border: 'border-yellow-300' },
++  authorised_product_list: { bg: 'bg-pink-100', text: 'text-pink-800', border: 'border-pink-300' },
++  construction_detail: { bg: 'bg-indigo-100', text: 'text-indigo-800', border: 'border-indigo-300' },
++  building_consent_form: { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-300' },
++  code_compliance_certificate: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-300' },
++  unknown: { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-300' },
++};
++
++export default function DocumentTypeBadge({
++  documentType,
++  confidence,
++  isOverride,
++  onClassify,
++  onChangeType,
++  availableTypes,
++  isClassifying = false,
++}: DocumentTypeBadgeProps) {
++  const { isDark } = useTheme();
++  const [showDropdown, setShowDropdown] = useState(false);
++
++  const type = documentType || 'unknown';
++  const label = DOCUMENT_TYPE_LABELS[type] || type;
++  const colors = DOCUMENT_TYPE_COLORS[type] || DOCUMENT_TYPE_COLORS.unknown;
++
++  const handleTypeSelect = (newType: string) => {
++    onChangeType?.(newType);
++    setShowDropdown(false);
++  };
++
++  if (!documentType) {
++    return (
++      <button
++        onClick={onClassify}
++        disabled={isClassifying}
++        className={`
++          inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
++          bg-gray-100 text-gray-600 border border-gray-300 border-dashed
++          hover:bg-gray-200 transition-colors cursor-pointer
++          ${isClassifying ? 'opacity-50 cursor-wait' : ''}
++        `}
++      >
++        {isClassifying ? (
++          <>
++            <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
++              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
++              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
++            </svg>
++            Classifying...
++          </>
++        ) : (
++          <>
++            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
++            </svg>
++            Classify
++          </>
++        )}
++      </button>
++    );
++  }
++
++  return (
++    <div className="relative inline-block">
++      <button
++        onClick={() => onChangeType && setShowDropdown(!showDropdown)}
++        className={`
++          inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
++          ${colors.bg} ${colors.text} border ${colors.border}
++          ${onChangeType ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}
++          transition-opacity
++        `}
++      >
++        <span>{label}</span>
++        {confidence !== undefined && confidence < 100 && !isOverride && (
++          <span className="opacity-60">({confidence}%)</span>
++        )}
++        {isOverride && (
++          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
++            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
++          </svg>
++        )}
++        {onChangeType && (
++          <svg className="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
++          </svg>
++        )}
++      </button>
++
++      {showDropdown && availableTypes && (
++        <div className={`
++          absolute z-50 mt-1 w-48 rounded-md shadow-lg
++          ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}
++          max-h-60 overflow-auto
++        `}>
++          <div className="py-1">
++            {availableTypes.map((t) => (
++              <button
++                key={t.id}
++                onClick={() => handleTypeSelect(t.id)}
++                className={`
++                  block w-full text-left px-4 py-2 text-sm
++                  ${isDark ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100 text-gray-700'}
++                  ${t.id === documentType ? 'font-medium' : ''}
++                `}
++              >
++                {t.name}
++              </button>
++            ))}
++          </div>
++        </div>
++      )}
++
++      {showDropdown && (
++        <div
++          className="fixed inset-0 z-40"
++          onClick={() => setShowDropdown(false)}
++        />
++      )}
++    </div>
++  );
++}
+diff --git a/frontend/src/components/ProjectSettingsPanel.tsx b/frontend/src/components/ProjectSettingsPanel.tsx
+new file mode 100644
+index 0000000..bffa7d1
+--- /dev/null
++++ b/frontend/src/components/ProjectSettingsPanel.tsx
+@@ -0,0 +1,360 @@
++/**
++ * Panel for managing project settings including work type and model preferences
++ */
++import { useState, useEffect } from 'react';
++import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
++import type { ProjectSettings, WorkTypeTemplate, ProjectSettingsUpdate } from '../types/checksV2';
++import { getProjectSettings, updateProjectSettings, getWorkTypeTemplates } from '../services/checksService';
++
++interface ProjectSettingsPanelProps {
++  projectId: string;
++  isOpen: boolean;
++  onClose: () => void;
++  onSettingsChange?: (settings: ProjectSettings) => void;
++}
++
++const WORK_TYPE_ICONS: Record<string, string> = {
++  solid_fuel_heater: 'fire',
++  new_dwelling: 'home',
++  minor_works: 'tool',
++  commercial_fitout: 'building',
++  demolition: 'trash',
++  custom: 'settings',
++};
++
++export default function ProjectSettingsPanel({
++  projectId,
++  isOpen,
++  onClose,
++  onSettingsChange,
++}: ProjectSettingsPanelProps) {
++  const { isDark } = useTheme();
++  const theme = getThemeStyles(isDark);
++
++  const [settings, setSettings] = useState<ProjectSettings | null>(null);
++  const [templates, setTemplates] = useState<WorkTypeTemplate[]>([]);
++  const [isLoading, setIsLoading] = useState(true);
++  const [isSaving, setIsSaving] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++  const [pendingChanges, setPendingChanges] = useState<ProjectSettingsUpdate>({});
++
++  useEffect(() => {
++    if (isOpen && projectId) {
++      loadData();
++    }
++  }, [isOpen, projectId]);
++
++  const loadData = async () => {
++    setIsLoading(true);
++    setError(null);
++    try {
++      const [settingsData, templatesData] = await Promise.all([
++        getProjectSettings(projectId),
++        getWorkTypeTemplates(),
++      ]);
++      setSettings(settingsData);
++      setTemplates(templatesData.templates);
++      setPendingChanges({});
++    } catch (err) {
++      setError('Failed to load settings');
++      console.error(err);
++    } finally {
++      setIsLoading(false);
++    }
++  };
++
++  const handleChange = (key: keyof ProjectSettingsUpdate, value: string) => {
++    setPendingChanges(prev => ({ ...prev, [key]: value }));
++  };
++
++  const handleSave = async () => {
++    if (Object.keys(pendingChanges).length === 0) return;
++
++    setIsSaving(true);
++    try {
++      const response = await updateProjectSettings(projectId, pendingChanges);
++      setSettings(prev => prev ? { ...prev, ...response.settings } : prev);
++      setPendingChanges({});
++      onSettingsChange?.(response.settings as ProjectSettings);
++    } catch (err) {
++      setError('Failed to save settings');
++      console.error(err);
++    } finally {
++      setIsSaving(false);
++    }
++  };
++
++  const handleWorkTypeSelect = async (workType: string) => {
++    setIsSaving(true);
++    try {
++      const response = await updateProjectSettings(projectId, { work_type: workType });
++      setSettings(prev => prev ? {
++        ...prev,
++        ...response.settings,
++        required_documents: response.settings.required_documents || [],
++        optional_documents: response.settings.optional_documents || [],
++      } : prev);
++      setPendingChanges({});
++      onSettingsChange?.(response.settings as ProjectSettings);
++    } catch (err) {
++      setError('Failed to update work type');
++      console.error(err);
++    } finally {
++      setIsSaving(false);
++    }
++  };
++
++  if (!isOpen) return null;
++
++  const currentWorkType = pendingChanges.work_type || settings?.work_type || 'custom';
++  const currentTemplate = templates.find(t => t.id === currentWorkType);
++
++  return (
++    <div className="fixed inset-0 z-50 flex items-center justify-center">
++      {/* Backdrop */}
++      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
++
++      {/* Panel */}
++      <div className={`
++        relative w-full max-w-2xl max-h-[90vh] overflow-auto rounded-xl shadow-xl
++        ${isDark ? 'bg-gray-900' : 'bg-white'}
++      `}>
++        {/* Header */}
++        <div className={`
++          sticky top-0 px-6 py-4 border-b flex items-center justify-between
++          ${isDark ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'}
++        `}>
++          <h2 className={`text-lg font-semibold ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
++            Project Settings
++          </h2>
++          <button
++            onClick={onClose}
++            className={`p-2 rounded-lg ${isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}
++          >
++            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
++            </svg>
++          </button>
++        </div>
++
++        {/* Content */}
++        <div className="p-6 space-y-6">
++          {isLoading ? (
++            <div className="flex items-center justify-center py-12">
++              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500" />
++            </div>
++          ) : error ? (
++            <div className="text-center py-8">
++              <p className="text-red-500 mb-4">{error}</p>
++              <button
++                onClick={loadData}
++                className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600"
++              >
++                Retry
++              </button>
++            </div>
++          ) : settings && (
++            <>
++              {/* Work Type Selection */}
++              <div>
++                <h3 className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
++                  Work Type Template
++                </h3>
++                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
++                  {templates.map((template) => {
++                    const isSelected = currentWorkType === template.id;
++                    return (
++                      <button
++                        key={template.id}
++                        onClick={() => handleWorkTypeSelect(template.id)}
++                        disabled={isSaving}
++                        className={`
++                          p-4 rounded-lg border-2 text-left transition-all
++                          ${isSelected
++                            ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20'
++                            : isDark
++                              ? 'border-gray-700 hover:border-gray-600'
++                              : 'border-gray-200 hover:border-gray-300'}
++                          ${isSaving ? 'opacity-50 cursor-wait' : ''}
++                        `}
++                      >
++                        <div className={`font-medium text-sm ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
++                          {template.name}
++                        </div>
++                        <div className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
++                          {template.description}
++                        </div>
++                      </button>
++                    );
++                  })}
++                </div>
++              </div>
++
++              {/* Required Documents */}
++              {currentTemplate && (
++                <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
++                  <h4 className={`text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
++                    Required Documents
++                  </h4>
++                  <div className="flex flex-wrap gap-2">
++                    {settings.required_documents.map((doc) => (
++                      <span
++                        key={doc}
++                        className="px-2 py-1 text-xs rounded-full bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300"
++                      >
++                        {doc.replace(/_/g, ' ')}
++                      </span>
++                    ))}
++                    {settings.required_documents.length === 0 && (
++                      <span className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
++                        No required documents for this work type
++                      </span>
++                    )}
++                  </div>
++                  {settings.optional_documents.length > 0 && (
++                    <>
++                      <h4 className={`text-sm font-medium mt-4 mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
++                        Optional Documents
++                      </h4>
++                      <div className="flex flex-wrap gap-2">
++                        {settings.optional_documents.map((doc) => (
++                          <span
++                            key={doc}
++                            className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
++                          >
++                            {doc.replace(/_/g, ' ')}
++                          </span>
++                        ))}
++                      </div>
++                    </>
++                  )}
++                </div>
++              )}
++
++              {/* Model Settings */}
++              <div>
++                <h3 className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
++                  Model Preferences
++                </h3>
++                <div className="space-y-4">
++                  {/* Parser */}
++                  <div>
++                    <label className={`block text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
++                      Vision Parser
++                    </label>
++                    <select
++                      value={pendingChanges.vision_parser ?? settings.vision_parser}
++                      onChange={(e) => handleChange('vision_parser', e.target.value)}
++                      className={`
++                        w-full px-3 py-2 rounded-lg border
++                        ${isDark
++                          ? 'bg-gray-800 border-gray-700 text-gray-200'
++                          : 'bg-white border-gray-300 text-gray-800'}
++                      `}
++                    >
++                      <option value="landing_ai">Landing AI</option>
++                      <option value="claude_vision">Claude Vision</option>
++                      <option value="bedrock_claude">AWS Bedrock Claude</option>
++                      <option value="gemini_vision">Google Gemini</option>
++                    </select>
++                  </div>
++
++                  {/* Chat Model */}
++                  <div>
++                    <label className={`block text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
++                      Chat Model
++                    </label>
++                    <select
++                      value={pendingChanges.chat_model ?? settings.chat_model}
++                      onChange={(e) => handleChange('chat_model', e.target.value)}
++                      className={`
++                        w-full px-3 py-2 rounded-lg border
++                        ${isDark
++                          ? 'bg-gray-800 border-gray-700 text-gray-200'
++                          : 'bg-white border-gray-300 text-gray-800'}
++                      `}
++                    >
++                      <option value="bedrock-claude-sonnet-3.5">Claude Sonnet 3.5</option>
++                      <option value="bedrock-claude-opus-3">Claude Opus 3</option>
++                      <option value="bedrock-nova-pro">Amazon Nova Pro</option>
++                    </select>
++                  </div>
++
++                  {/* Compliance Model */}
++                  <div>
++                    <label className={`block text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
++                      Compliance Check Model
++                    </label>
++                    <select
++                      value={pendingChanges.compliance_model ?? settings.compliance_model}
++                      onChange={(e) => handleChange('compliance_model', e.target.value)}
++                      className={`
++                        w-full px-3 py-2 rounded-lg border
++                        ${isDark
++                          ? 'bg-gray-800 border-gray-700 text-gray-200'
++                          : 'bg-white border-gray-300 text-gray-800'}
++                      `}
++                    >
++                      <option value="bedrock-claude-sonnet-3.5">Claude Sonnet 3.5</option>
++                      <option value="bedrock-claude-opus-3">Claude Opus 3</option>
++                      <option value="bedrock-nova-pro">Amazon Nova Pro</option>
++                    </select>
++                  </div>
++                </div>
++              </div>
++
++              {/* Usage Stats */}
++              <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
++                <h4 className={`text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
++                  Project Usage
++                </h4>
++                <div className="grid grid-cols-3 gap-4 text-center">
++                  <div>
++                    <div className={`text-lg font-bold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
++                      {settings.usage.total_parse_credits.toLocaleString()}
++                    </div>
++                    <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Parse Credits</div>
++                  </div>
++                  <div>
++                    <div className={`text-lg font-bold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
++                      {settings.usage.total_input_tokens.toLocaleString()}
++                    </div>
++                    <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Input Tokens</div>
++                  </div>
++                  <div>
++                    <div className={`text-lg font-bold ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
++                      {settings.usage.total_output_tokens.toLocaleString()}
++                    </div>
++                    <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Output Tokens</div>
++                  </div>
++                </div>
++              </div>
++            </>
++          )}
++        </div>
++
++        {/* Footer */}
++        {settings && Object.keys(pendingChanges).length > 0 && (
++          <div className={`
++            sticky bottom-0 px-6 py-4 border-t flex justify-end gap-3
++            ${isDark ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'}
++          `}>
++            <button
++              onClick={() => setPendingChanges({})}
++              className={`px-4 py-2 rounded-lg ${isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}
++            >
++              Cancel
++            </button>
++            <button
++              onClick={handleSave}
++              disabled={isSaving}
++              className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 disabled:opacity-50"
++            >
++              {isSaving ? 'Saving...' : 'Save Changes'}
++            </button>
++          </div>
++        )}
++      </div>
++    </div>
++  );
++}
+diff --git a/frontend/src/services/checksService.ts b/frontend/src/services/checksService.ts
+new file mode 100644
+index 0000000..f2f91e9
+--- /dev/null
++++ b/frontend/src/services/checksService.ts
+@@ -0,0 +1,212 @@
++/**
++ * Service for interacting with the v2 checks API
++ */
++import { API_BASE } from '../config';
++import type {
++  DocumentCheckResult,
++  CheckHistoryResponse,
++  RunChecksResponse,
++  BatchCheckRun,
++  BatchCheckRequest,
++  BatchRunsListResponse,
++  ProjectSettings,
++  ProjectSettingsUpdate,
++  WorkTypesResponse,
++  DocumentTypesResponse,
++  DocumentClassification,
++  ChecksConfig,
++} from '../types/checksV2';
++
++const CHECKS_API = `${API_BASE}/api/checks`;
++const PROJECTS_API = `${API_BASE}/api/projects`;
++
++// ============ DOCUMENT CHECKS ============
++
++export async function runDocumentChecks(
++  documentId: string,
++  forceReclassify: boolean = false
++): Promise<RunChecksResponse> {
++  const response = await fetch(`${CHECKS_API}/documents/${documentId}/run`, {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify({ force_reclassify: forceReclassify }),
++  });
++  if (!response.ok) throw new Error('Failed to run checks');
++  return response.json();
++}
++
++export async function getDocumentCheckHistory(
++  documentId: string,
++  limit: number = 10
++): Promise<CheckHistoryResponse> {
++  const response = await fetch(`${CHECKS_API}/documents/${documentId}/history?limit=${limit}`);
++  if (!response.ok) throw new Error('Failed to get check history');
++  return response.json();
++}
++
++export async function getLatestCheckResults(
++  documentId: string
++): Promise<{ has_results: boolean } & Partial<DocumentCheckResult>> {
++  const response = await fetch(`${CHECKS_API}/documents/${documentId}/results/latest`);
++  if (!response.ok) throw new Error('Failed to get latest results');
++  return response.json();
++}
++
++export async function getCheckResultById(resultId: string): Promise<DocumentCheckResult> {
++  const response = await fetch(`${CHECKS_API}/results/${resultId}`);
++  if (!response.ok) throw new Error('Failed to get check result');
++  return response.json();
++}
++
++// ============ BATCH CHECKS ============
++
++export async function runBatchChecks(
++  projectId: string,
++  options: BatchCheckRequest = {}
++): Promise<{ batch_run_id: string; status: string; total_documents: number; message: string }> {
++  const response = await fetch(`${CHECKS_API}/projects/${projectId}/run-all`, {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify(options),
++  });
++  if (!response.ok) throw new Error('Failed to start batch check run');
++  return response.json();
++}
++
++export async function getBatchRuns(projectId: string): Promise<BatchRunsListResponse> {
++  const response = await fetch(`${CHECKS_API}/projects/${projectId}/batch-runs`);
++  if (!response.ok) throw new Error('Failed to get batch runs');
++  return response.json();
++}
++
++export async function getBatchRunStatus(batchRunId: string): Promise<BatchCheckRun> {
++  const response = await fetch(`${CHECKS_API}/batch-runs/${batchRunId}`);
++  if (!response.ok) throw new Error('Failed to get batch run status');
++  return response.json();
++}
++
++// ============ PROJECT SETTINGS ============
++
++export async function getWorkTypeTemplates(): Promise<WorkTypesResponse> {
++  const response = await fetch(`${PROJECTS_API}/templates`);
++  if (!response.ok) throw new Error('Failed to get work type templates');
++  return response.json();
++}
++
++export async function getProjectSettings(projectId: string): Promise<ProjectSettings> {
++  const response = await fetch(`${PROJECTS_API}/${projectId}/settings`);
++  if (!response.ok) throw new Error('Failed to get project settings');
++  return response.json();
++}
++
++export async function updateProjectSettings(
++  projectId: string,
++  settings: ProjectSettingsUpdate
++): Promise<{ status: string; settings: ProjectSettings }> {
++  const response = await fetch(`${PROJECTS_API}/${projectId}/settings`, {
++    method: 'PUT',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify(settings),
++  });
++  if (!response.ok) throw new Error('Failed to update project settings');
++  return response.json();
++}
++
++export async function getProjectChecksConfig(projectId: string): Promise<ChecksConfig> {
++  const response = await fetch(`${PROJECTS_API}/${projectId}/checks-config`);
++  if (!response.ok) throw new Error('Failed to get checks config');
++  return response.json();
++}
++
++export async function updateProjectChecksConfig(
++  projectId: string,
++  config: ChecksConfig
++): Promise<{ status: string }> {
++  const response = await fetch(`${PROJECTS_API}/${projectId}/checks-config`, {
++    method: 'PUT',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify(config),
++  });
++  if (!response.ok) throw new Error('Failed to update checks config');
++  return response.json();
++}
++
++// ============ DOCUMENT CLASSIFICATION ============
++
++export async function getDocumentTypes(): Promise<DocumentTypesResponse> {
++  const response = await fetch(`${PROJECTS_API}/document-types`);
++  if (!response.ok) throw new Error('Failed to get document types');
++  return response.json();
++}
++
++export async function classifyDocument(
++  projectId: string,
++  documentId: string
++): Promise<DocumentClassification> {
++  const response = await fetch(
++    `${PROJECTS_API}/${projectId}/documents/${documentId}/classify`,
++    { method: 'POST' }
++  );
++  if (!response.ok) throw new Error('Failed to classify document');
++  return response.json();
++}
++
++export async function getDocumentClassification(
++  projectId: string,
++  documentId: string
++): Promise<DocumentClassification> {
++  const response = await fetch(
++    `${PROJECTS_API}/${projectId}/documents/${documentId}/classification`
++  );
++  if (!response.ok) throw new Error('Failed to get document classification');
++  return response.json();
++}
++
++export async function overrideDocumentClassification(
++  projectId: string,
++  documentId: string,
++  documentType: string
++): Promise<{ status: string; document_type: string }> {
++  const response = await fetch(
++    `${PROJECTS_API}/${projectId}/documents/${documentId}/classification`,
++    {
++      method: 'PATCH',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ document_type: documentType }),
++    }
++  );
++  if (!response.ok) throw new Error('Failed to override classification');
++  return response.json();
++}
++
++// ============ REPORTS ============
++
++export async function downloadDocumentReport(documentId: string): Promise<Blob> {
++  const response = await fetch(`${API_BASE}/api/reports/documents/${documentId}/report`, {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify({ include_details: true }),
++  });
++  if (!response.ok) throw new Error('Failed to generate report');
++  return response.blob();
++}
++
++export async function downloadProjectReport(projectId: string): Promise<Blob> {
++  const response = await fetch(`${API_BASE}/api/reports/projects/${projectId}/report`, {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify({ include_details: true }),
++  });
++  if (!response.ok) throw new Error('Failed to generate report');
++  return response.blob();
++}
++
++export async function downloadBatchReport(batchRunId: string): Promise<Blob> {
++  const response = await fetch(`${API_BASE}/api/reports/batch-runs/${batchRunId}/report`, {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify({ include_details: true }),
++  });
++  if (!response.ok) throw new Error('Failed to generate report');
++  return response.blob();
++}
+diff --git a/frontend/src/types/checksV2.ts b/frontend/src/types/checksV2.ts
+new file mode 100644
+index 0000000..01148d8
+--- /dev/null
++++ b/frontend/src/types/checksV2.ts
+@@ -0,0 +1,263 @@
++/**
++ * Types for the v2 compliance checks system
++ * Including document classification, project settings, and batch checks
++ */
++
++// ============ DOCUMENT TYPES ============
++
++export interface DocumentTypeConfig {
++  id: string;
++  name: string;
++  description: string;
++  upload_slot: string;
++  classification_signals?: {
++    keywords: string[];
++    patterns?: string[];
++    visual_cues?: string[];
++  };
++  completeness_checks: CompletenessCheck[];
++  compliance_checks: ComplianceCheckV2[];
++}
++
++export interface CompletenessCheck {
++  id: string;
++  name: string;
++  question: string;
++  required: boolean;
++  search_terms?: string[];
++}
++
++export interface ComplianceCheckV2 {
++  id: string;
++  name: string;
++  question: string;
++  rule_reference?: string;
++  validation_type?: string;
++  threshold?: {
++    max_percentage?: number;
++    max_metres?: number;
++    min_metres?: number;
++    max_days?: number;
++    max_emissions_g_kg?: number;
++    min_efficiency_percent?: number;
++  };
++  applies_to?: string[];
++}
++
++// ============ WORK TYPES ============
++
++export interface WorkTypeTemplate {
++  id: string;
++  name: string;
++  description: string;
++  required_documents: string[];
++  optional_documents: string[];
++  default_settings: {
++    vision_parser: string;
++    chat_model: string;
++    compliance_model: string;
++  };
++}
++
++// ============ PROJECT SETTINGS ============
++
++export interface ProjectSettings {
++  work_type: string;
++  vision_parser: string;
++  vision_model?: string;
++  chat_model: string;
++  compliance_model: string;
++  checks_config?: ChecksConfig;
++  usage: {
++    total_parse_credits: number;
++    total_input_tokens: number;
++    total_output_tokens: number;
++  };
++  required_documents: string[];
++  optional_documents: string[];
++}
++
++export interface ProjectSettingsUpdate {
++  work_type?: string;
++  vision_parser?: string;
++  vision_model?: string;
++  chat_model?: string;
++  compliance_model?: string;
++}
++
++// ============ CHECKS CONFIG ============
++
++export interface ChecksConfig {
++  version: string;
++  description: string;
++  document_types: Record<string, DocumentTypeConfig>;
++  work_types: Record<string, WorkTypeTemplate>;
++  upload_slots?: {
++    description: string;
++    slots: UploadSlot[];
++  };
++}
++
++export interface UploadSlot {
++  id: string;
++  name: string;
++  required: boolean;
++  document_types: string[];
++}
++
++// ============ DOCUMENT CLASSIFICATION ============
++
++export interface DocumentClassification {
++  document_type: string;
++  confidence: number;
++  signals_found: string[];
++  is_override?: boolean;
++  model?: string;
++}
++
++// ============ CHECK RESULTS ============
++
++export interface CheckResultItem {
++  check_id: string;
++  check_name: string;
++  check_type: 'completeness' | 'compliance';
++  status: 'pass' | 'fail' | 'needs_review' | 'na';
++  confidence: number;
++  found_value?: string | null;
++  notes: string;
++  rule_reference?: string;
++  chunk_ids: string[];
++}
++
++export interface CheckResultSummary {
++  total_checks: number;
++  passed: number;
++  failed: number;
++  needs_review: number;
++  na: number;
++}
++
++export interface DocumentCheckResult {
++  id: string;
++  run_number: number;
++  document_type: string;
++  completeness_results: CheckResultItem[];
++  compliance_results: CheckResultItem[];
++  summary: CheckResultSummary;
++  checks_config?: {
++    document_type: string;
++    completeness_checks: CompletenessCheck[];
++    compliance_checks: ComplianceCheckV2[];
++  };
++  usage?: {
++    model: string;
++    input_tokens: number;
++    output_tokens: number;
++  };
++  checked_at: string;
++  processing_time_ms?: number;
++}
++
++export interface CheckHistoryItem {
++  id: string;
++  run_number: number;
++  document_type: string;
++  summary: CheckResultSummary;
++  model: string;
++  batch_run_id?: string;
++  created_at: string;
++  processing_time_ms?: number;
++}
++
++export interface CheckHistoryResponse {
++  document_id: string;
++  total_runs: number;
++  history: CheckHistoryItem[];
++}
++
++// ============ BATCH CHECK RUNS ============
++
++export interface BatchCheckRequest {
++  force_rerun?: boolean;
++  skip_unparsed?: boolean;
++}
++
++export interface BatchCheckRun {
++  id: string;
++  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
++  progress: {
++    total: number;
++    completed: number;
++    failed: number;
++    skipped: number;
++    percent: number;
++  };
++  summary: {
++    total_passed: number;
++    total_failed: number;
++    total_needs_review: number;
++  };
++  usage: {
++    input_tokens: number;
++    output_tokens: number;
++  };
++  results?: BatchCheckResultItem[];
++  created_at: string;
++  started_at?: string;
++  completed_at?: string;
++}
++
++export interface BatchCheckResultItem {
++  document_id: string;
++  document_type: string;
++  status: string;
++  summary: CheckResultSummary;
++}
++
++export interface BatchRunsListResponse {
++  runs: BatchCheckRunSummary[];
++}
++
++export interface BatchCheckRunSummary {
++  id: string;
++  status: string;
++  total_documents: number;
++  completed_documents: number;
++  failed_documents: number;
++  skipped_documents: number;
++  total_passed: number;
++  total_failed: number;
++  total_needs_review: number;
++  created_at: string;
++  completed_at?: string;
++}
++
++// ============ API RESPONSES ============
++
++export interface DocumentTypesResponse {
++  document_types: Array<{
++    id: string;
++    name: string;
++    description: string;
++    upload_slot: string;
++  }>;
++}
++
++export interface WorkTypesResponse {
++  templates: WorkTypeTemplate[];
++}
++
++export interface RunChecksResponse {
++  id: string;
++  run_number: number;
++  document_type: string;
++  completeness_results: CheckResultItem[];
++  compliance_results: CheckResultItem[];
++  summary: CheckResultSummary;
++  checked_at: string;
++  usage?: {
++    model: string;
++    input_tokens: number;
++    output_tokens: number;
++  };
++}
+diff --git a/frontend/src/types/project.ts b/frontend/src/types/project.ts
+index 54f9b3b..7c5909c 100644
+--- a/frontend/src/types/project.ts
++++ b/frontend/src/types/project.ts
+@@ -42,6 +42,12 @@ export interface Document {
+   parse_results: ParseResultSummary[];
+   has_cached_result: boolean;
+   latest_parser?: string;
++  // Classification fields (v2)
++  document_type?: string;
++  classification_confidence?: number;
++  classification_signals?: string[];
++  classification_override?: boolean;
++  classification_model?: string;
+ }
+ 
+ export interface DocumentListResponse {
+-- 
+2.43.0
+

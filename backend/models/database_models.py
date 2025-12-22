@@ -351,6 +351,49 @@ class ProjectSettings(Base):
     project = relationship("Project", back_populates="settings")
 
 
+class BatchCheckRun(Base):
+    """Batch check run across multiple documents in a project."""
+    __tablename__ = "batch_check_runs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+
+    # Progress
+    status = Column(String(20), default="pending")  # pending, processing, completed, failed, cancelled
+    total_documents = Column(Integer, default=0)
+    completed_documents = Column(Integer, default=0)
+    failed_documents = Column(Integer, default=0)
+    skipped_documents = Column(Integer, default=0)
+
+    # Configuration
+    model = Column(String(100), nullable=True)
+    force_rerun = Column(Boolean, default=False)
+
+    # Aggregated results
+    total_passed = Column(Integer, default=0)
+    total_failed = Column(Integer, default=0)
+    total_needs_review = Column(Integer, default=0)
+
+    # Usage
+    total_input_tokens = Column(Integer, default=0)
+    total_output_tokens = Column(Integer, default=0)
+
+    # Error
+    error_message = Column(Text, nullable=True)
+
+    # Timing
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    results = relationship("CheckResult", back_populates="batch_run")
+
+    __table_args__ = (
+        Index("ix_batch_check_runs_project_id", "project_id"),
+        Index("ix_batch_check_runs_status", "status"),
+    )
+
+
 class CheckResult(Base):
     """Individual check result for a document (supports history)."""
     __tablename__ = "check_results"
@@ -395,47 +438,4 @@ class CheckResult(Base):
         Index("ix_check_results_project_id", "project_id"),
         Index("ix_check_results_batch_run_id", "batch_run_id"),
         Index("ix_check_results_created_at", "created_at"),
-    )
-
-
-class BatchCheckRun(Base):
-    """Batch check run across multiple documents in a project."""
-    __tablename__ = "batch_check_runs"
-
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-
-    # Progress
-    status = Column(String(20), default="pending")  # pending, processing, completed, failed, cancelled
-    total_documents = Column(Integer, default=0)
-    completed_documents = Column(Integer, default=0)
-    failed_documents = Column(Integer, default=0)
-    skipped_documents = Column(Integer, default=0)
-
-    # Configuration
-    model = Column(String(100), nullable=True)
-    force_rerun = Column(Boolean, default=False)
-
-    # Aggregated results
-    total_passed = Column(Integer, default=0)
-    total_failed = Column(Integer, default=0)
-    total_needs_review = Column(Integer, default=0)
-
-    # Usage
-    total_input_tokens = Column(Integer, default=0)
-    total_output_tokens = Column(Integer, default=0)
-
-    # Error
-    error_message = Column(Text, nullable=True)
-
-    # Timing
-    created_at = Column(DateTime, default=datetime.utcnow)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-
-    results = relationship("CheckResult", back_populates="batch_run")
-
-    __table_args__ = (
-        Index("ix_batch_check_runs_project_id", "project_id"),
-        Index("ix_batch_check_runs_status", "status"),
     )
