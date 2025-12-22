@@ -2,8 +2,8 @@
  * Badge component for displaying document type classification
  */
 import { useState } from 'react';
-import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
-import type { DocumentClassification } from '../types/checksV2';
+import { useTheme } from '../contexts/ThemeContext';
+// DocumentClassification type imported but used for props typing
 
 interface DocumentTypeBadgeProps {
   documentType?: string;

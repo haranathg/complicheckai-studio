@@ -2,7 +2,7 @@
  * Panel for managing project settings including work type and model preferences
  */
 import { useState, useEffect } from 'react';
-import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
+import { useTheme } from '../contexts/ThemeContext';
 import type { ProjectSettings, WorkTypeTemplate, ProjectSettingsUpdate } from '../types/checksV2';
 import { getProjectSettings, updateProjectSettings, getWorkTypeTemplates } from '../services/checksService';
 
@@ -13,15 +13,6 @@ interface ProjectSettingsPanelProps {
   onSettingsChange?: (settings: ProjectSettings) => void;
 }
 
-const WORK_TYPE_ICONS: Record<string, string> = {
-  solid_fuel_heater: 'fire',
-  new_dwelling: 'home',
-  minor_works: 'tool',
-  commercial_fitout: 'building',
-  demolition: 'trash',
-  custom: 'settings',
-};
-
 export default function ProjectSettingsPanel({
   projectId,
   isOpen,
@@ -29,7 +20,6 @@ export default function ProjectSettingsPanel({
   onSettingsChange,
 }: ProjectSettingsPanelProps) {
   const { isDark } = useTheme();
-  const theme = getThemeStyles(isDark);
 
   const [settings, setSettings] = useState<ProjectSettings | null>(null);
   const [templates, setTemplates] = useState<WorkTypeTemplate[]>([]);

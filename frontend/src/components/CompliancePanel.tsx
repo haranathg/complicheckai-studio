@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { Chunk } from '../types/ade';
 import type { CheckResult, ComplianceReport, ComplianceCheck } from '../types/compliance';
-import { API_URL, API_BASE } from '../config';
+import { API_URL } from '../config';
 import { getMarkdownPreview } from '../utils/cleanMarkdown';
 import { useTheme } from '../contexts/ThemeContext';
 import { downloadDocumentReport } from '../services/checksService';

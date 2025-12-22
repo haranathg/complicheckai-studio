@@ -2,7 +2,7 @@
  * Component for displaying batch check progress and results
  */
 import { useState, useEffect } from 'react';
-import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
+import { useTheme } from '../contexts/ThemeContext';
 import type { BatchCheckRun, BatchCheckRunSummary } from '../types/checksV2';
 import { getBatchRunStatus, downloadBatchReport } from '../services/checksService';
 
@@ -23,7 +23,7 @@ export default function BatchCheckProgress({
   const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
-    let pollInterval: NodeJS.Timeout;
+    let pollInterval: ReturnType<typeof setInterval>;
 
     const fetchStatus = async () => {
       try {

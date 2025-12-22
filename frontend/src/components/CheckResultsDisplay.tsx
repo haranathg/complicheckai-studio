@@ -2,7 +2,7 @@
  * Component for displaying document check results
  */
 import { useState } from 'react';
-import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
+import { useTheme } from '../contexts/ThemeContext';
 import type { CheckResultItem, CheckResultSummary, DocumentCheckResult } from '../types/checksV2';
 
 interface CheckResultsDisplayProps {
