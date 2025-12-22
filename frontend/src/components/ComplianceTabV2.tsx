@@ -40,6 +40,7 @@ export default function ComplianceTabV2({
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [expandedChecks, setExpandedChecks] = useState<Set<string>>(new Set());
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [showFindings, setShowFindings] = useState(true);
 
   // Load check results when document changes
   const loadResults = useCallback(async () => {
@@ -334,34 +335,55 @@ export default function ComplianceTabV2({
             </button>
           </div>
 
-          {/* Status filters */}
-          <div className="flex gap-2 mb-3">
-            {(['pass', 'fail', 'needs_review', 'na'] as const).map(status => {
-              const config = STATUS_CONFIG[status];
-              const count = currentChecks.filter(c => c.status === status).length;
-              if (count === 0) return null;
-              return (
+          {/* Status filters and options */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex gap-2">
+              {(['pass', 'fail', 'needs_review', 'na'] as const).map(status => {
+                const config = STATUS_CONFIG[status];
+                const count = currentChecks.filter(c => c.status === status).length;
+                if (count === 0) return null;
+                return (
+                  <button
+                    key={status}
+                    onClick={() => setStatusFilter(statusFilter === status ? null : status)}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                      statusFilter === status
+                        ? `${config.bgColor} ${config.color} ring-2 ring-current ring-offset-1`
+                        : `${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} hover:opacity-80`
+                    }`}
+                  >
+                    {config.label} ({count})
+                  </button>
+                );
+              })}
+              {statusFilter && (
                 <button
-                  key={status}
-                  onClick={() => setStatusFilter(statusFilter === status ? null : status)}
-                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                    statusFilter === status
-                      ? `${config.bgColor} ${config.color} ring-2 ring-current ring-offset-1`
-                      : `${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} hover:opacity-80`
-                  }`}
+                  onClick={() => setStatusFilter(null)}
+                  className={`px-2 py-1 text-xs ${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                  {config.label} ({count})
+                  Clear
                 </button>
-              );
-            })}
-            {statusFilter && (
-              <button
-                onClick={() => setStatusFilter(null)}
-                className={`px-2 py-1 text-xs ${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                Clear
-              </button>
-            )}
+              )}
+            </div>
+            {/* Show/Hide Findings toggle */}
+            <button
+              onClick={() => setShowFindings(!showFindings)}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
+                showFindings
+                  ? isDark ? 'bg-slate-700 text-gray-300' : 'bg-slate-200 text-slate-700'
+                  : isDark ? 'bg-slate-800 text-gray-500' : 'bg-slate-100 text-slate-500'
+              }`}
+              title={showFindings ? 'Hide findings' : 'Show findings'}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {showFindings ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                )}
+              </svg>
+              {showFindings ? 'Hide' : 'Show'} Findings
+            </button>
           </div>
 
           {/* Check items */}
@@ -419,22 +441,26 @@ export default function ComplianceTabV2({
                           <span className={`font-semibold ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>Q: </span>
                           <span className={isDark ? 'text-gray-200' : 'text-gray-700'}>{check.check_name}</span>
                         </div>
-                        {/* Findings/Notes */}
-                        {check.notes && (
-                          <div>
-                            <span className={`font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Findings: </span>
-                            <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>{check.notes}</span>
-                          </div>
-                        )}
-                        {check.found_value && (
-                          <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
-                            <span className="font-medium">Found:</span> {check.found_value}
-                          </p>
-                        )}
-                        {check.rule_reference && (
-                          <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
-                            <span className="font-medium">Rule:</span> {check.rule_reference}
-                          </p>
+                        {/* Findings/Notes - conditionally shown */}
+                        {showFindings && (
+                          <>
+                            {check.notes && (
+                              <div>
+                                <span className={`font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Findings: </span>
+                                <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>{check.notes}</span>
+                              </div>
+                            )}
+                            {check.found_value && (
+                              <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+                                <span className="font-medium">Found:</span> {check.found_value}
+                              </p>
+                            )}
+                            {check.rule_reference && (
+                              <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
+                                <span className="font-medium">Rule:</span> {check.rule_reference}
+                              </p>
+                            )}
+                          </>
                         )}
                         {hasChunks && onChunkSelect && (
                           <button
