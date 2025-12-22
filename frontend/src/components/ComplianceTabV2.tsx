@@ -390,6 +390,11 @@ export default function ComplianceTabV2({
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
+                      {check.confidence !== undefined && check.confidence > 0 && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-600'}`}>
+                          {check.confidence}%
+                        </span>
+                      )}
                       {hasChunks && (
                         <span className={`text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-sky-900/30 text-sky-400' : 'bg-sky-100 text-sky-600'}`}>
                           {check.chunk_ids.length} source{check.chunk_ids.length > 1 ? 's' : ''}
@@ -429,11 +434,6 @@ export default function ComplianceTabV2({
                         {check.rule_reference && (
                           <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
                             <span className="font-medium">Rule:</span> {check.rule_reference}
-                          </p>
-                        )}
-                        {check.confidence !== undefined && check.confidence > 0 && (
-                          <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
-                            <span className="font-medium">Confidence:</span> {check.confidence}%
                           </p>
                         )}
                         {hasChunks && onChunkSelect && (
