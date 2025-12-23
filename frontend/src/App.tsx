@@ -629,7 +629,7 @@ function App() {
                   annotations={annotations}
                   selectedAnnotation={selectedAnnotation}
                   showChunks={activeTab === 'parse'}
-                  showAnnotations={activeTab === 'parse' || showReviewOverlays}
+                  showAnnotations={showReviewOverlays}
                   onAnnotationClick={(annotation) => {
                     setSelectedAnnotation(annotation);
                     // If annotation is linked to a chunk, navigate to that chunk

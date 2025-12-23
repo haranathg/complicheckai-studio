@@ -65,18 +65,8 @@ export default function ParseResults({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [popupChunk, onPopupOpen]);
 
-  if (isLoading) {
-    return (
-      <div className={`flex flex-col items-center justify-center h-full ${theme.textMuted}`}>
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-400 mb-4"></div>
-        <p className={theme.textSecondary}>Parsing document...</p>
-        <p className={`text-sm ${theme.textSubtle} mt-2`}>This may take a moment</p>
-      </div>
-    );
-  }
-
-  // Show document selector even when no result is loaded
-  if (!result) {
+  // Show document selector even when loading or no result
+  if (isLoading || !result) {
     return (
       <div className="h-full flex flex-col">
         {/* Document selector - always show if documents available */}
@@ -91,11 +81,12 @@ export default function ParseResults({
                 const doc = processedDocs.find(d => d.id === e.target.value);
                 if (doc) onDocumentSelect(doc);
               }}
+              disabled={isLoading}
               className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 ${
                 isDark
                   ? 'bg-slate-800/60 border-slate-600/50 text-gray-300'
                   : 'bg-white border-slate-300 text-slate-700'
-              }`}
+              } ${isLoading ? 'opacity-50' : ''}`}
             >
               <option value="">Select a document...</option>
               {processedDocs.map(doc => (
@@ -107,16 +98,25 @@ export default function ParseResults({
           </div>
         )}
 
-        <div className={`flex flex-col items-center justify-center flex-1 ${theme.textSubtle}`}>
-          <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          <p className={theme.textMuted}>
-            {processedDocs.length > 0
-              ? 'Select a processed document above'
-              : 'No processed documents yet'}
-          </p>
-        </div>
+        {/* Loading state */}
+        {isLoading ? (
+          <div className={`flex flex-col items-center justify-center flex-1 ${theme.textMuted}`}>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-400 mb-4"></div>
+            <p className={theme.textSecondary}>Loading document...</p>
+            <p className={`text-sm ${theme.textSubtle} mt-2`}>This may take a moment</p>
+          </div>
+        ) : (
+          <div className={`flex flex-col items-center justify-center flex-1 ${theme.textSubtle}`}>
+            <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className={theme.textMuted}>
+              {processedDocs.length > 0
+                ? 'Select a processed document above'
+                : 'No processed documents yet'}
+            </p>
+          </div>
+        )}
       </div>
     );
   }
