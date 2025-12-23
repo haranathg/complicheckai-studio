@@ -27,8 +27,6 @@ interface ReviewTabProps {
   onCreateAnnotation?: (position: { page: number; bbox: { left: number; top: number; right: number; bottom: number } }) => void;
   file?: File | null;
   chunks?: Chunk[];
-  showOverlays?: boolean;
-  onToggleOverlays?: (show: boolean) => void;
 }
 
 export default function ReviewTab({
@@ -38,8 +36,6 @@ export default function ReviewTab({
   onAnnotationSelect,
   file,
   chunks = [],
-  showOverlays = true,
-  onToggleOverlays,
 }: ReviewTabProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
@@ -238,20 +234,7 @@ export default function ReviewTab({
               <option value="resolved">Resolved</option>
             </select>
 
-            {/* Notes overlay toggle */}
-            {onToggleOverlays && (
-              <label className={`flex items-center gap-2 text-xs ${theme.textMuted} cursor-pointer`}>
-                <input
-                  type="checkbox"
-                  checked={showOverlays}
-                  onChange={(e) => onToggleOverlays(e.target.checked)}
-                  className="rounded border-gray-300 text-sky-500 focus:ring-sky-500"
-                />
-                Show Notes
-              </label>
-            )}
-
-            {/* Export PDF button */}
+{/* Export PDF button */}
             {file && annotations.length > 0 && (
               <button
                 onClick={handleExportPDF}

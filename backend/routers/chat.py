@@ -37,22 +37,29 @@ class ChatMessage(BaseModel):
     content: str
 
 
-class ChatRequest(BaseModel):
-    question: str
+class DocumentContext(BaseModel):
+    """Context for a single document in multi-document chat."""
+    document_id: str
+    document_name: str
     markdown: str
     chunks: List[dict]
+
+
+class ChatRequest(BaseModel):
+    question: str
+    # Single document mode (legacy)
+    markdown: Optional[str] = None
+    chunks: Optional[List[dict]] = None
+    # Multi-document mode
+    document_contexts: Optional[List[DocumentContext]] = None
     history: Optional[List[ChatMessage]] = []
     model: Optional[str] = "anthropic.claude-3-5-sonnet-20241022-v2:0"
 
 
-@router.post("")
-async def chat_with_document(request: ChatRequest):
-    """Chat with the parsed document using Bedrock Claude."""
-    client = get_bedrock_client()
-
-    # Build chunk reference for the prompt
+def build_single_doc_prompt(markdown: str, chunks: List[dict]) -> str:
+    """Build system prompt for single document mode."""
     chunk_info = []
-    for chunk in request.chunks:
+    for chunk in chunks:
         chunk_id = chunk.get('id', '')
         chunk_type = chunk.get('type', 'text')
         chunk_text = chunk.get('markdown', '')[:200]  # First 200 chars for context
@@ -61,12 +68,11 @@ async def chat_with_document(request: ChatRequest):
 
     chunks_reference = "\n".join(chunk_info)
 
-    # Build context from markdown and chunks
-    system_prompt = f"""You are a helpful assistant that answers questions about a document.
+    return f"""You are a helpful assistant that answers questions about a document.
 
 The document has been parsed into the following markdown:
 
-{request.markdown}
+{markdown}
 
 The document contains the following components (chunks) that you can reference:
 
@@ -82,6 +88,113 @@ When answering:
    ```
    Only include chunk IDs that directly support your answer. If no specific chunks are relevant, use an empty array [].
 """
+
+
+def build_multi_doc_prompt(document_contexts: List[DocumentContext]) -> str:
+    """Build system prompt for multi-document mode."""
+    doc_sections = []
+
+    for doc in document_contexts:
+        chunk_info = []
+        for chunk in doc.chunks:
+            chunk_id = chunk.get('id', '')
+            chunk_type = chunk.get('type', 'text')
+            chunk_text = chunk.get('markdown', '')[:200]
+            page = chunk.get('grounding', {}).get('page', 'unknown')
+            chunk_info.append(f"  - ID: {chunk_id}, Type: {chunk_type}, Page: {page}, Preview: {chunk_text}...")
+
+        chunks_reference = "\n".join(chunk_info) if chunk_info else "  (No chunks extracted)"
+
+        doc_sections.append(f"""
+=== DOCUMENT: {doc.document_name} (ID: {doc.document_id}) ===
+
+Content:
+{doc.markdown}
+
+Components (chunks):
+{chunks_reference}
+""")
+
+    all_docs = "\n".join(doc_sections)
+
+    return f"""You are a helpful assistant that answers questions about multiple documents in a project.
+
+The following documents are available:
+
+{all_docs}
+
+When answering:
+1. Be specific and cite relevant sections from the appropriate document(s)
+2. When referencing content, always mention which document it comes from
+3. If information isn't in any document, say so
+4. Reference chunk types (tables, figures, etc.) when relevant
+5. IMPORTANT: At the end of your response, include a JSON block with sources organized by document:
+   ```sources
+   {{"document_sources": [{{"document_id": "doc_id_1", "document_name": "filename1.pdf", "chunk_ids": ["chunk_1", "chunk_2"]}}, {{"document_id": "doc_id_2", "document_name": "filename2.pdf", "chunk_ids": ["chunk_3"]}}]}}
+   ```
+   Only include documents and chunks that directly support your answer. If no specific chunks are relevant, use an empty array for document_sources.
+   Note: The chunk_ids you reference should match the IDs shown in the Components sections above.
+"""
+
+
+def enrich_document_sources(document_sources: List[dict], document_contexts: List[DocumentContext]) -> List[dict]:
+    """Enrich document sources with chunk details (page, bbox) for stable cross-document navigation."""
+    # Build a lookup of document_id -> {chunk_id -> chunk_details}
+    doc_chunks_lookup = {}
+    for doc in document_contexts:
+        chunk_lookup = {}
+        for chunk in doc.chunks:
+            chunk_id = chunk.get('id', '')
+            grounding = chunk.get('grounding', {})
+            chunk_lookup[chunk_id] = {
+                'id': chunk_id,
+                'page': grounding.get('page') if grounding else None,
+                'bbox': grounding.get('box') if grounding else None,
+                'type': chunk.get('type', 'text')
+            }
+        doc_chunks_lookup[doc.document_id] = chunk_lookup
+
+    # Enrich each document source with chunk details
+    enriched_sources = []
+    for doc_src in document_sources:
+        doc_id = doc_src.get('document_id', '')
+        chunk_ids = doc_src.get('chunk_ids', [])
+        chunk_lookup = doc_chunks_lookup.get(doc_id, {})
+
+        # Build detailed chunks array
+        chunks_with_details = []
+        for chunk_id in chunk_ids:
+            if chunk_id in chunk_lookup:
+                chunks_with_details.append(chunk_lookup[chunk_id])
+            else:
+                # Chunk ID not found, include with just the ID
+                chunks_with_details.append({'id': chunk_id})
+
+        enriched_sources.append({
+            'document_id': doc_id,
+            'document_name': doc_src.get('document_name', ''),
+            'chunk_ids': chunk_ids,  # Keep for backwards compatibility
+            'chunks': chunks_with_details  # New: detailed chunk info
+        })
+
+    return enriched_sources
+
+
+@router.post("")
+async def chat_with_document(request: ChatRequest):
+    """Chat with the parsed document(s) using Bedrock Claude."""
+    client = get_bedrock_client()
+
+    # Determine if this is single-doc or multi-doc mode
+    is_multi_doc = request.document_contexts is not None and len(request.document_contexts) > 0
+
+    if is_multi_doc:
+        system_prompt = build_multi_doc_prompt(request.document_contexts)
+    else:
+        # Fallback to single document mode
+        markdown = request.markdown or ""
+        chunks = request.chunks or []
+        system_prompt = build_single_doc_prompt(markdown, chunks)
 
     # Build message history
     messages = [{"role": msg.role, "content": msg.content} for msg in request.history]
@@ -108,20 +221,38 @@ When answering:
         response_body = json.loads(response["body"].read())
         answer_text = response_body["content"][0]["text"]
 
-        # Extract chunk IDs from the sources block
+        # Extract sources from the sources block
         chunk_ids = []
-        sources_match = re.search(r'```sources\s*\n?\s*(\[.*?\])\s*\n?```', answer_text, re.DOTALL)
+        document_sources = []
+
+        sources_match = re.search(r'```sources\s*\n?\s*(\{.*?\}|\[.*?\])\s*\n?```', answer_text, re.DOTALL)
         if sources_match:
             try:
-                chunk_ids = json.loads(sources_match.group(1))
+                sources_data = json.loads(sources_match.group(1))
+
+                # Check if it's multi-doc format (object with document_sources)
+                if isinstance(sources_data, dict) and 'document_sources' in sources_data:
+                    document_sources = sources_data['document_sources']
+                    # Also flatten chunk_ids for backwards compatibility
+                    for doc_src in document_sources:
+                        chunk_ids.extend(doc_src.get('chunk_ids', []))
+                elif isinstance(sources_data, list):
+                    # Single doc format (just array of chunk IDs)
+                    chunk_ids = sources_data
+
                 # Remove the sources block from the answer
-                answer_text = re.sub(r'\s*```sources\s*\n?\s*\[.*?\]\s*\n?```\s*', '', answer_text, flags=re.DOTALL).strip()
+                answer_text = re.sub(r'\s*```sources\s*\n?\s*(\{.*?\}|\[.*?\])\s*\n?```\s*', '', answer_text, flags=re.DOTALL).strip()
             except json.JSONDecodeError:
                 pass
+
+        # Enrich document sources with chunk details for stable cross-document navigation
+        if is_multi_doc and document_sources:
+            document_sources = enrich_document_sources(document_sources, request.document_contexts)
 
         return {
             "answer": answer_text,
             "chunk_ids": chunk_ids,
+            "document_sources": document_sources,
             "usage": {
                 "input_tokens": response_body.get("usage", {}).get("input_tokens", 0),
                 "output_tokens": response_body.get("usage", {}).get("output_tokens", 0),

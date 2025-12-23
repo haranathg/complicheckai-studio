@@ -10,6 +10,7 @@ from database import get_db
 from models.database_models import Project, Document, ParseResult, Chunk, DocumentAnnotation, ProjectSettings, CheckResult
 from services import s3_service
 from services.config_service import load_default_checks_config, list_document_types
+from services.classification_service import classify_document as classify_document_service
 from routers.compliance import get_bedrock_client, resolve_model_id
 import json
 
@@ -763,80 +764,15 @@ async def classify_document(
     if not parse_result:
         raise HTTPException(status_code=400, detail="Document must be parsed first")
 
-    # Get project settings
-    settings = db.query(ProjectSettings).filter(
-        ProjectSettings.project_id == project_id
-    ).first()
-
-    model = settings.compliance_model if settings else "bedrock-claude-sonnet-3.5"
-    checks_config = settings.checks_config if settings else load_default_checks_config()
-
-    # Build classification prompt
-    doc_types_desc = "\n".join([
-        f"- {dt_id}: {dt.get('name')} - {dt.get('description')}"
-        for dt_id, dt in checks_config.get("document_types", {}).items()
-    ])
-
-    prompt = f"""Classify this document into one of these types:
-
-{doc_types_desc}
-
-Document content (first 5000 chars):
-{parse_result.markdown[:5000] if parse_result.markdown else "No content"}
-
-Respond with JSON only:
-{{
-    "document_type": "type_id",
-    "confidence": 0-100,
-    "signals_found": ["list", "of", "signals"]
-}}"""
-
-    # Call AI using existing Bedrock client pattern
-    client = get_bedrock_client()
-    model_id = resolve_model_id(model)
-
-    body = {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 500,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-
     try:
-        response = client.invoke_model(
-            modelId=model_id,
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps(body)
-        )
-
-        response_body = json.loads(response["body"].read())
-        response_text = response_body["content"][0]["text"]
-
-        # Parse response
-        try:
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0]
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0]
-            result = json.loads(response_text.strip())
-        except:
-            result = {"document_type": "unknown", "confidence": 0, "signals_found": []}
-
-        # Update document
-        document.document_type = result.get("document_type", "unknown")
-        document.classification_confidence = result.get("confidence", 0)
-        document.classification_signals = result.get("signals_found", [])
-        document.classification_model = model
-        document.classification_override = False
-
-        db.commit()
+        # Use classification service
+        result = await classify_document_service(document, parse_result, db)
 
         return ClassificationResult(
             document_type=document.document_type,
             confidence=document.classification_confidence,
             signals_found=document.classification_signals or []
         )
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Classification failed: {str(e)}")
 

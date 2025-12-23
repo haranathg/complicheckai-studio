@@ -23,7 +23,21 @@ interface PDFViewerProps {
   onAnnotationClick?: (annotation: Annotation) => void;
   showChunks?: boolean;
   showAnnotations?: boolean;
+  // Legend filter controls
+  visibleChunkTypes?: Set<string>;
+  onToggleChunkType?: (type: string) => void;
+  visibleNoteLevels?: Set<string>;
+  onToggleNoteLevel?: (level: string) => void;
+  // Control which legends to show
+  showComponentsLegend?: boolean;
+  showNotesLegend?: boolean;
+  // Focus mode: only show the selected chunk, hide all others
+  focusMode?: boolean;
 }
+
+// Default all chunk types visible
+const ALL_CHUNK_TYPES = new Set(['text', 'table', 'figure', 'title', 'caption', 'form_field']);
+const ALL_NOTE_LEVELS = new Set(['page', 'document', 'project']);
 
 export default function PDFViewer({
   file,
@@ -38,6 +52,13 @@ export default function PDFViewer({
   onAnnotationClick,
   showChunks = true,
   showAnnotations = true,
+  visibleChunkTypes = ALL_CHUNK_TYPES,
+  onToggleChunkType,
+  visibleNoteLevels = ALL_NOTE_LEVELS,
+  onToggleNoteLevel,
+  showComponentsLegend = true,
+  showNotesLegend = false,
+  focusMode = false,
 }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -61,6 +82,7 @@ export default function PDFViewer({
       setPdfError(null);
       setIsPageLoading(true);
       setFileKey((k) => k + 1);
+      setLastTargetPage(undefined); // Reset so page navigation works for new document
     }
   }, [file]);
 
@@ -76,16 +98,26 @@ export default function PDFViewer({
     return () => window.removeEventListener('resize', updateWidth);
   }, [file]);
 
-  // Navigate to target page when it changes (only when targetPage actually changes)
+  // Navigate to target page when it changes
+  // We use lastTargetPage to track if we already processed this request
   useEffect(() => {
-    if (targetPage && targetPage >= 1 && targetPage <= numPages && targetPage !== lastTargetPage) {
-      setLastTargetPage(targetPage);
-      if (targetPage !== currentPage) {
-        setPageSize({ width: 0, height: 0 });
-        setCurrentPage(targetPage);
+    if (targetPage && targetPage >= 1 && targetPage <= numPages) {
+      // Only process if this is a new target page request
+      if (targetPage !== lastTargetPage) {
+        setLastTargetPage(targetPage);
+        if (targetPage !== currentPage) {
+          setPageSize({ width: 0, height: 0 });
+          setCurrentPage(targetPage);
+        }
       }
     }
   }, [targetPage, numPages, lastTargetPage, currentPage]);
+
+  // Reset lastTargetPage when selectedAnnotation or selectedChunk changes
+  // This allows navigating back to the same page when clicking a different item
+  useEffect(() => {
+    setLastTargetPage(undefined);
+  }, [selectedAnnotation?.id, selectedChunk?.id]);
 
   // Scroll to selected chunk when it changes
   useEffect(() => {
@@ -178,9 +210,9 @@ export default function PDFViewer({
         setCanvasOffset({ left: 0, top: 0 });
       }
       setIsPageLoading(false);
-      onPdfReady?.();
+      // Note: onPdfReady is called in onRenderSuccess instead, after page is fully rendered
     });
-  }, [onPdfReady, containerWidth, scale]);
+  }, [containerWidth, scale]);
 
   const onPageLoadError = useCallback((error: Error) => {
     console.error('PDF page load error:', error);
@@ -348,7 +380,27 @@ export default function PDFViewer({
                       }}
                     >
                       {pageChunks
-                        .filter(chunk => showChunks || (showAnnotations && pageAnnotations.some(a => a.chunk_id === chunk.id)))
+                        .filter(chunk => {
+                          // In focus mode, very strict filtering
+                          if (focusMode) {
+                            // If we have a selected chunk, only show that chunk
+                            if (selectedChunk) {
+                              return selectedChunk.id === chunk.id;
+                            }
+                            // If we have a selected annotation, only show the chunk linked to it (if any)
+                            if (selectedAnnotation && selectedAnnotation.chunk_id) {
+                              return selectedAnnotation.chunk_id === chunk.id;
+                            }
+                            // Focus mode with annotation but no linked chunk - hide all chunks
+                            return false;
+                          }
+                          // First check if chunk should be shown at all
+                          const shouldShow = showChunks || (showAnnotations && pageAnnotations.some(a => a.chunk_id === chunk.id));
+                          if (!shouldShow) return false;
+                          // Then filter by visible chunk types (unless it's a selected chunk - always show that)
+                          if (selectedChunk?.id === chunk.id) return true;
+                          return visibleChunkTypes.has(chunk.type);
+                        })
                         .map((chunk) => (
                         <ChunkOverlay
                           key={chunk.id}
@@ -362,9 +414,10 @@ export default function PDFViewer({
                     </div>
                   )}
                   {/* Annotation Overlays - rendered above chunks */}
+                  {/* In focus mode with selected annotation, show only that annotation */}
                   {/* When showChunks is true (Parse tab), only show stickies tied to chunks */}
                   {/* When showChunks is false (Review tab), show all stickies (unless toggled off) */}
-                  {pageSize.width > 0 && showAnnotations && pageAnnotations.length > 0 && (
+                  {pageSize.width > 0 && (showAnnotations || (focusMode && selectedAnnotation)) && pageAnnotations.length > 0 && (
                     <div
                       className="absolute pointer-events-none"
                       style={{
@@ -375,7 +428,17 @@ export default function PDFViewer({
                       }}
                     >
                       {pageAnnotations
-                        .filter(a => !showChunks || a.chunk_id)
+                        .filter(a => {
+                          // In focus mode with selected annotation, only show that annotation
+                          if (focusMode && selectedAnnotation) {
+                            return selectedAnnotation.id === a.id;
+                          }
+                          // In Parse mode (showChunks), only show annotations linked to chunks
+                          if (showChunks && !a.chunk_id) return false;
+                          // Filter by visible note levels (unless selected - always show that)
+                          if (selectedAnnotation?.id === a.id) return true;
+                          return visibleNoteLevels.has(a.level);
+                        })
                         .map((annotation) => {
                         // For chunk-linked annotations, get bbox from the linked chunk
                         let annotationWithBbox = annotation;
@@ -417,48 +480,80 @@ export default function PDFViewer({
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="bg-white border-t px-4 py-2 flex flex-wrap gap-3 text-xs">
-        {showChunks ? (
-          <>
-            <span className="text-gray-500 font-medium">Component types:</span>
-            {['text', 'table', 'figure', 'title', 'caption', 'form_field'].map((type) => (
-              <span key={type} className="flex items-center gap-1">
-                <span
-                  className="w-3 h-3 rounded"
-                  style={{
-                    backgroundColor:
-                      type === 'text' ? 'rgba(59, 130, 246, 0.5)' :
-                      type === 'table' ? 'rgba(34, 197, 94, 0.5)' :
-                      type === 'figure' ? 'rgba(249, 115, 22, 0.5)' :
-                      type === 'title' ? 'rgba(168, 85, 247, 0.5)' :
-                      type === 'caption' ? 'rgba(236, 72, 153, 0.5)' :
-                      'rgba(20, 184, 166, 0.5)',
-                  }}
-                />
-                {type}
-              </span>
-            ))}
-          </>
-        ) : (
-          <>
-            <span className="text-gray-500 font-medium">Annotation levels:</span>
-            {[
-              { level: 'page', color: 'rgba(251, 191, 36, 0.85)' },
-              { level: 'document', color: 'rgba(74, 222, 128, 0.85)' },
-              { level: 'project', color: 'rgba(96, 165, 250, 0.85)' },
-            ].map(({ level, color }) => (
-              <span key={level} className="flex items-center gap-1">
-                <span
-                  className="w-3 h-3 rounded"
-                  style={{ backgroundColor: color }}
-                />
-                {level}
-              </span>
-            ))}
-          </>
-        )}
-      </div>
+      {/* Legend - Interactive toggles */}
+      {(showComponentsLegend || showNotesLegend) && (
+        <div className="bg-white border-t px-4 py-2 flex flex-wrap items-center gap-2 text-xs">
+          {showComponentsLegend && (
+            <>
+              <span className="text-gray-500 font-medium mr-1">Components:</span>
+              {[
+                { type: 'text', color: 'rgba(59, 130, 246, 0.5)', activeColor: 'rgba(59, 130, 246, 0.8)' },
+                { type: 'table', color: 'rgba(34, 197, 94, 0.5)', activeColor: 'rgba(34, 197, 94, 0.8)' },
+                { type: 'figure', color: 'rgba(249, 115, 22, 0.5)', activeColor: 'rgba(249, 115, 22, 0.8)' },
+                { type: 'title', color: 'rgba(168, 85, 247, 0.5)', activeColor: 'rgba(168, 85, 247, 0.8)' },
+                { type: 'caption', color: 'rgba(236, 72, 153, 0.5)', activeColor: 'rgba(236, 72, 153, 0.8)' },
+                { type: 'form_field', color: 'rgba(20, 184, 166, 0.5)', activeColor: 'rgba(20, 184, 166, 0.8)' },
+              ].map(({ type, color, activeColor }) => {
+                const isActive = visibleChunkTypes.has(type);
+                const count = chunks.filter(c => c.type === type).length;
+                if (count === 0) return null; // Don't show types with no chunks
+                return (
+                  <button
+                    key={type}
+                    onClick={() => onToggleChunkType?.(type)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-md transition-all ${
+                      isActive
+                        ? 'bg-gray-100 hover:bg-gray-200'
+                        : 'bg-gray-50 opacity-50 hover:opacity-75'
+                    }`}
+                    title={`${isActive ? 'Hide' : 'Show'} ${type} (${count})`}
+                  >
+                    <span
+                      className="w-3 h-3 rounded transition-colors"
+                      style={{ backgroundColor: isActive ? activeColor : color }}
+                    />
+                    <span className={isActive ? 'text-gray-700' : 'text-gray-400 line-through'}>{type}</span>
+                    <span className={`text-[10px] ${isActive ? 'text-gray-500' : 'text-gray-400'}`}>({count})</span>
+                  </button>
+                );
+              })}
+              {showNotesLegend && <span className="mx-2 text-gray-300">|</span>}
+            </>
+          )}
+          {showNotesLegend && (
+            <>
+              <span className="text-gray-500 font-medium mr-1">Notes:</span>
+              {[
+                { level: 'page', color: 'rgba(251, 191, 36, 0.6)', activeColor: 'rgba(251, 191, 36, 0.85)' },
+                { level: 'document', color: 'rgba(74, 222, 128, 0.6)', activeColor: 'rgba(74, 222, 128, 0.85)' },
+                { level: 'project', color: 'rgba(96, 165, 250, 0.6)', activeColor: 'rgba(96, 165, 250, 0.85)' },
+              ].map(({ level, color, activeColor }) => {
+                const isActive = visibleNoteLevels.has(level);
+                const count = annotations.filter(a => a.level === level).length;
+                return (
+                  <button
+                    key={level}
+                    onClick={() => onToggleNoteLevel?.(level)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-md transition-all ${
+                      isActive
+                        ? 'bg-gray-100 hover:bg-gray-200'
+                        : 'bg-gray-50 opacity-50 hover:opacity-75'
+                    }`}
+                    title={`${isActive ? 'Hide' : 'Show'} ${level}-level notes (${count})`}
+                  >
+                    <span
+                      className="w-3 h-3 rounded transition-colors"
+                      style={{ backgroundColor: isActive ? activeColor : color }}
+                    />
+                    <span className={isActive ? 'text-gray-700' : 'text-gray-400 line-through'}>{level}</span>
+                    <span className={`text-[10px] ${isActive ? 'text-gray-500' : 'text-gray-400'}`}>({count})</span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

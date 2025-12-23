@@ -311,64 +311,34 @@ export default function ComplianceTabV2({
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className={`flex border-b mb-3 ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-            <button
-              onClick={() => { setActiveTab('completeness'); setStatusFilter(null); }}
-              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                activeTab === 'completeness'
-                  ? 'border-sky-500 text-sky-500'
-                  : `border-transparent ${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`
-              }`}
-            >
-              Completeness ({results.completeness_results.length})
-            </button>
-            <button
-              onClick={() => { setActiveTab('compliance'); setStatusFilter(null); }}
-              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                activeTab === 'compliance'
-                  ? 'border-sky-500 text-sky-500'
-                  : `border-transparent ${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`
-              }`}
-            >
-              Compliance ({results.compliance_results.length})
-            </button>
-          </div>
-
-          {/* Status filters and options */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex gap-2">
-              {(['pass', 'fail', 'needs_review', 'na'] as const).map(status => {
-                const config = STATUS_CONFIG[status];
-                const count = currentChecks.filter(c => c.status === status).length;
-                if (count === 0) return null;
-                return (
-                  <button
-                    key={status}
-                    onClick={() => setStatusFilter(statusFilter === status ? null : status)}
-                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                      statusFilter === status
-                        ? `${config.bgColor} ${config.color} ring-2 ring-current ring-offset-1`
-                        : `${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} hover:opacity-80`
-                    }`}
-                  >
-                    {config.label} ({count})
-                  </button>
-                );
-              })}
-              {statusFilter && (
-                <button
-                  onClick={() => setStatusFilter(null)}
-                  className={`px-2 py-1 text-xs ${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                  Clear
-                </button>
-              )}
+          {/* Tabs row with Show Findings toggle */}
+          <div className={`flex items-center justify-between border-b mb-3 ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div className="flex">
+              <button
+                onClick={() => { setActiveTab('completeness'); setStatusFilter(null); }}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  activeTab === 'completeness'
+                    ? 'border-sky-500 text-sky-500'
+                    : `border-transparent ${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`
+                }`}
+              >
+                Completeness ({results.completeness_results.length})
+              </button>
+              <button
+                onClick={() => { setActiveTab('compliance'); setStatusFilter(null); }}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  activeTab === 'compliance'
+                    ? 'border-sky-500 text-sky-500'
+                    : `border-transparent ${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`
+                }`}
+              >
+                Compliance ({results.compliance_results.length})
+              </button>
             </div>
-            {/* Show/Hide Findings toggle */}
+            {/* Show/Hide Findings toggle - moved here */}
             <button
               onClick={() => setShowFindings(!showFindings)}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors mb-1 ${
                 showFindings
                   ? isDark ? 'bg-slate-700 text-gray-300' : 'bg-slate-200 text-slate-700'
                   : isDark ? 'bg-slate-800 text-gray-500' : 'bg-slate-100 text-slate-500'
@@ -384,6 +354,52 @@ export default function ComplianceTabV2({
               </svg>
               {showFindings ? 'Hide' : 'Show'} Findings
             </button>
+          </div>
+
+          {/* Status filters - legend style like PDFViewer */}
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className={`text-xs font-medium mr-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Results:</span>
+            {([
+              { status: 'pass' as const, color: '#22c55e' },
+              { status: 'fail' as const, color: '#ef4444' },
+              { status: 'needs_review' as const, color: '#f59e0b' },
+              { status: 'na' as const, color: '#9ca3af' },
+            ]).map(({ status, color }) => {
+              const config = STATUS_CONFIG[status];
+              const count = currentChecks.filter(c => c.status === status).length;
+              if (count === 0) return null;
+              const isActive = statusFilter === null || statusFilter === status;
+              return (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(statusFilter === status ? null : status)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-all ${
+                    isActive
+                      ? isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'
+                      : isDark ? 'bg-gray-800 opacity-50 hover:opacity-75' : 'bg-gray-50 opacity-50 hover:opacity-75'
+                  }`}
+                  style={statusFilter === status ? { boxShadow: `0 0 0 2px ${color}` } : undefined}
+                  title={`${statusFilter === status ? 'Show all' : `Filter by ${config.label}`}`}
+                >
+                  <span
+                    className="w-3 h-3 rounded transition-colors flex items-center justify-center text-white text-[10px] font-bold"
+                    style={{ backgroundColor: isActive ? color : `${color}80` }}
+                  >
+                    {config.icon}
+                  </span>
+                  <span className={isActive ? (isDark ? 'text-gray-200' : 'text-gray-700') : (isDark ? 'text-gray-500' : 'text-gray-400')}>{config.label}</span>
+                  <span className={`text-[10px] ${isActive ? (isDark ? 'text-gray-400' : 'text-gray-500') : (isDark ? 'text-gray-600' : 'text-gray-400')}`}>({count})</span>
+                </button>
+              );
+            })}
+            {statusFilter && (
+              <button
+                onClick={() => setStatusFilter(null)}
+                className={`px-2 py-1 text-xs ${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Show all
+              </button>
+            )}
           </div>
 
           {/* Check items */}
