@@ -335,7 +335,8 @@ export default function PDFViewer({
                     }
                   />
                   {/* Chunk Overlays - positioned to match canvas exactly */}
-                  {/* When showChunks is false (Review tab), only show chunks linked to annotations (if overlays enabled) */}
+                  {/* When showChunks is true: show all chunks (Parse tab) */}
+                  {/* When showChunks is false: only show chunks linked to annotations if showAnnotations is also true */}
                   {pageSize.width > 0 && (showChunks || (showAnnotations && pageAnnotations.some(a => a.chunk_id))) && (
                     <div
                       className="absolute pointer-events-none"
@@ -347,7 +348,7 @@ export default function PDFViewer({
                       }}
                     >
                       {pageChunks
-                        .filter(chunk => showChunks || pageAnnotations.some(a => a.chunk_id === chunk.id))
+                        .filter(chunk => showChunks || (showAnnotations && pageAnnotations.some(a => a.chunk_id === chunk.id)))
                         .map((chunk) => (
                         <ChunkOverlay
                           key={chunk.id}

@@ -298,6 +298,13 @@ export default function ReviewTab({
           <span>{annotations.length} annotation{annotations.length !== 1 ? 's' : ''}</span>
           <span>{annotations.filter(a => a.status === 'open').length} open</span>
           <span>{annotations.filter(a => a.status === 'resolved').length} resolved</span>
+          {/* Subtle loading indicator when refreshing with existing annotations */}
+          {isLoading && annotations.length > 0 && (
+            <svg className="animate-spin h-3 w-3 ml-2" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          )}
         </div>
       </div>
 
@@ -390,7 +397,8 @@ export default function ReviewTab({
 
       {/* Annotations list */}
       <div className="flex-1 overflow-y-auto">
-        {isLoading ? (
+        {/* Only show full loading spinner on initial load (when we have no annotations yet) */}
+        {isLoading && annotations.length === 0 ? (
           <div className={`flex items-center justify-center py-8 ${theme.textSubtle}`}>
             <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
@@ -398,7 +406,7 @@ export default function ReviewTab({
             </svg>
             Loading...
           </div>
-        ) : annotations.length === 0 ? (
+        ) : !isLoading && annotations.length === 0 ? (
           <div className={`flex flex-col items-center justify-center py-8 ${theme.textSubtle}`}>
             <svg className="w-12 h-12 mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />

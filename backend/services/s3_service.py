@@ -12,6 +12,7 @@ from botocore.exceptions import ClientError
 # S3 configuration from environment
 S3_BUCKET = os.getenv("S3_BUCKET", "")
 AWS_REGION = os.getenv("AWS_REGION", "ap-southeast-2")
+AWS_PROFILE = os.getenv("AWS_PROFILE", "")
 
 # Initialize S3 client
 _s3_client = None
@@ -21,7 +22,13 @@ def get_s3_client():
     """Get or create S3 client."""
     global _s3_client
     if _s3_client is None:
-        _s3_client = boto3.client("s3", region_name=AWS_REGION)
+        if AWS_PROFILE:
+            # Use named profile from ~/.aws/credentials
+            session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
+            _s3_client = session.client("s3")
+        else:
+            # Fall back to default credential chain
+            _s3_client = boto3.client("s3", region_name=AWS_REGION)
     return _s3_client
 
 

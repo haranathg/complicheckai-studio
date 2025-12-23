@@ -501,7 +501,9 @@ async def get_document_file(
         raise HTTPException(status_code=404, detail="Document not found")
 
     try:
+        print(f"[get_document_file] Downloading document {document_id} from S3 key: {document.s3_key}")
         content = s3_service.download_document(document.s3_key)
+        print(f"[get_document_file] Successfully downloaded {len(content)} bytes for document {document_id}")
         return Response(
             content=content,
             media_type=document.content_type or "application/octet-stream",
@@ -510,7 +512,18 @@ async def get_document_file(
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to download file: {str(e)}")
+        error_str = str(e)
+        error_type = type(e).__name__
+        print(f"[get_document_file] ERROR downloading document {document_id}: {error_type}: {error_str}")
+        # Provide more helpful error messages
+        if "NoSuchKey" in error_str:
+            raise HTTPException(status_code=404, detail="Document file not found in storage. It may have been deleted.")
+        elif "ExpiredToken" in error_str or "InvalidAccessKeyId" in error_str:
+            raise HTTPException(status_code=503, detail="Storage authentication error. Please try again.")
+        elif "ConnectionError" in error_str or "ConnectTimeout" in error_str:
+            raise HTTPException(status_code=503, detail="Storage service temporarily unavailable. Please try again.")
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to download file: {error_str}")
 
 
 @router.delete("/{project_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
