@@ -39,10 +39,27 @@ export interface ExtractResponse {
   extraction_metadata: Record<string, unknown>;
 }
 
+// Chunk reference with stable identifiers for cross-document navigation
+export interface ChunkReference {
+  id: string;
+  page?: number;  // 0-indexed page number
+  bbox?: BoundingBox;  // Bounding box for position matching
+  type?: string;  // Chunk type (text, table, figure, etc.)
+}
+
+// Source from a specific document in multi-doc chat
+export interface DocumentSource {
+  document_id: string;
+  document_name: string;
+  chunk_ids: string[];  // Keep for backwards compatibility
+  chunks?: ChunkReference[];  // New: detailed chunk info for stable matching
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   chunk_ids?: string[];
+  document_sources?: DocumentSource[]; // For multi-document chat
   usage?: {
     input_tokens: number;
     output_tokens: number;

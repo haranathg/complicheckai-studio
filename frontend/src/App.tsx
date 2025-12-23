@@ -12,7 +12,7 @@ import type { Project, Document } from './types/project';
 import type { Annotation } from './types/annotation';
 import SaveToProjectDropdown from './components/SaveToProjectDropdown';
 import LoginPage from './components/LoginPage';
-import type { ParseResponse, Chunk, TabType, ChatMessage } from './types/ade';
+import type { ParseResponse, Chunk, TabType, ChatMessage, ChunkReference, BoundingBox } from './types/ade';
 import type { ComplianceCheck } from './types/compliance';
 import { API_URL } from './config';
 import { isAuthenticated, logout } from './utils/auth';
@@ -65,9 +65,22 @@ function App() {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selectedAnnotation, setSelectedAnnotation] = useState<Annotation | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [showReviewOverlays, setShowReviewOverlays] = useState(true);
+  // Chunk type visibility filters (for Parse tab legend)
+  const [visibleChunkTypes, setVisibleChunkTypes] = useState<Set<string>>(
+    new Set(['text', 'table', 'figure', 'title', 'caption', 'form_field'])
+  );
+  // Note level visibility filters (for Review tab legend)
+  const [visibleNoteLevels, setVisibleNoteLevels] = useState<Set<string>>(
+    new Set(['page', 'document', 'project'])
+  );
+  // Note: showReviewOverlays is now derived from visibleNoteLevels.size > 0
+  const showReviewOverlays = visibleNoteLevels.size > 0;
+  // Focus mode: when true, only show the selected chunk (hide all others)
+  const [focusMode, setFocusMode] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Ref to store pending chunk to highlight after PDF loads (for cross-document navigation)
+  const pendingChunkHighlightRef = useRef<{ chunk: Chunk | null; pageNumber?: number } | null>(null);
 
   // Check if projects are available and get default project on mount
   useEffect(() => {
@@ -213,6 +226,158 @@ function App() {
     }
   }, [currentProject, defaultProject, selectedParser]);
 
+  // Helper to find a chunk by page/bbox matching when ID doesn't match
+  const findChunkByPageAndBbox = useCallback((
+    chunks: Chunk[],
+    targetPage: number,
+    targetBbox: BoundingBox,
+    tolerance: number = 0.05  // 5% tolerance for bbox matching
+  ): Chunk | undefined => {
+    // Find chunks on the same page
+    const chunksOnPage = chunks.filter(c =>
+      c.grounding?.page === targetPage
+    );
+
+    if (chunksOnPage.length === 0) return undefined;
+
+    // Find chunk with closest matching bbox
+    let bestMatch: Chunk | undefined;
+    let bestScore = Infinity;
+
+    for (const chunk of chunksOnPage) {
+      if (!chunk.grounding?.box) continue;
+      const box = chunk.grounding.box;
+
+      // Calculate position difference
+      const leftDiff = Math.abs(box.left - targetBbox.left);
+      const topDiff = Math.abs(box.top - targetBbox.top);
+      const rightDiff = Math.abs(box.right - targetBbox.right);
+      const bottomDiff = Math.abs(box.bottom - targetBbox.bottom);
+      const score = leftDiff + topDiff + rightDiff + bottomDiff;
+
+      // Check if within tolerance
+      if (leftDiff <= tolerance && topDiff <= tolerance &&
+          rightDiff <= tolerance && bottomDiff <= tolerance) {
+        if (score < bestScore) {
+          bestScore = score;
+          bestMatch = chunk;
+        }
+      }
+    }
+
+    return bestMatch;
+  }, []);
+
+  // Handle switching to a different document and highlighting a specific chunk
+  // Used when clicking source chunks from multi-doc chat or compliance checks
+  const handleSwitchDocumentAndHighlight = useCallback(async (
+    documentId: string,
+    chunkIds: string[],
+    pageNumber?: number,
+    chunkRef?: ChunkReference
+  ) => {
+    const project = currentProject || defaultProject;
+    if (!project) return;
+
+    // If it's the current document, just highlight the chunk
+    if (currentDocument?.id === documentId) {
+      const chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
+      if (chunk) {
+        if (!visibleChunkTypes.has(chunk.type)) {
+          setVisibleChunkTypes(prev => new Set([...prev, chunk.type]));
+        }
+        setHighlightedChunk(chunk);
+        if (pageNumber) {
+          setTargetPage(pageNumber);
+        } else if (chunk.grounding) {
+          setTargetPage(chunk.grounding.page + 1);
+        }
+      }
+      return;
+    }
+
+    // Find the document in the list
+    const doc = documents.find(d => d.id === documentId);
+    if (!doc) {
+      console.error('Document not found:', documentId);
+      return;
+    }
+
+    // Load the document
+    setIsLoading(true);
+    try {
+      const fileUrl = await getDocumentDownloadUrl(project.id, doc.id);
+      const response = await fetch(fileUrl);
+
+      if (!response.ok) {
+        throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const contentType = response.headers.get('content-type') || doc.content_type || 'application/pdf';
+      if (blob.size === 0) {
+        throw new Error('Downloaded file is empty');
+      }
+
+      const loadedFile = new File([blob], doc.original_filename, {
+        type: contentType,
+      });
+
+      const cachedResponse = await getLatestParseResult(project.id, doc.id, selectedParser);
+
+      if (cachedResponse.cached && cachedResponse.result) {
+        const parseResultData: ParseResponse = {
+          markdown: cachedResponse.result.markdown,
+          chunks: cachedResponse.result.chunks.map(c => ({
+            id: c.id,
+            markdown: c.markdown,
+            type: c.type,
+            grounding: c.grounding || null,
+          })),
+          metadata: {
+            page_count: cachedResponse.result.metadata.page_count || null,
+            credit_usage: cachedResponse.result.metadata.credit_usage || null,
+            parser: cachedResponse.result.metadata.parser,
+            model: cachedResponse.result.metadata.model,
+            usage: cachedResponse.result.metadata.usage,
+          },
+        };
+
+        // Find the chunk to highlight in the new document
+        let chunkToHighlight = parseResultData.chunks.find(c => chunkIds.includes(c.id));
+
+        // If chunk ID not found, try fallback matching by page/bbox
+        if (!chunkToHighlight && chunkRef?.page !== undefined && chunkRef.bbox) {
+          chunkToHighlight = findChunkByPageAndBbox(parseResultData.chunks, chunkRef.page, chunkRef.bbox);
+        }
+
+        // Store pending chunk to highlight after PDF loads
+        if (chunkToHighlight) {
+          pendingChunkHighlightRef.current = { chunk: chunkToHighlight, pageNumber };
+        } else if (chunkRef?.page !== undefined) {
+          // If we have page info but couldn't find chunk, at least navigate to the page
+          pendingChunkHighlightRef.current = { chunk: null, pageNumber: chunkRef.page + 1 };
+        }
+
+        setCurrentDocument(doc);
+        setFile(loadedFile);
+        setParseResult(parseResultData);
+        // Don't set highlightedChunk here - it will be set in handlePdfReady
+      } else {
+        // Document not parsed yet
+        setCurrentDocument(doc);
+        setFile(loadedFile);
+        setParseResult(null);
+        setError('This document has not been parsed yet. Please process it first.');
+      }
+    } catch (err) {
+      console.error('Failed to load document:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load document');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentProject, defaultProject, currentDocument, documents, parseResult, selectedParser, visibleChunkTypes, findChunkByPageAndBbox]);
+
   const handleFileSelect = (uploadedFile: File, cachedResult?: ParseResponse) => {
     // Cancel any ongoing processing
     if (abortControllerRef.current) {
@@ -229,9 +394,38 @@ function App() {
     setChatMessages([]);
   };
 
-  const handlePdfReady = () => {
+  const handlePdfReady = useCallback(() => {
     setIsPdfReady(true);
-  };
+    // Apply pending chunk highlight if we were waiting for PDF to load
+    if (pendingChunkHighlightRef.current) {
+      const { chunk, pageNumber } = pendingChunkHighlightRef.current;
+      pendingChunkHighlightRef.current = null;
+
+      // Handle page-only navigation (when chunk matching failed but we have page info)
+      if (!chunk && pageNumber) {
+        setTimeout(() => {
+          setTargetPage(pageNumber);
+        }, 150);
+        return;
+      }
+
+      if (!chunk) {
+        return;
+      }
+
+      const chunkPage = chunk.grounding ? chunk.grounding.page + 1 : undefined;
+      // Use setTimeout to ensure PDF viewer has fully rendered
+      setTimeout(() => {
+        // Set highlighted chunk (focus mode is already enabled by onChunkSelect)
+        setHighlightedChunk(chunk);
+        // Navigate to page
+        const targetPageNum = pageNumber || chunkPage;
+        if (targetPageNum) {
+          setTargetPage(targetPageNum);
+        }
+      }, 150);
+    }
+  }, []);
 
   const handleCancel = () => {
     if (abortControllerRef.current) {
@@ -315,6 +509,7 @@ function App() {
     setCurrentProject(project);
     setCurrentView('document');
     setActiveTab('parse');
+    setFocusMode(false); // Reset focus mode when opening a new document
 
     // Load documents for this project
     try {
@@ -622,27 +817,67 @@ function App() {
                   file={file}
                   chunks={parseResult?.chunks || []}
                   selectedChunk={highlightedChunk}
-                  onChunkClick={handleChunkClick}
+                  onChunkClick={(chunk) => {
+                    // When clicking directly on a chunk overlay, exit focus mode
+                    setFocusMode(false);
+                    handleChunkClick(chunk);
+                  }}
                   onPdfReady={handlePdfReady}
                   targetPage={targetPage}
                   onPageChange={setCurrentPage}
                   annotations={annotations}
                   selectedAnnotation={selectedAnnotation}
-                  showChunks={activeTab === 'parse'}
-                  showAnnotations={showReviewOverlays}
-                  onAnnotationClick={(annotation) => {
-                    setSelectedAnnotation(annotation);
-                    // If annotation is linked to a chunk, navigate to that chunk
-                    if (annotation.chunk_id) {
-                      const linkedChunk = parseResult?.chunks?.find(c => c.id === annotation.chunk_id);
-                      if (linkedChunk && linkedChunk.grounding) {
-                        setTargetPage(linkedChunk.grounding.page + 1);
-                        setHighlightedChunk(linkedChunk);
+                  showChunks={activeTab === 'parse' || activeTab === 'review' || activeTab === 'chat' || activeTab === 'compliance' || focusMode}
+                  showAnnotations={activeTab === 'review' && !focusMode && showReviewOverlays}
+                  visibleChunkTypes={visibleChunkTypes}
+                  onToggleChunkType={(type) => {
+                    setFocusMode(false); // Exit focus mode when toggling
+                    setVisibleChunkTypes(prev => {
+                      const next = new Set(prev);
+                      if (next.has(type)) {
+                        next.delete(type);
+                      } else {
+                        next.add(type);
                       }
-                    } else if (annotation.page_number) {
+                      return next;
+                    });
+                  }}
+                  visibleNoteLevels={visibleNoteLevels}
+                  onToggleNoteLevel={(level) => {
+                    setFocusMode(false); // Exit focus mode when toggling
+                    setVisibleNoteLevels(prev => {
+                      const next = new Set(prev);
+                      if (next.has(level)) {
+                        next.delete(level);
+                      } else {
+                        next.add(level);
+                      }
+                      return next;
+                    });
+                  }}
+                  onAnnotationClick={(annotation) => {
+                    // Enter focus mode to show only this annotation
+                    setFocusMode(true);
+                    setSelectedAnnotation(annotation);
+                    setHighlightedChunk(null); // Clear any highlighted chunk
+                    // Navigate to the annotation's page
+                    if (annotation.page_number) {
                       setTargetPage(annotation.page_number);
+                    } else if (annotation.chunk_id) {
+                      const linkedChunk = parseResult?.chunks?.find(c => c.id === annotation.chunk_id);
+                      if (linkedChunk?.grounding) {
+                        setTargetPage(linkedChunk.grounding.page + 1);
+                      } else {
+                        setTargetPage(1);
+                      }
+                    } else {
+                      // Document or project level annotation - go to page 1
+                      setTargetPage(1);
                     }
                   }}
+                  showComponentsLegend={!focusMode}
+                  showNotesLegend={!focusMode && activeTab === 'review'}
+                  focusMode={focusMode}
                 />
               </div>
               {/* Annotation Panel - below PDF */}
@@ -653,22 +888,28 @@ function App() {
                 prefilledChunk={prefilledChunk}
                 onClearPrefilledChunk={() => setPrefilledChunk(null)}
                 onAnnotationClick={(annotation) => {
+                  // Enter focus mode to show only this annotation (and its linked chunk if any)
+                  setFocusMode(true);
                   setSelectedAnnotation(annotation);
+                  setHighlightedChunk(null); // Clear highlighted chunk - focus mode filter will show linked chunk
+                  // Navigate to the annotation's page
                   if (annotation.chunk_id) {
                     const linkedChunk = parseResult?.chunks?.find(c => c.id === annotation.chunk_id);
-                    if (linkedChunk && linkedChunk.grounding) {
+                    if (linkedChunk?.grounding) {
                       setTargetPage(linkedChunk.grounding.page + 1);
-                      setHighlightedChunk(linkedChunk);
+                    } else {
+                      setTargetPage(1);
                     }
                   } else if (annotation.page_number) {
                     setTargetPage(annotation.page_number);
+                  } else {
+                    // Document or project level annotation - go to page 1
+                    setTargetPage(1);
                   }
                 }}
                 onAnnotationsChange={loadAnnotations}
                 file={file}
                 chunks={parseResult?.chunks}
-                showNotes={showReviewOverlays}
-                onToggleShowNotes={setShowReviewOverlays}
               />
             </>
           ) : (
@@ -695,7 +936,10 @@ function App() {
         <div className="w-1/2 flex flex-col overflow-hidden" style={{ background: theme.panelBgAlt }}>
           <TabNavigation
             activeTab={activeTab}
-            onTabChange={setActiveTab}
+            onTabChange={(tab) => {
+              setFocusMode(false); // Exit focus mode when changing tabs
+              setActiveTab(tab);
+            }}
             disabled={!parseResult}
             onSettingsClick={() => setIsSettingsOpen(true)}
           />
@@ -737,15 +981,36 @@ function App() {
                 currentDocument={currentDocument}
                 currentPage={currentPage}
                 onAnnotationSelect={(annotation) => {
-                  if (annotation.page_number) {
-                    setTargetPage(annotation.page_number);
-                    setCurrentPage(annotation.page_number);
+                  // Enter focus mode to show only this annotation
+                  setFocusMode(true);
+                  setSelectedAnnotation(annotation);
+                  setHighlightedChunk(null); // Clear - focus mode filter will show linked chunk if any
+
+                  // Check if annotation is from a different document
+                  if (annotation.document_id && annotation.document_id !== currentDocument?.id) {
+                    // Switch to that document and navigate to the annotation
+                    const chunkIds = annotation.chunk_id ? [annotation.chunk_id] : [];
+                    handleSwitchDocumentAndHighlight(annotation.document_id, chunkIds, annotation.page_number || 1);
+                  } else {
+                    // Same document - navigate to page/chunk
+                    if (annotation.chunk_id) {
+                      const linkedChunk = parseResult?.chunks?.find(c => c.id === annotation.chunk_id);
+                      if (linkedChunk?.grounding) {
+                        setTargetPage(linkedChunk.grounding.page + 1);
+                      } else {
+                        // Chunk not found or no grounding, go to page 1
+                        setTargetPage(1);
+                      }
+                    } else if (annotation.page_number) {
+                      setTargetPage(annotation.page_number);
+                    } else {
+                      // Document or project level annotation - go to page 1
+                      setTargetPage(1);
+                    }
                   }
                 }}
                 file={file}
                 chunks={parseResult?.chunks}
-                showOverlays={showReviewOverlays}
-                onToggleOverlays={setShowReviewOverlays}
               />
             )}
             {activeTab === 'chat' && (
@@ -757,12 +1022,53 @@ function App() {
                   messages={chatMessages}
                   onMessagesChange={setChatMessages}
                   selectedModel={selectedModel}
-                  onChunkSelect={(chunkIds, pageNumber) => {
-                    const chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
-                    if (chunk) {
-                      setHighlightedChunk(chunk);
-                      if (pageNumber) {
-                        setTargetPage(pageNumber);
+                  allDocuments={documents}
+                  currentDocumentId={currentDocument?.id}
+                  onLoadDocumentContext={async (docId: string) => {
+                    const project = currentProject || defaultProject;
+                    if (!project) return null;
+                    try {
+                      const cachedResponse = await getLatestParseResult(project.id, docId, selectedParser);
+                      if (cachedResponse.cached && cachedResponse.result) {
+                        return {
+                          markdown: cachedResponse.result.markdown,
+                          chunks: cachedResponse.result.chunks.map(c => ({
+                            id: c.id,
+                            markdown: c.markdown,
+                            type: c.type,
+                            grounding: c.grounding || null,
+                          })),
+                        };
+                      }
+                      return null;
+                    } catch (err) {
+                      console.error('Failed to load document context:', err);
+                      return null;
+                    }
+                  }}
+                  onChunkSelect={(chunkIds, pageNumber, documentId, chunkRef) => {
+                    // Enable focus mode to show only the selected chunk
+                    setFocusMode(true);
+                    setSelectedAnnotation(null); // Clear any selected annotation
+                    // If documentId provided and different from current, switch docs then highlight
+                    if (documentId && documentId !== currentDocument?.id) {
+                      handleSwitchDocumentAndHighlight(documentId, chunkIds, pageNumber, chunkRef);
+                    } else {
+                      // Highlight in current document - try ID match first, then page/bbox fallback
+                      let chunk = parseResult?.chunks.find(c => chunkIds.includes(c.id));
+                      if (!chunk && chunkRef?.page !== undefined && chunkRef.bbox && parseResult?.chunks) {
+                        chunk = findChunkByPageAndBbox(parseResult.chunks, chunkRef.page, chunkRef.bbox);
+                      }
+                      if (chunk) {
+                        setHighlightedChunk(chunk);
+                        if (pageNumber) {
+                          setTargetPage(pageNumber);
+                        } else if (chunk.grounding) {
+                          setTargetPage(chunk.grounding.page + 1);
+                        }
+                      } else if (chunkRef?.page !== undefined) {
+                        // At least navigate to the page if we have page info
+                        setTargetPage(chunkRef.page + 1);
                       }
                     }
                   }}
@@ -777,9 +1083,16 @@ function App() {
                 onChunkSelect={(chunkIds, pageNumber) => {
                   const chunk = parseResult?.chunks?.find(c => chunkIds.includes(c.id));
                   if (chunk) {
+                    // Auto-enable the chunk type if it was hidden
+                    if (!visibleChunkTypes.has(chunk.type)) {
+                      setVisibleChunkTypes(prev => new Set([...prev, chunk.type]));
+                    }
                     setHighlightedChunk(chunk);
+                    // Navigate to page (use provided pageNumber or get from chunk's grounding)
                     if (pageNumber) {
                       setTargetPage(pageNumber);
+                    } else if (chunk.grounding) {
+                      setTargetPage(chunk.grounding.page + 1);
                     }
                   }
                 }}

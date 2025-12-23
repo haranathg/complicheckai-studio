@@ -1,25 +1,57 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { Chunk, ChatMessage } from '../types/ade';
+import type { Chunk, ChatMessage, ChunkReference } from '../types/ade';
+import type { Document } from '../types/project';
 import { API_URL } from '../config';
 import { useTheme } from '../contexts/ThemeContext';
+
+// Document context for multi-document chat
+interface DocumentContext {
+  document_id: string;
+  document_name: string;
+  markdown: string;
+  chunks: Chunk[];
+}
 
 interface ChatPanelProps {
   markdown: string;
   chunks: Chunk[];
   disabled: boolean;
-  onChunkSelect: (chunkIds: string[], pageNumber?: number) => void;
+  onChunkSelect: (chunkIds: string[], pageNumber?: number, documentId?: string, chunkRef?: ChunkReference) => void;
   messages: ChatMessage[];
   onMessagesChange: (messages: ChatMessage[]) => void;
   selectedModel: string;
+  // Multi-document support
+  allDocuments?: Document[];
+  currentDocumentId?: string;
+  onLoadDocumentContext?: (docId: string) => Promise<{ markdown: string; chunks: Chunk[] } | null>;
 }
 
-export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, messages, onMessagesChange, selectedModel }: ChatPanelProps) {
+type ChatScope = 'current' | 'all';
+
+export default function ChatPanel({
+  markdown,
+  chunks,
+  disabled,
+  onChunkSelect,
+  messages,
+  onMessagesChange,
+  selectedModel,
+  allDocuments,
+  currentDocumentId,
+  onLoadDocumentContext
+}: ChatPanelProps) {
   const { isDark } = useTheme();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chatScope, setChatScope] = useState<ChatScope>('current');
+  const [isLoadingDocs, setIsLoadingDocs] = useState(false);
+  const [documentContexts, setDocumentContexts] = useState<DocumentContext[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Check if multi-document chat is available
+  const hasMultipleDocuments = allDocuments && allDocuments.length > 1;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -28,6 +60,41 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Load all document contexts when switching to "all" scope
+  const loadAllDocumentContexts = async () => {
+    if (!allDocuments || !onLoadDocumentContext) return [];
+
+    setIsLoadingDocs(true);
+    const contexts: DocumentContext[] = [];
+
+    for (const doc of allDocuments) {
+      // If this is the current document, use the already-loaded data
+      if (doc.id === currentDocumentId) {
+        contexts.push({
+          document_id: doc.id,
+          document_name: doc.original_filename,
+          markdown,
+          chunks,
+        });
+      } else {
+        // Load context for other documents
+        const context = await onLoadDocumentContext(doc.id);
+        if (context) {
+          contexts.push({
+            document_id: doc.id,
+            document_name: doc.original_filename,
+            markdown: context.markdown,
+            chunks: context.chunks,
+          });
+        }
+      }
+    }
+
+    setIsLoadingDocs(false);
+    setDocumentContexts(contexts);
+    return contexts;
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -40,16 +107,41 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      let requestBody: Record<string, unknown>;
+
+      if (chatScope === 'all' && hasMultipleDocuments && onLoadDocumentContext) {
+        // Multi-document mode: load all document contexts and send them
+        let contexts = documentContexts;
+        if (contexts.length === 0) {
+          contexts = await loadAllDocumentContexts();
+        }
+
+        requestBody = {
+          question: input,
+          document_contexts: contexts.map(ctx => ({
+            document_id: ctx.document_id,
+            document_name: ctx.document_name,
+            markdown: ctx.markdown,
+            chunks: ctx.chunks,
+          })),
+          history: messages,
+          model: selectedModel,
+        };
+      } else {
+        // Single document mode (existing behavior)
+        requestBody = {
           question: input,
           markdown,
           chunks,
           history: messages,
           model: selectedModel,
-        }),
+        };
+      }
+
+      const response = await fetch(`${API_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -62,6 +154,7 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
         role: 'assistant',
         content: data.answer,
         chunk_ids: data.chunk_ids || [],
+        document_sources: data.document_sources || [],
         usage: data.usage
       };
       onMessagesChange([...updatedMessages, assistantMessage]);
@@ -101,7 +194,63 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
     <div className="h-full flex flex-col">
       {/* Messages Header */}
       <div className="flex items-center justify-between mb-4">
-        <h4 className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>Chat with your document</h4>
+        <div className="flex items-center gap-3">
+          <h4 className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>
+            Chat with {chatScope === 'all' ? 'all documents' : 'your document'}
+          </h4>
+          {/* Scope toggle - only show if multiple documents available */}
+          {hasMultipleDocuments && (
+            <div className={`flex items-center rounded-lg p-0.5 ${isDark ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
+              <button
+                onClick={() => {
+                  setChatScope('current');
+                  setDocumentContexts([]); // Clear cached contexts when switching
+                }}
+                className={`px-2.5 py-1 text-xs rounded-md transition-all ${
+                  chatScope === 'current'
+                    ? isDark
+                      ? 'bg-slate-700 text-white shadow-sm'
+                      : 'bg-white text-slate-800 shadow-sm'
+                    : isDark
+                      ? 'text-gray-400 hover:text-gray-300'
+                      : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Current
+              </button>
+              <button
+                onClick={() => setChatScope('all')}
+                className={`px-2.5 py-1 text-xs rounded-md transition-all flex items-center gap-1 ${
+                  chatScope === 'all'
+                    ? isDark
+                      ? 'bg-slate-700 text-white shadow-sm'
+                      : 'bg-white text-slate-800 shadow-sm'
+                    : isDark
+                      ? 'text-gray-400 hover:text-gray-300'
+                      : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                All Docs
+                <span className={`text-[10px] px-1 rounded ${
+                  isDark ? 'bg-slate-600 text-gray-300' : 'bg-slate-200 text-slate-600'
+                }`}>
+                  {allDocuments?.length || 0}
+                </span>
+              </button>
+            </div>
+          )}
+          {isLoadingDocs && (
+            <div className="flex items-center gap-1.5">
+              <svg className="animate-spin h-3 w-3 text-sky-400" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-400'}`}>
+                Loading docs...
+              </span>
+            </div>
+          )}
+        </div>
         {messages.length > 0 && (
           <button
             onClick={clearChat}
@@ -142,7 +291,9 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
           </div>
         ) : (
           messages.map((msg, i) => {
-            const relevantChunks = msg.chunk_ids
+            // For single-doc mode, use chunk_ids; for multi-doc, use document_sources
+            const hasDocumentSources = msg.document_sources && msg.document_sources.length > 0;
+            const relevantChunks = !hasDocumentSources && msg.chunk_ids
               ? chunks.filter(c => msg.chunk_ids?.includes(c.id))
               : [];
 
@@ -169,7 +320,53 @@ export default function ChatPanel({ markdown, chunks, disabled, onChunkSelect, m
                       <div className={`prose prose-sm max-w-none ${isDark ? 'prose-invert' : ''}`}>
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
-                      {relevantChunks.length > 0 && (
+                      {/* Multi-document sources */}
+                      {hasDocumentSources && (
+                        <div className={`mt-3 pt-3 border-t ${isDark ? 'border-slate-700/40' : 'border-slate-200'}`}>
+                          <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-500'} mb-2`}>
+                            Sources from {msg.document_sources!.length} document{msg.document_sources!.length > 1 ? 's' : ''}:
+                          </p>
+                          <div className="space-y-2">
+                            {msg.document_sources!.map((docSource) => {
+                              // Use detailed chunks if available, fall back to chunk_ids
+                              const chunkRefs: ChunkReference[] = docSource.chunks || docSource.chunk_ids.map(id => ({ id }));
+                              return (
+                                <div key={docSource.document_id}>
+                                  <p className={`text-xs font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>
+                                    {docSource.document_name}
+                                  </p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {chunkRefs.map((chunkRef) => {
+                                      const pageNum = chunkRef.page !== undefined ? chunkRef.page + 1 : undefined;
+                                      return (
+                                        <button
+                                          key={chunkRef.id}
+                                          onClick={() => onChunkSelect([chunkRef.id], pageNum, docSource.document_id, chunkRef)}
+                                          className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                                            isDark
+                                              ? 'bg-slate-800/50 border border-slate-600/50 hover:border-sky-400 hover:bg-sky-900/30'
+                                              : 'bg-slate-100 border border-slate-300 hover:border-sky-500 hover:bg-sky-50'
+                                          }`}
+                                        >
+                                          {pageNum && <span className={isDark ? 'text-gray-500' : 'text-slate-500'}>p.{pageNum}</span>}
+                                          <span className={`capitalize ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>
+                                            {chunkRef.type || chunkRef.id.slice(0, 8) + '...'}
+                                          </span>
+                                          <svg className={`w-3 h-3 ${isDark ? 'text-gray-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                          </svg>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {/* Single-document sources (original behavior) */}
+                      {!hasDocumentSources && relevantChunks.length > 0 && (
                         <div className={`mt-3 pt-3 border-t ${isDark ? 'border-slate-700/40' : 'border-slate-200'}`}>
                           <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-500'} mb-2`}>
                             Sources ({relevantChunks.length}) — click to view:

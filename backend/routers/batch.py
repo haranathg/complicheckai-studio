@@ -13,6 +13,7 @@ from services.ade_service import ade_service
 from services.claude_vision_service import get_claude_vision_service
 from services.gemini_vision_service import get_gemini_vision_service
 from services.bedrock_vision_service import get_bedrock_vision_service
+from services.classification_service import classify_document
 
 router = APIRouter()
 
@@ -237,6 +238,18 @@ async def process_single_document(
                 db.add(chunk)
 
             task.parse_result_id = parse_result.id
+            task.progress = 85
+            db.commit()
+
+            # Auto-classify document after parsing
+            try:
+                await classify_document(document, parse_result, db)
+                task.progress = 95
+                db.commit()
+            except Exception as classify_err:
+                # Classification failure shouldn't fail the whole task
+                print(f"Warning: Classification failed for document {document_id}: {classify_err}")
+
             task.status = "completed"
             task.progress = 100
             task.completed_at = datetime.utcnow()

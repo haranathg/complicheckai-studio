@@ -9,7 +9,13 @@
       "Bash(git push)",
       "Bash(lsof:*)",
       "Bash(curl:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(aws sts get-caller-identity:*)",
+      "Bash(cat:*)",
+      "Bash(pkill:*)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(uvicorn:*)",
+      "Bash(xargs kill:*)"
     ],
     "deny": [],
     "ask": []

@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Project, DocumentStatusSummary } from '../types/project';
 import { listProjects, getProjectDocumentStatus, uploadDocument, createProject } from '../services/projectService';
 import { runBatchChecks, getBatchRuns } from '../services/checksService';
-import { startBatchProcess, listBatchJobs, getBatchJob } from '../services/batchService';
+import { startBatchProcess, listBatchJobs, getBatchJob, cancelBatchJob } from '../services/batchService';
 import type { BatchJob } from '../types/batch';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 import DocumentTypeBadge from './DocumentTypeBadge';
@@ -376,6 +376,26 @@ export default function DashboardPage({
     setReprocessAction(null);
   };
 
+  // Handle cancelling a batch job (including stuck jobs)
+  const handleCancelBatchJob = async () => {
+    if (!activeBatchJob) return;
+
+    try {
+      await cancelBatchJob(activeBatchJob.id);
+      setActiveBatchJob(null);
+      setIsProcessing(false);
+      // Reload documents to get updated status
+      loadDocuments();
+    } catch (err) {
+      console.error('Failed to cancel batch job:', err);
+      // Even if backend cancel fails, reset the UI state
+      // The job may have already completed or been cleaned up
+      setActiveBatchJob(null);
+      setIsProcessing(false);
+      loadDocuments();
+    }
+  };
+
   // Format file size
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return '-';
@@ -526,38 +546,40 @@ export default function DashboardPage({
                       {selectedDocIds.size} selected
                     </span>
                   )}
-                  {/* Process Button */}
-                  <button
-                    onClick={() => handleProcessSelected()}
-                    disabled={isProcessing || selectedDocIds.size === 0}
-                    className={`px-4 py-2 rounded-full transition-colors flex items-center gap-2 disabled:opacity-50 ${
-                      isDark
-                        ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                        : 'bg-amber-500 hover:bg-amber-600 text-white'
-                    }`}
-                    title={selectedDocIds.size === 0 ? 'Select documents to process' : `Process ${selectedDocIds.size} selected document(s)`}
-                  >
-                    {isProcessing && activeBatchJob ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                        <span>
-                          {activeBatchJob.completed_documents}/{activeBatchJob.total_documents}
+                  {/* Process Button / Cancel Processing Button */}
+                  {isProcessing ? (
+                    <button
+                      onClick={handleCancelBatchJob}
+                      className="px-4 py-2 rounded-full transition-colors flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white"
+                      title="Cancel processing"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      <span>Cancel</span>
+                      {activeBatchJob && (
+                        <span className="text-xs opacity-80">
+                          ({activeBatchJob.completed_documents}/{activeBatchJob.total_documents})
                         </span>
-                      </>
-                    ) : isProcessing ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                        <span>Processing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        <span>Process</span>
-                      </>
-                    )}
-                  </button>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleProcessSelected()}
+                      disabled={selectedDocIds.size === 0}
+                      className={`px-4 py-2 rounded-full transition-colors flex items-center gap-2 disabled:opacity-50 ${
+                        isDark
+                          ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                          : 'bg-amber-500 hover:bg-amber-600 text-white'
+                      }`}
+                      title={selectedDocIds.size === 0 ? 'Select documents to process' : `Process ${selectedDocIds.size} selected document(s)`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>Process</span>
+                    </button>
+                  )}
                   {/* Run Checks Button */}
                   <button
                     onClick={() => handleRunChecksSelected()}
