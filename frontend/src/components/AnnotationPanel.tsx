@@ -367,6 +367,9 @@ function AnnotationItem({ annotation, isDark, theme, onClick, onResolve, onDelet
         <div className="flex-1 min-w-0">
           <p className={`${theme.textSecondary} line-clamp-2`}>{annotation.text}</p>
           <div className={`flex items-center gap-2 mt-1 ${theme.textMuted}`}>
+            {annotation.author && (
+              <span className="font-medium">{annotation.author}</span>
+            )}
             {annotation.page_number && (
               <span>p.{annotation.page_number}</span>
             )}

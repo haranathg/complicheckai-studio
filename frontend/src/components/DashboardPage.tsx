@@ -10,19 +10,18 @@ import type { BatchJob } from '../types/batch';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 import DocumentTypeBadge from './DocumentTypeBadge';
 import BatchCheckProgress from './BatchCheckProgress';
+import UserMenu from './UserMenu';
 import cognaifySymbol from '../assets/cognaify-symbol.png';
 import cognaifyLogo from '../assets/Cognaify-logo-white-bg.png';
 
 interface DashboardPageProps {
   onOpenDocument: (project: Project, documentId: string) => void;
-  onLogout: () => void;
   onOpenSettings: () => void;
   onProjectChange?: (project: Project | null) => void;
 }
 
 export default function DashboardPage({
   onOpenDocument,
-  onLogout,
   onOpenSettings,
   onProjectChange,
 }: DashboardPageProps) {
@@ -429,15 +428,7 @@ export default function DashboardPage({
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <button
-              onClick={onLogout}
-              className={`p-2 ${theme.textMuted} hover:${theme.textPrimary} transition-colors`}
-              title="Sign Out"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
+            <UserMenu />
           </div>
         </div>
       </header>

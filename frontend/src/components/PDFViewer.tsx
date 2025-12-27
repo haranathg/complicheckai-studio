@@ -183,17 +183,25 @@ export default function PDFViewer({
           // Get the actual rendered dimensions from the canvas
           // Use getBoundingClientRect for accurate dimensions
           const rect = canvas.getBoundingClientRect();
-          const offsetLeft = canvas.offsetLeft;
-          const offsetTop = canvas.offsetTop;
+          const containerRect = pageContainerRef.current.getBoundingClientRect();
+
+          // Calculate actual offset relative to the pageContainerRef
+          const actualOffsetLeft = rect.left - containerRect.left;
+          const actualOffsetTop = rect.top - containerRect.top;
+
           console.log('Canvas bounding rect:', rect.width, 'x', rect.height);
-          console.log('Canvas offset within container:', offsetLeft, offsetTop);
+          console.log('Container bounding rect:', containerRect.width, 'x', containerRect.height);
+          console.log('Canvas actual offset relative to container:', actualOffsetLeft, actualOffsetTop);
+          console.log('Canvas offsetLeft/offsetTop (may be wrong):', canvas.offsetLeft, canvas.offsetTop);
+          console.log('Canvas offsetParent:', canvas.offsetParent?.tagName, canvas.offsetParent?.className);
+
           setPageSize({
             width: rect.width,
             height: rect.height,
           });
           setCanvasOffset({
-            left: offsetLeft,
-            top: offsetTop,
+            left: actualOffsetLeft,
+            top: actualOffsetTop,
           });
         } else {
           setPageSize({
@@ -246,13 +254,24 @@ export default function PDFViewer({
     return false;
   });
 
-  // Debug: log chunk coordinates
+  // Debug: log chunk coordinates and page dimensions
   if (pageChunks.length > 0 && pageSize.width > 0) {
-    console.log('Page chunks with coordinates:', pageChunks.map(c => ({
-      type: c.type,
-      box: c.grounding?.box,
-      content: c.markdown.substring(0, 50)
-    })));
+    console.log('=== PDF Overlay Debug ===');
+    console.log('Current page:', currentPage, '(0-indexed:', currentPage - 1, ')');
+    console.log('Page size:', pageSize.width, 'x', pageSize.height);
+    console.log('Canvas offset:', canvasOffset);
+    console.log('Focus mode:', focusMode, '| Selected chunk:', selectedChunk?.id?.substring(0, 20));
+    // If there's a selected chunk, show its details
+    if (selectedChunk?.grounding?.box) {
+      const b = selectedChunk.grounding.box;
+      console.log('*** SELECTED CHUNK ***');
+      console.log(`  ID: ${selectedChunk.id}`);
+      console.log(`  Type: ${selectedChunk.type}`);
+      console.log(`  Page: ${selectedChunk.grounding.page}`);
+      console.log(`  Box: top=${b.top} left=${b.left} right=${b.right} bottom=${b.bottom}`);
+      console.log(`  Pixel pos: top=${Math.round(b.top * pageSize.height)}px left=${Math.round(b.left * pageSize.width)}px`);
+      console.log(`  Content: "${selectedChunk.markdown.substring(0, 50)}..."`);
+    }
   }
 
   const goToPrevPage = () => {

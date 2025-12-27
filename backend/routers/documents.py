@@ -12,6 +12,7 @@ from services import s3_service
 from services.config_service import load_default_checks_config, list_document_types
 from services.classification_service import classify_document as classify_document_service
 from routers.compliance import get_bedrock_client, resolve_model_id
+from auth import CognitoUser, get_current_user, get_optional_user
 import json
 
 router = APIRouter()
@@ -349,7 +350,8 @@ async def upload_document(
     project_id: str,
     file: UploadFile = File(...),
     replace_existing: bool = False,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: CognitoUser = Depends(get_current_user)
 ):
     """Upload a new document to a project."""
     # Verify project exists
@@ -416,6 +418,7 @@ async def upload_document(
         file_size=file_size,
         file_hash=file_hash,
         s3_key="",  # Will update after upload
+        uploaded_by=user.display_name if user else None,
     )
     db.add(document)
     db.commit()

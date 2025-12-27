@@ -1,35 +1,89 @@
+/**
+ * LoginPage - Cognito email/password authentication.
+ *
+ * Features:
+ * - Email/password sign in
+ * - New password challenge handling (first login with temp password)
+ * - Error display with friendly messages
+ * - Loading states
+ * - Hidden theme toggle (for demo)
+ */
+
 import { useState } from 'react';
-import { validateAccessKey, setAuthenticated } from '../utils/auth';
+import { useAuth } from '../contexts/AuthContext';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 import cognaifyLogo from '../assets/Cognaify-logo-white-bg.png';
 
-interface LoginPageProps {
-  onAuthenticated: () => void;
-}
-
-export default function LoginPage({ onAuthenticated }: LoginPageProps) {
+export default function LoginPage() {
+  const { signIn, completeNewPassword, error, clearError, isLoading, requiresNewPassword } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const theme = getThemeStyles(isDark);
-  const [accessKey, setAccessKey] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [isValidating, setIsValidating] = useState(false);
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setIsValidating(true);
+    setLocalError(null);
+    clearError();
 
-    // Small delay to prevent brute force
-    await new Promise(resolve => setTimeout(resolve, 500));
+    if (!email.trim() || !password.trim()) {
+      setLocalError('Please enter your email and password.');
+      return;
+    }
 
-    if (validateAccessKey(accessKey)) {
-      setAuthenticated();
-      onAuthenticated();
-    } else {
-      setError('Invalid access key. Please check and try again.');
-      setIsValidating(false);
+    const result = await signIn(email.trim(), password);
+
+    if (result.requiresNewPassword) {
+      setPassword(''); // Clear temp password
+    } else if (!result.success && result.error) {
+      // Map Cognito errors to friendly messages
+      let friendlyError = result.error;
+      if (result.error.includes('Incorrect username or password')) {
+        friendlyError = 'Invalid email or password. Please try again.';
+      } else if (result.error.includes('User does not exist')) {
+        friendlyError = 'No account found with this email address.';
+      } else if (result.error.includes('User is not confirmed')) {
+        friendlyError = 'Your account is not yet confirmed. Please contact your administrator.';
+      } else if (result.error.includes('Password attempts exceeded')) {
+        friendlyError = 'Too many failed attempts. Please try again later.';
+      }
+      setLocalError(friendlyError);
     }
   };
+
+  const handleNewPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+    clearError();
+
+    if (!newPassword.trim()) {
+      setLocalError('Please enter a new password.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setLocalError('Passwords do not match.');
+      return;
+    }
+
+    // Validate password requirements (matching Cognito policy: 8 chars minimum)
+    if (newPassword.length < 8) {
+      setLocalError('Password must be at least 8 characters long.');
+      return;
+    }
+
+    const result = await completeNewPassword(newPassword);
+
+    if (!result.success && result.error) {
+      setLocalError(result.error);
+    }
+  };
+
+  const displayError = localError || error;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative" style={{ background: theme.pageBg }}>
@@ -58,59 +112,145 @@ export default function LoginPage({ onAuthenticated }: LoginPageProps) {
             AI-powered document compliance checking for building consent applications.
           </p>
           <p className={`${theme.textSubtle} text-xs mt-3`}>
-            Enter your access key to continue.
+            {requiresNewPassword ? 'Please set a new password to continue.' : 'Sign in with your email and password.'}
           </p>
         </div>
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="accessKey" className={`block text-sm font-medium ${theme.textSecondary} mb-2`}>
-              Access Key
-            </label>
-            <input
-              type="password"
-              id="accessKey"
-              value={accessKey}
-              onChange={(e) => setAccessKey(e.target.value)}
-              placeholder="Enter your access key"
-              className={`w-full px-4 py-3 ${theme.inputBg} border ${theme.inputBorder} rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all ${theme.textPrimary} ${isDark ? 'placeholder-gray-500' : 'placeholder-slate-400'}`}
-              disabled={isValidating}
-              autoFocus
-            />
-          </div>
-
-          {error && (
-            <div className={`p-3 ${isDark ? 'bg-red-900/30 border-red-700/50 text-red-400' : 'bg-red-100 border-red-300 text-red-600'} border rounded-xl text-sm`}>
-              {error}
+        {/* New Password Form */}
+        {requiresNewPassword ? (
+          <form onSubmit={handleNewPasswordSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="newPassword" className={`block text-sm font-medium ${theme.textSecondary} mb-2`}>
+                New Password
+              </label>
+              <input
+                type="password"
+                id="newPassword"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password"
+                className={`w-full px-4 py-3 ${theme.inputBg} border ${theme.inputBorder} rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all ${theme.textPrimary} ${isDark ? 'placeholder-gray-500' : 'placeholder-slate-400'}`}
+                disabled={isLoading}
+                autoFocus
+              />
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={!accessKey.trim() || isValidating}
-            className="w-full py-3 rounded-full font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-            style={{
-              background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
-              boxShadow: '0 12px 30px rgba(56, 189, 248, 0.3)',
-              border: '1px solid rgba(191, 219, 254, 0.5)'
-            }}
-          >
-            {isValidating ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                Validating...
-              </>
-            ) : (
-              <>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                </svg>
-                Sign In
-              </>
+            <div>
+              <label htmlFor="confirmPassword" className={`block text-sm font-medium ${theme.textSecondary} mb-2`}>
+                Confirm Password
+              </label>
+              <input
+                type="password"
+                id="confirmPassword"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+                className={`w-full px-4 py-3 ${theme.inputBg} border ${theme.inputBorder} rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all ${theme.textPrimary} ${isDark ? 'placeholder-gray-500' : 'placeholder-slate-400'}`}
+                disabled={isLoading}
+              />
+            </div>
+
+            <div className={`text-xs ${theme.textMuted}`}>
+              <p>Password must be at least 8 characters.</p>
+            </div>
+
+            {displayError && (
+              <div className={`p-3 ${isDark ? 'bg-red-900/30 border-red-700/50 text-red-400' : 'bg-red-100 border-red-300 text-red-600'} border rounded-xl text-sm`}>
+                {displayError}
+              </div>
             )}
-          </button>
-        </form>
+
+            <button
+              type="submit"
+              disabled={!newPassword.trim() || !confirmPassword.trim() || isLoading}
+              className="w-full py-3 rounded-full font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              style={{
+                background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
+                boxShadow: '0 12px 30px rgba(56, 189, 248, 0.3)',
+                border: '1px solid rgba(191, 219, 254, 0.5)'
+              }}
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                  Setting Password...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Set Password
+                </>
+              )}
+            </button>
+          </form>
+        ) : (
+          /* Login Form */
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="email" className={`block text-sm font-medium ${theme.textSecondary} mb-2`}>
+                Email Address
+              </label>
+              <input
+                type="email"
+                id="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                className={`w-full px-4 py-3 ${theme.inputBg} border ${theme.inputBorder} rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all ${theme.textPrimary} ${isDark ? 'placeholder-gray-500' : 'placeholder-slate-400'}`}
+                disabled={isLoading}
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className={`block text-sm font-medium ${theme.textSecondary} mb-2`}>
+                Password
+              </label>
+              <input
+                type="password"
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                className={`w-full px-4 py-3 ${theme.inputBg} border ${theme.inputBorder} rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all ${theme.textPrimary} ${isDark ? 'placeholder-gray-500' : 'placeholder-slate-400'}`}
+                disabled={isLoading}
+              />
+            </div>
+
+            {displayError && (
+              <div className={`p-3 ${isDark ? 'bg-red-900/30 border-red-700/50 text-red-400' : 'bg-red-100 border-red-300 text-red-600'} border rounded-xl text-sm`}>
+                {displayError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={!email.trim() || !password.trim() || isLoading}
+              className="w-full py-3 rounded-full font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              style={{
+                background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
+                boxShadow: '0 12px 30px rgba(56, 189, 248, 0.3)',
+                border: '1px solid rgba(191, 219, 254, 0.5)'
+              }}
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                  Signing In...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                  </svg>
+                  Sign In
+                </>
+              )}
+            </button>
+          </form>
+        )}
 
         {/* Footer */}
         <div className={`mt-8 pt-6 border-t ${theme.border} text-center relative`}>
