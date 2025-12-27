@@ -13,6 +13,9 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 import cognaifyLogo from '../assets/Cognaify-logo-white-bg.png';
+import packageJson from '../../package.json';
+
+const APP_VERSION = packageJson.version;
 
 export default function LoginPage() {
   const { signIn, completeNewPassword, error, clearError, isLoading, requiresNewPassword } = useAuth();
@@ -259,6 +262,9 @@ export default function LoginPage() {
           </p>
           <p className={`text-xs ${theme.textSubtle} mt-2 flex items-center justify-center gap-1`}>
             Powered by <a href="https://cognaify.com" target="_blank" rel="noopener noreferrer" className="flex items-center"><img src={cognaifyLogo} alt="Cognaify Solutions" className="h-4 object-contain" /></a>
+          </p>
+          <p className={`text-xs ${theme.textMuted} mt-1`}>
+            v{APP_VERSION}
           </p>
           {/* Hidden theme toggle hotspot - 10x10px area below powered by */}
           <button
