@@ -12,10 +12,11 @@ import type { Project, Document } from './types/project';
 import type { Annotation } from './types/annotation';
 import SaveToProjectDropdown from './components/SaveToProjectDropdown';
 import LoginPage from './components/LoginPage';
+import UserMenu from './components/UserMenu';
 import type { ParseResponse, Chunk, TabType, ChatMessage, ChunkReference, BoundingBox } from './types/ade';
 import type { ComplianceCheck } from './types/compliance';
-import { API_URL } from './config';
-import { isAuthenticated, logout } from './utils/auth';
+import { apiUpload } from './services/apiClient';
+import { useAuth } from './contexts/AuthContext';
 import { getDefaultModelForParser } from './components/ModelSelector';
 import { getParserType, getModelForParser } from './components/ParserSelector';
 import { uploadDocument, checkProjectsAvailable, getOrCreateDefaultProject, listDocuments, getLatestParseResult, getDocumentDownloadUrl } from './services/projectService';
@@ -34,7 +35,7 @@ const DEFAULT_PARSER = 'landing_ai';
 function App() {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
-  const [authenticated, setAuthenticated] = useState(isAuthenticated());
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
   const [file, setFile] = useState<File | null>(null);
   const [parseResult, setParseResult] = useState<ParseResponse | null>(null);
@@ -176,7 +177,8 @@ function App() {
         type: contentType,
       });
 
-      const cachedResponse = await getLatestParseResult(project.id, doc.id, selectedParser);
+      // Don't filter by parser - get whatever cached result is available
+      const cachedResponse = await getLatestParseResult(project.id, doc.id);
 
       if (cachedResponse.cached && cachedResponse.result) {
         const parseResultData: ParseResponse = {
@@ -323,7 +325,8 @@ function App() {
         type: contentType,
       });
 
-      const cachedResponse = await getLatestParseResult(project.id, doc.id, selectedParser);
+      // Don't filter by parser - get whatever cached result is available
+      const cachedResponse = await getLatestParseResult(project.id, doc.id);
 
       if (cachedResponse.cached && cachedResponse.result) {
         const parseResultData: ParseResponse = {
@@ -464,18 +467,9 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/parse`, {
-        method: 'POST',
-        body: formData,
+      const result = await apiUpload<ParseResponse>('/api/parse', formData, {
         signal: abortControllerRef.current.signal,
       });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || 'Parse failed');
-      }
-
-      const result = await response.json();
       setParseResult(result);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
@@ -497,11 +491,6 @@ function App() {
     if (activeTab !== 'parse') {
       setActiveTab('parse');
     }
-  };
-
-  const handleLogout = () => {
-    logout();
-    setAuthenticated(false);
   };
 
   // Handle opening a document from the dashboard
@@ -542,7 +531,8 @@ function App() {
             type: contentType,
           });
 
-          const cachedResponse = await getLatestParseResult(project.id, doc.id, selectedParser);
+          // Don't filter by parser - get whatever cached result is available
+      const cachedResponse = await getLatestParseResult(project.id, doc.id);
 
           if (cachedResponse.cached && cachedResponse.result) {
             const parseResultData: ParseResponse = {
@@ -661,9 +651,21 @@ function App() {
     e.target.value = ''; // Reset input
   };
 
+  // Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: theme.pageBg }}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-sky-500 border-t-transparent"></div>
+          <p className={theme.textMuted}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Show login page if not authenticated
-  if (!authenticated) {
-    return <LoginPage onAuthenticated={() => setAuthenticated(true)} />;
+  if (!isAuthenticated) {
+    return <LoginPage />;
   }
 
   // Show Dashboard when in dashboard view
@@ -672,7 +674,6 @@ function App() {
       <>
         <DashboardPage
           onOpenDocument={handleOpenDocumentFromDashboard}
-          onLogout={handleLogout}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onProjectChange={setCurrentProject}
         />
@@ -773,15 +774,7 @@ function App() {
                 <span>Cancel</span>
               </button>
             )}
-            <button
-              onClick={handleLogout}
-              className={`p-2 ${theme.textMuted} hover:${theme.textPrimary} transition-colors`}
-              title="Sign Out"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
+            <UserMenu />
           </div>
         </div>
       </header>
@@ -953,6 +946,7 @@ function App() {
                   popupChunk={popupChunk}
                   onPopupOpen={setPopupChunk}
                   onChunkSelect={(chunk) => {
+                    console.log('onChunkSelect called with:', chunk.id, chunk.markdown.substring(0, 50));
                     setHighlightedChunk(highlightedChunk?.id === chunk.id ? null : chunk);
                     // Navigate to the chunk's page
                     if (chunk.grounding) {
@@ -1028,7 +1022,7 @@ function App() {
                     const project = currentProject || defaultProject;
                     if (!project) return null;
                     try {
-                      const cachedResponse = await getLatestParseResult(project.id, docId, selectedParser);
+                      const cachedResponse = await getLatestParseResult(project.id, docId);
                       if (cachedResponse.cached && cachedResponse.result) {
                         return {
                           markdown: cachedResponse.result.markdown,

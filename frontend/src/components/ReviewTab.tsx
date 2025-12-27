@@ -491,6 +491,9 @@ export default function ReviewTab({
                     )}
 
                     <div className={`flex items-center gap-3 mt-2 text-xs ${theme.textMuted}`}>
+                      {annotation.author && (
+                        <span className="font-medium">{annotation.author}</span>
+                      )}
                       {annotation.page_number && (
                         <span>Page {annotation.page_number}</span>
                       )}

@@ -1,7 +1,8 @@
 /**
  * API service for project and document management
+ * Uses authenticated API client with Bearer token
  */
-import { API_URL } from '../config';
+import { apiGet, apiPost, apiDelete, apiUpload, API_URL } from './apiClient';
 import type {
   Project,
   ProjectListResponse,
@@ -16,51 +17,28 @@ import type {
  * List all projects
  */
 export async function listProjects(): Promise<ProjectListResponse> {
-  const response = await fetch(`${API_URL}/api/projects`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch projects');
-  }
-  return response.json();
+  return apiGet<ProjectListResponse>('/api/projects');
 }
 
 /**
  * Create a new project
  */
 export async function createProject(name: string, description?: string): Promise<Project> {
-  const response = await fetch(`${API_URL}/api/projects`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name, description }),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to create project');
-  }
-  return response.json();
+  return apiPost<Project>('/api/projects', { name, description });
 }
 
 /**
  * Delete a project
  */
 export async function deleteProject(projectId: string): Promise<void> {
-  const response = await fetch(`${API_URL}/api/projects/${projectId}`, {
-    method: 'DELETE',
-  });
-  if (!response.ok) {
-    throw new Error('Failed to delete project');
-  }
+  return apiDelete(`/api/projects/${projectId}`);
 }
 
 /**
  * List documents in a project
  */
 export async function listDocuments(projectId: string): Promise<DocumentListResponse> {
-  const response = await fetch(`${API_URL}/api/projects/${projectId}/documents`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch documents');
-  }
-  return response.json();
+  return apiGet<DocumentListResponse>(`/api/projects/${projectId}/documents`);
 }
 
 /**
@@ -83,14 +61,10 @@ export async function checkDuplicateDocument(
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_URL}/api/projects/${projectId}/documents/check-duplicate`, {
-    method: 'POST',
-    body: formData,
-  });
-  if (!response.ok) {
-    throw new Error('Failed to check for duplicates');
-  }
-  return response.json();
+  return apiUpload<DuplicateCheckResponse>(
+    `/api/projects/${projectId}/documents/check-duplicate`,
+    formData
+  );
 }
 
 /**
@@ -104,44 +78,18 @@ export async function uploadDocument(
   const formData = new FormData();
   formData.append('file', file);
 
-  const url = new URL(`${API_URL}/api/projects/${projectId}/documents`);
-  if (replaceExisting) {
-    url.searchParams.set('replace_existing', 'true');
-  }
+  const url = replaceExisting
+    ? `/api/projects/${projectId}/documents?replace_existing=true`
+    : `/api/projects/${projectId}/documents`;
 
-  const response = await fetch(url.toString(), {
-    method: 'POST',
-    body: formData,
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
-    // Handle conflict error specially
-    if (response.status === 409 && error.detail) {
-      const err = new Error(error.detail.message || 'File already exists') as Error & {
-        isConflict: boolean;
-        existingDocumentId: string;
-        uploadedAt: string;
-      };
-      err.isConflict = true;
-      err.existingDocumentId = error.detail.existing_document_id;
-      err.uploadedAt = error.detail.uploaded_at;
-      throw err;
-    }
-    throw new Error(typeof error.detail === 'string' ? error.detail : 'Failed to upload document');
-  }
-  return response.json();
+  return apiUpload<Document>(url, formData);
 }
 
 /**
  * Delete a document
  */
 export async function deleteDocument(projectId: string, documentId: string): Promise<void> {
-  const response = await fetch(`${API_URL}/api/projects/${projectId}/documents/${documentId}`, {
-    method: 'DELETE',
-  });
-  if (!response.ok) {
-    throw new Error('Failed to delete document');
-  }
+  return apiDelete(`/api/projects/${projectId}/documents/${documentId}`);
 }
 
 /**
@@ -160,15 +108,10 @@ export async function getLatestParseResult(
   documentId: string,
   parser?: string
 ): Promise<CachedParseResponse> {
-  const url = new URL(`${API_URL}/api/projects/${projectId}/documents/${documentId}/latest-parse`);
-  if (parser) {
-    url.searchParams.set('parser', parser);
-  }
-  const response = await fetch(url.toString());
-  if (!response.ok) {
-    throw new Error('Failed to fetch parse result');
-  }
-  return response.json();
+  const url = parser
+    ? `/api/projects/${projectId}/documents/${documentId}/latest-parse?parser=${parser}`
+    : `/api/projects/${projectId}/documents/${documentId}/latest-parse`;
+  return apiGet<CachedParseResponse>(url);
 }
 
 /**
@@ -209,27 +152,16 @@ export async function getOrCreateDefaultProject(): Promise<Project | null> {
  * Get usage statistics for a project
  */
 export async function getProjectUsage(projectId: string): Promise<ProjectUsageResponse> {
-  const response = await fetch(`${API_URL}/api/projects/${projectId}/usage`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch project usage');
-  }
-  return response.json();
+  return apiGet<ProjectUsageResponse>(`/api/projects/${projectId}/usage`);
 }
 
 /**
  * Get document status summaries for a project (for dashboard)
  */
 export async function getProjectDocumentStatus(projectId: string): Promise<DocumentStatusListResponse> {
-  const url = `${API_URL}/api/projects/${projectId}/documents/status`;
+  const url = `/api/projects/${projectId}/documents/status`;
   console.log('[getProjectDocumentStatus] Fetching:', url);
-  const response = await fetch(url);
-  console.log('[getProjectDocumentStatus] Response status:', response.status);
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[getProjectDocumentStatus] Error response:', errorText);
-    throw new Error('Failed to fetch document status');
-  }
-  const data = await response.json();
+  const data = await apiGet<DocumentStatusListResponse>(url);
   console.log('[getProjectDocumentStatus] Response data:', JSON.stringify(data).slice(0, 200));
   return data;
 }

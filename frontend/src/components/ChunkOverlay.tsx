@@ -24,6 +24,16 @@ export default function ChunkOverlay({
     pageHeight
   );
 
+  // Debug: log actual CSS values being applied
+  if (isSelected) {
+    console.log('ChunkOverlay RENDER:', {
+      chunkId: chunk.id,
+      inputBox: chunk.grounding.box,
+      pageSize: { pageWidth, pageHeight },
+      calculatedCSS: { left, top, width, height }
+    });
+  }
+
   const color = getChunkColor(chunk.type);
 
   return (

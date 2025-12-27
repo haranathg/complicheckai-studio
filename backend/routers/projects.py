@@ -10,6 +10,7 @@ from database import get_db
 from models.database_models import Project, Document, ParseResult, ProjectSettings, CheckResult
 from services import s3_service
 from services.config_service import load_default_checks_config, list_work_types, get_work_type_config
+from auth import CognitoUser, get_current_user, get_optional_user
 
 router = APIRouter()
 
@@ -142,12 +143,14 @@ async def list_projects(
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(
     project: ProjectCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: CognitoUser = Depends(get_current_user)
 ):
     """Create a new project."""
     db_project = Project(
         name=project.name,
         description=project.description,
+        created_by=user.display_name if user else None,
     )
     db.add(db_project)
     db.commit()

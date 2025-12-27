@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.database_models import Project, Document, DocumentAnnotation
+from auth import CognitoUser, get_current_user, get_optional_user
 
 router = APIRouter()
 
@@ -106,7 +107,8 @@ def annotation_to_response(annotation: DocumentAnnotation) -> AnnotationResponse
 async def create_annotation(
     project_id: str,
     annotation: AnnotationCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: CognitoUser = Depends(get_current_user)
 ):
     """Create a new annotation in a project."""
     # Verify project exists
@@ -134,6 +136,9 @@ async def create_annotation(
         color_map = {"page": "yellow", "document": "green", "project": "blue"}
         color = color_map.get(annotation.level, "yellow")
 
+    # Auto-populate author from authenticated user
+    author = user.display_name if user else annotation.author
+
     # Create annotation
     db_annotation = DocumentAnnotation(
         project_id=project_id,
@@ -150,7 +155,7 @@ async def create_annotation(
         color=color,
         annotation_type=annotation.annotation_type or "comment",
         priority=annotation.priority or "normal",
-        author=annotation.author
+        author=author
     )
     db.add(db_annotation)
     db.commit()
