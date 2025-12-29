@@ -1,10 +1,13 @@
 """Classification service for auto-classifying documents using AI."""
 import json
+import logging
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 
 from models.database_models import Document, ParseResult, ProjectSettings
 from services.config_service import load_default_checks_config
+
+logger = logging.getLogger(__name__)
 
 
 def get_bedrock_client():
@@ -14,7 +17,10 @@ def get_bedrock_client():
 
     # Use configured profile if available
     profile = os.getenv("AWS_PROFILE")
-    region = os.getenv("AWS_REGION", "us-west-2")
+    # Use BEDROCK_REGION if set, otherwise AWS_REGION, default to ap-southeast-2
+    region = os.getenv("BEDROCK_REGION", os.getenv("AWS_REGION", "ap-southeast-2"))
+
+    logger.info(f"[Classification] Creating Bedrock client for region: {region}")
 
     if profile:
         session = boto3.Session(profile_name=profile)
@@ -106,7 +112,7 @@ Respond with JSON only:
         return result
 
     except Exception as e:
-        print(f"Classification failed: {e}")
+        logger.error(f"[Classification] Failed: {e}", exc_info=True)
         return {"document_type": "unknown", "confidence": 0, "signals_found": [], "error": str(e)}
 
 
