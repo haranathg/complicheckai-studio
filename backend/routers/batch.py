@@ -135,10 +135,13 @@ async def process_single_document(
 
         # Download document from S3
         try:
+            logger.info(f"[Batch] Downloading document {document_id} from S3: {document.s3_key}")
             content = s3_service.download_document(document.s3_key)
+            logger.info(f"[Batch] Downloaded {len(content)} bytes for document {document_id}")
             task.progress = 30
             db.commit()
         except Exception as e:
+            logger.error(f"[Batch] Failed to download document {document_id}: {e}", exc_info=True)
             task.status = "failed"
             task.error_message = f"Failed to download document: {str(e)}"
             task.completed_at = datetime.utcnow()
@@ -148,6 +151,7 @@ async def process_single_document(
         start_time = time.time()
 
         # Parse document
+        logger.info(f"[Batch] Starting parse for document {document_id} with parser {parser}")
         try:
             if parser == "claude_vision":
                 claude_service = get_claude_vision_service()
@@ -182,6 +186,7 @@ async def process_single_document(
             db.commit()
 
         except Exception as e:
+            logger.error(f"[Batch] Parsing failed for document {document_id}: {e}", exc_info=True)
             task.status = "failed"
             task.error_message = f"Parsing failed: {str(e)}"
             task.completed_at = datetime.utcnow()
@@ -189,6 +194,7 @@ async def process_single_document(
             return
 
         processing_time_ms = int((time.time() - start_time) * 1000)
+        logger.info(f"[Batch] Parsing completed for document {document_id} in {processing_time_ms}ms")
 
         # Save result to database
         try:
@@ -201,8 +207,9 @@ async def process_single_document(
                     parser=parser,
                     result_data=result
                 )
+                logger.info(f"[Batch] Uploaded parse result to S3: {s3_result_key}")
             except Exception as e:
-                print(f"Warning: Failed to upload parse result to S3: {e}")
+                logger.warning(f"[Batch] Failed to upload parse result to S3: {e}")
 
             # Create ParseResult record
             parse_result = ParseResult(
@@ -246,6 +253,7 @@ async def process_single_document(
             task.parse_result_id = parse_result.id
             task.progress = 85
             db.commit()
+            logger.info(f"[Batch] Saved parse result {parse_result.id} with {len(result.get('chunks', []))} chunks")
 
             # Auto-classify document after parsing
             try:
@@ -264,6 +272,7 @@ async def process_single_document(
             db.commit()
 
         except Exception as e:
+            logger.error(f"[Batch] Failed to save result for document {document_id}: {e}", exc_info=True)
             task.status = "failed"
             task.error_message = f"Failed to save result: {str(e)}"
             task.completed_at = datetime.utcnow()

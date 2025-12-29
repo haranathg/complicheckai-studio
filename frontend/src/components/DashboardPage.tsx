@@ -3,8 +3,9 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Project, DocumentStatusSummary } from '../types/project';
+import type { ProjectSettings } from '../types/checksV2';
 import { listProjects, getProjectDocumentStatus, uploadDocument, createProject } from '../services/projectService';
-import { runBatchChecks, getBatchRuns } from '../services/checksService';
+import { runBatchChecks, getBatchRuns, getProjectSettings } from '../services/checksService';
 import { startBatchProcess, listBatchJobs, getBatchJob, cancelBatchJob } from '../services/batchService';
 import type { BatchJob } from '../types/batch';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
@@ -43,6 +44,7 @@ export default function DashboardPage({
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [showReprocessModal, setShowReprocessModal] = useState(false);
   const [reprocessAction, setReprocessAction] = useState<'process' | 'check' | null>(null);
+  const [projectSettings, setProjectSettings] = useState<ProjectSettings | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadDocumentsRequestId = useRef(0); // Track request ID to prevent stale updates
   const checkBatchJobsRequestId = useRef(0); // Track batch jobs request ID
@@ -56,6 +58,12 @@ export default function DashboardPage({
   useEffect(() => {
     onProjectChange?.(selectedProject);
   }, [selectedProject, onProjectChange]);
+
+  // Reset request counters when project changes (ensures spinner shows on project switch)
+  useEffect(() => {
+    loadDocumentsRequestId.current = 0;
+    checkBatchJobsRequestId.current = 0;
+  }, [selectedProject?.id]);
 
   // Load projects on mount
   useEffect(() => {
@@ -81,24 +89,38 @@ export default function DashboardPage({
     loadProjectsAndDocs();
   }, []);
 
-  // Load documents when selected project changes
+  // Load documents and settings when selected project changes
   const loadDocuments = useCallback(async () => {
     if (!selectedProject) {
       setDocuments([]);
+      setProjectSettings(null);
       return;
     }
+
+    // Check if this is the first load (before incrementing)
+    const isInitialLoad = loadDocumentsRequestId.current === 0;
 
     // Increment request ID and capture it for this request
     const requestId = ++loadDocumentsRequestId.current;
     const projectId = selectedProject.id;
 
     try {
-      setIsLoadingDocs(true);
-      const response = await getProjectDocumentStatus(projectId);
+      // Only show loading spinner on initial load (prevents flicker on refresh)
+      if (isInitialLoad) {
+        setIsLoadingDocs(true);
+      }
+      // Load documents and settings in parallel
+      const [docResponse, settings] = await Promise.all([
+        getProjectDocumentStatus(projectId),
+        getProjectSettings(projectId).catch(() => null), // Don't fail if settings unavailable
+      ]);
 
       // Only update if this is still the latest request
       if (requestId === loadDocumentsRequestId.current) {
-        setDocuments(response.documents);
+        setDocuments(docResponse.documents);
+        if (settings) {
+          setProjectSettings(settings);
+        }
       } else {
         console.log('Ignoring stale document response for request', requestId);
       }
@@ -209,6 +231,15 @@ export default function DashboardPage({
           // Only reload if we're still on the same project
           // Use the ref-based loadDocuments which handles stale requests
           loadDocuments();
+
+          // Show error message for failed or partially failed jobs
+          if (job.status === 'failed') {
+            setError(`Batch processing failed: ${job.error_message || 'Unknown error'}`);
+          } else if (job.status === 'completed_with_errors') {
+            setError(`Processing completed with ${job.failed_documents} failed document(s). Check individual documents for details.`);
+          } else if (job.status === 'cancelled') {
+            setError('Batch processing was cancelled');
+          }
         }
       } catch (err) {
         console.error('Failed to poll batch job:', err);
@@ -318,14 +349,15 @@ export default function DashboardPage({
       setIsProcessing(true);
       const job = await startBatchProcess(selectedProject.id, {
         document_ids: docsToProcess.map(doc => doc.id),
-        parser: 'gemini_vision', // Default parser
+        parser: projectSettings?.vision_parser || 'landing_ai', // Use project settings
         skip_already_parsed: !forceReprocess,
       });
       setActiveBatchJob(job);
       setSelectedDocIds(new Set()); // Clear selection after starting
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to start batch processing:', err);
-      setError('Failed to start document processing');
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(`Failed to start document processing: ${errorMessage}`);
       setIsProcessing(false);
     }
   };
@@ -357,9 +389,10 @@ export default function DashboardPage({
       });
       setActiveBatchRunId(response.batch_run_id);
       setSelectedDocIds(new Set()); // Clear selection after starting
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to start batch checks:', err);
-      setError('Failed to start batch checks');
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(`Failed to start batch checks: ${errorMessage}`);
       setIsRunningBatchCheck(false);
     }
   };
@@ -414,7 +447,7 @@ export default function DashboardPage({
   return (
     <div className="h-screen flex flex-col" style={{ background: theme.pageBg }}>
       {/* Header */}
-      <header className={`border-b ${theme.border} px-6 py-3`} style={{ background: theme.headerBg, backdropFilter: 'blur(8px)' }}>
+      <header className={`border-b ${theme.border} px-6 py-3 relative z-50`} style={{ background: theme.headerBg, backdropFilter: 'blur(8px)' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={cognaifySymbol} alt="Cognaify Solutions" className="h-10 object-contain" />
