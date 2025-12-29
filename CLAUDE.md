@@ -1,5 +1,27 @@
 # CompliCheckAI Studio - Development Notes
 
+## Git Workflow (IMPORTANT)
+
+**Standard Operating Procedure:**
+1. **Always develop on the `dev` branch** - Never make changes directly to `main`
+2. **Test locally** before pushing
+3. **Create a PR** from `dev` to `main` when ready to deploy
+4. **AWS App Runner and Amplify deploy from `main`** - They auto-deploy when `main` is updated
+
+```bash
+# Start work
+git checkout dev
+
+# Make changes, commit
+git add . && git commit -m "Your changes"
+git push origin dev
+
+# When ready to deploy, create PR or merge to main
+git checkout main
+git merge dev
+git push origin main  # This triggers AWS deployment
+```
+
 ## AWS Profiles
 
 - **coguser**: Use this profile for AWS CLI commands (App Runner, Amplify, S3)
