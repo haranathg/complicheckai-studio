@@ -1,5 +1,6 @@
 """API endpoints for batch document processing."""
 import asyncio
+import logging
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
@@ -14,6 +15,8 @@ from services.claude_vision_service import get_claude_vision_service
 from services.gemini_vision_service import get_gemini_vision_service
 from services.bedrock_vision_service import get_bedrock_vision_service
 from services.classification_service import classify_document
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -243,12 +246,14 @@ async def process_single_document(
 
             # Auto-classify document after parsing
             try:
+                logger.info(f"[Batch] Starting classification for document {document_id}")
                 await classify_document(document, parse_result, db)
+                logger.info(f"[Batch] Classification completed for document {document_id}, type: {document.document_type}")
                 task.progress = 95
                 db.commit()
             except Exception as classify_err:
                 # Classification failure shouldn't fail the whole task
-                print(f"Warning: Classification failed for document {document_id}: {classify_err}")
+                logger.error(f"[Batch] Classification failed for document {document_id}: {classify_err}", exc_info=True)
 
             task.status = "completed"
             task.progress = 100

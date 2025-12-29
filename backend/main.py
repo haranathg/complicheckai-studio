@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 import traceback
+import logging
+import sys
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,6 +12,14 @@ import os
 
 load_dotenv()
 
+# Configure logging to stdout for CloudWatch
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -18,15 +28,15 @@ async def lifespan(app: FastAPI):
     database_url = os.getenv("DATABASE_URL")
     if database_url:
         from database import init_database, close_database
-        print("Initializing database connection...")
+        logger.info("Initializing database connection...")
         try:
             init_database(database_url)
-            print("Database initialized successfully")
+            logger.info("Database initialized successfully")
         except Exception as e:
-            print(f"ERROR initializing database: {e}")
-            print(traceback.format_exc())
+            logger.error(f"ERROR initializing database: {e}")
+            logger.error(traceback.format_exc())
     else:
-        print("Warning: DATABASE_URL not set - project/document storage disabled")
+        logger.warning("DATABASE_URL not set - project/document storage disabled")
 
     yield
 
@@ -34,7 +44,7 @@ async def lifespan(app: FastAPI):
     if database_url:
         from database import close_database
         close_database()
-        print("Database connection closed")
+        logger.info("Database connection closed")
 
 
 app = FastAPI(title="CompliCheckAI - Document Compliance Studio", lifespan=lifespan)
@@ -49,8 +59,8 @@ async def global_exception_handler(request: Request, exc: Exception):
         "path": str(request.url.path),
         "traceback": traceback.format_exc()
     }
-    print(f"ERROR on {request.url.path}: {exc}")
-    print(traceback.format_exc())
+    logger.error(f"ERROR on {request.url.path}: {exc}")
+    logger.error(traceback.format_exc())
     return JSONResponse(
         status_code=500,
         content={"detail": str(exc), "error_type": type(exc).__name__}
