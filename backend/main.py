@@ -118,7 +118,7 @@ def health_check():
     openai_key = os.getenv("OPENAI_API_KEY")
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     google_key = os.getenv("GOOGLE_API_KEY")
-    landing_ai_key = os.getenv("LANDINGAI_API_KEY")
+    landing_ai_key = os.getenv("VISION_AGENT_API_KEY")
 
     # Initialize status
     db_healthy = False
