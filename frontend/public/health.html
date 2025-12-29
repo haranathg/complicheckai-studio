@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Health Check</title>
+  <script>
+    const API_URL = 'https://kn2bbychmk.ap-southeast-2.awsapprunner.com';
+
+    async function checkHealth() {
+      const health = {
+        status: 'unknown',
+        checked_at: new Date().toISOString(),
+        frontend: { status: 'healthy' },
+        backend: { status: 'unknown', reachable: false },
+        database: { configured: false, healthy: false },
+        s3: { configured: false, healthy: false },
+        llm_providers: {}
+      };
+
+      try {
+        const response = await fetch(`${API_URL}/health`);
+        if (response.ok) {
+          const backendHealth = await response.json();
+          health.backend = { status: backendHealth.backend?.status || 'healthy', reachable: true };
+          health.database = backendHealth.database || { configured: false, healthy: false };
+          health.s3 = backendHealth.s3 || { configured: false, healthy: false };
+          health.llm_providers = backendHealth.llm_providers || {};
+          health.status = backendHealth.status || 'healthy';
+        } else {
+          health.backend = { status: 'unhealthy', reachable: true, error: `HTTP ${response.status}` };
+          health.status = 'degraded';
+        }
+      } catch (err) {
+        health.backend = { status: 'unreachable', reachable: false, error: err.message };
+        health.status = 'degraded';
+      }
+
+      document.body.innerHTML = '<pre>' + JSON.stringify(health, null, 2) + '</pre>';
+      document.body.style.fontFamily = 'monospace';
+      document.body.style.padding = '20px';
+      document.body.style.backgroundColor = '#1e1e1e';
+      document.body.style.color = '#d4d4d4';
+    }
+
+    checkHealth();
+  </script>
+</head>
+<body>
+  <p>Checking health...</p>
+</body>
+</html>
