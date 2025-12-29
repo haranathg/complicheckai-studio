@@ -753,10 +753,20 @@ export default function DashboardPage({
                         {/* Status Column */}
                         <td className="px-4 py-3">
                           {doc.processed_at ? (
-                            <div className="flex items-center gap-2">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700'}`}>
+                            <div className="flex items-center gap-2 group relative">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium cursor-help ${isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700'}`}
+                              >
                                 Parsed
                               </span>
+                              {/* Tooltip */}
+                              <div className={`absolute left-0 bottom-full mb-2 px-3 py-2 rounded-lg text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none ${isDark ? 'bg-slate-700 text-slate-200' : 'bg-slate-800 text-white'}`}>
+                                <div className="flex flex-col gap-1">
+                                  <span>{new Date(doc.processed_at).toLocaleString()}</span>
+                                  <span>Parser: {doc.parser === 'landing_ai' ? 'Landing AI' : doc.parser === 'gemini_vision' ? 'Gemini Vision' : doc.parser === 'bedrock_claude' ? 'Bedrock Claude' : doc.parser || 'Unknown'}{doc.parser_model ? ` (${doc.parser_model})` : ''}</span>
+                                  {doc.uploaded_by && <span>By: {doc.uploaded_by}</span>}
+                                </div>
+                              </div>
                             </div>
                           ) : (
                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>

@@ -25,6 +25,8 @@ export interface ParseResponse {
     credit_usage: number | null;
     parser?: string;
     model?: string;
+    parsed_at?: string;
+    parsed_by?: string;
     usage?: {
       input_tokens: number;
       output_tokens: number;

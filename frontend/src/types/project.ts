@@ -144,6 +144,8 @@ export interface DocumentStatusSummary {
   created_at: string;
   processed_at?: string;
   parser?: string;
+  parser_model?: string;
+  uploaded_by?: string;
   annotations: AnnotationSummary;
   // V2 Classification fields
   document_type?: string;

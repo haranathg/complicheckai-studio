@@ -166,7 +166,7 @@ export default function ParseResults({
       )}
 
       {/* Collapsible Document Info header with options */}
-      <div className={`rounded-xl mb-4 border ${theme.border} overflow-hidden`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : '#ffffff' }}>
+      <div className={`rounded-xl mb-4 border ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : '#ffffff' }}>
         {/* Header row - always visible */}
         <div
           className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${isDark ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}`}
@@ -191,10 +191,29 @@ export default function ParseResults({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {/* Document Info label */}
-            <span className={`text-xs px-2 py-1 rounded ${isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
-              Document Info
-            </span>
+            {/* Document Info label with tooltip */}
+            <div className="relative group">
+              <span className={`text-xs px-2 py-1 rounded cursor-help ${isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
+                Document Info
+              </span>
+              {/* Tooltip with parse details - shows below to avoid overflow:hidden clipping */}
+              <div className={`absolute right-0 top-full mt-2 px-3 py-2 rounded-lg text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-[200] pointer-events-none shadow-lg ${isDark ? 'bg-slate-700 text-slate-200' : 'bg-slate-800 text-white'}`}>
+                <div className="flex flex-col gap-1">
+                  {result.metadata.parsed_at && (
+                    <span>Parsed: {new Date(result.metadata.parsed_at).toLocaleString()}</span>
+                  )}
+                  {result.metadata.parser && (
+                    <span>Parser: {result.metadata.parser === 'landing_ai' ? 'Landing AI' : result.metadata.parser === 'gemini_vision' ? 'Gemini Vision' : result.metadata.parser === 'bedrock_claude' ? 'Bedrock Claude' : result.metadata.parser}{result.metadata.model ? ` (${result.metadata.model})` : ''}</span>
+                  )}
+                  {result.metadata.parsed_by && (
+                    <span>By: {result.metadata.parsed_by}</span>
+                  )}
+                  {!result.metadata.parsed_at && !result.metadata.parser && (
+                    <span>No parse info available</span>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
