@@ -115,6 +115,8 @@ async def process_single_document(
     from database import SessionLocal
     import time
 
+    logger.info(f"[Batch] Processing document {document_id} with parser {parser}")
+
     db = SessionLocal()
     try:
         # Get task and document
@@ -122,6 +124,7 @@ async def process_single_document(
         document = db.query(Document).filter(Document.id == document_id).first()
 
         if not task or not document:
+            logger.warning(f"[Batch] Task or document not found: task_id={task_id}, document_id={document_id}")
             return
 
         # Update task to processing
@@ -275,12 +278,16 @@ async def run_batch_job(job_id: str, db_url: str):
     from database import SessionLocal
     import os
 
+    logger.info(f"[Batch] Starting batch job {job_id}")
+
     db = SessionLocal()
     try:
         job = db.query(BatchJob).filter(BatchJob.id == job_id).first()
         if not job:
+            logger.error(f"[Batch] Job not found: {job_id}")
             return
 
+        logger.info(f"[Batch] Found job with {job.total_documents} documents, parser={job.parser}")
         job.status = "processing"
         job.started_at = datetime.utcnow()
         db.commit()
@@ -290,6 +297,8 @@ async def run_batch_job(job_id: str, db_url: str):
             BatchTask.batch_job_id == job_id,
             BatchTask.status == "pending"
         ).all()
+
+        logger.info(f"[Batch] Found {len(tasks)} pending tasks to process")
 
         # Process documents in parallel (with concurrency limit)
         max_concurrent = int(os.getenv("BATCH_CONCURRENCY", "3"))
@@ -307,7 +316,9 @@ async def run_batch_job(job_id: str, db_url: str):
                 )
 
         # Run all tasks
+        logger.info(f"[Batch] Starting parallel processing with concurrency={max_concurrent}")
         await asyncio.gather(*[process_with_semaphore(t) for t in tasks])
+        logger.info(f"[Batch] All tasks completed for job {job_id}")
 
         # Update job status
         db.refresh(job)
