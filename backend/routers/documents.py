@@ -187,6 +187,8 @@ class DocumentStatusSummary(BaseModel):
     created_at: datetime
     processed_at: Optional[datetime] = None
     parser: Optional[str] = None
+    parser_model: Optional[str] = None
+    uploaded_by: Optional[str] = None
     annotations: AnnotationSummary
     # V2 Classification fields
     document_type: Optional[str] = None
@@ -272,6 +274,8 @@ async def get_documents_status(
             created_at=doc.created_at,
             processed_at=latest_parse.created_at if latest_parse else None,
             parser=latest_parse.parser if latest_parse else None,
+            parser_model=latest_parse.model if latest_parse else None,
+            uploaded_by=doc.uploaded_by,
             annotations=AnnotationSummary(
                 total=total_annotations,
                 open=open_count,
@@ -715,6 +719,8 @@ async def get_latest_parse_result(
                 "credit_usage": parse_result.credit_usage,
                 "parser": parse_result.parser,
                 "model": parse_result.model,
+                "parsed_at": parse_result.created_at.isoformat() if parse_result.created_at else None,
+                "parsed_by": document.uploaded_by,
                 "usage": {
                     "input_tokens": parse_result.input_tokens or 0,
                     "output_tokens": parse_result.output_tokens or 0,
