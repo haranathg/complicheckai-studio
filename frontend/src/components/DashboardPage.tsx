@@ -544,9 +544,7 @@ export default function DashboardPage({
                       className="px-4 py-2 rounded-full transition-colors flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white"
                       title="Cancel processing"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                       <span>Cancel</span>
                       {activeBatchJob && (
                         <span className="text-xs opacity-80">

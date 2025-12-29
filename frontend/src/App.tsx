@@ -702,7 +702,7 @@ function App() {
   return (
     <div className="h-screen flex flex-col" style={{ background: theme.pageBg }}>
       {/* Header */}
-      <header className={`border-b ${theme.border} px-6 py-3`} style={{ background: theme.headerBg, backdropFilter: 'blur(8px)' }}>
+      <header className={`border-b ${theme.border} px-6 py-3 relative z-50`} style={{ background: theme.headerBg, backdropFilter: 'blur(8px)' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* Back to Dashboard button */}

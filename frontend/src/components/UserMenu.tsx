@@ -111,7 +111,7 @@ export default function UserMenu({ compact = false, className = '' }: UserMenuPr
       {/* Dropdown Menu */}
       {isOpen && (
         <div
-          className={`absolute right-0 mt-2 w-56 rounded-xl shadow-lg border ${theme.border} py-1 z-50`}
+          className={`absolute right-0 mt-2 w-56 rounded-xl shadow-lg border ${theme.border} py-1 z-[100]`}
           style={{
             background: isDark ? 'rgb(30, 41, 59)' : 'white',
           }}
