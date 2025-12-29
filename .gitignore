@@ -69,3 +69,12 @@ coverage/
 # Large files and samples
 *.zip
 samples/
+
+# Temporary files and screenshots
+tmp/
+
+# Infrastructure (Terraform/CloudFormation)
+infrastructure/
+
+# Scripts
+check_aws_conflicts.sh
