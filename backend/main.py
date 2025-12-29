@@ -103,15 +103,30 @@ app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 
 @app.get("/health")
 def health_check():
-    """Health check endpoint with database ping to keep connection alive."""
+    """Full health check endpoint - checks backend, database, S3, and LLM API keys."""
     from sqlalchemy import text
+    import boto3
+    from botocore.exceptions import ClientError, NoCredentialsError
+    from datetime import datetime
 
+    # Environment variables
     database_url = os.getenv("DATABASE_URL")
     s3_bucket = os.getenv("S3_BUCKET")
+    aws_region = os.getenv("AWS_REGION", "ap-southeast-2")
+
+    # API keys configured
+    openai_key = os.getenv("OPENAI_API_KEY")
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    google_key = os.getenv("GOOGLE_API_KEY")
+    landing_ai_key = os.getenv("LANDINGAI_API_KEY")
+
+    # Initialize status
     db_healthy = False
     db_error = None
+    s3_healthy = False
+    s3_error = None
 
-    # Ping the database to keep it active (prevents Neon from suspending)
+    # Check database connectivity
     if database_url:
         try:
             from database import SessionLocal
@@ -125,12 +140,67 @@ def health_check():
         except Exception as e:
             db_error = str(e)
 
+    # Check S3 connectivity
+    if s3_bucket:
+        try:
+            s3_client = boto3.client('s3', region_name=aws_region)
+            # Just check if we can access the bucket (head_bucket is lightweight)
+            s3_client.head_bucket(Bucket=s3_bucket)
+            s3_healthy = True
+        except NoCredentialsError:
+            s3_error = "AWS credentials not configured"
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            if error_code == '403':
+                s3_error = "Access denied to S3 bucket"
+            elif error_code == '404':
+                s3_error = "S3 bucket not found"
+            else:
+                s3_error = f"S3 error: {error_code}"
+        except Exception as e:
+            s3_error = str(e)
+
+    # Determine overall status
+    all_healthy = True
+    degraded = False
+
+    if database_url and not db_healthy:
+        all_healthy = False
+    if s3_bucket and not s3_healthy:
+        degraded = True  # S3 issues are degraded, not unhealthy
+
+    if not all_healthy:
+        overall_status = "unhealthy"
+    elif degraded:
+        overall_status = "degraded"
+    else:
+        overall_status = "healthy"
+
     return {
-        "status": "healthy" if (not database_url or db_healthy) else "degraded",
-        "database_configured": bool(database_url),
-        "database_healthy": db_healthy,
-        "database_error": db_error,
-        "s3_configured": bool(s3_bucket)
+        "status": overall_status,
+        "checked_at": datetime.utcnow().isoformat() + "Z",
+        "backend": {
+            "status": "healthy",
+            "version": "1.0.0"
+        },
+        "database": {
+            "configured": bool(database_url),
+            "healthy": db_healthy,
+            "error": db_error
+        },
+        "s3": {
+            "configured": bool(s3_bucket),
+            "healthy": s3_healthy,
+            "bucket": s3_bucket if s3_bucket else None,
+            "error": s3_error
+        },
+        "llm_providers": {
+            "openai": bool(openai_key),
+            "anthropic": bool(anthropic_key),
+            "google": bool(google_key),
+            "landing_ai": bool(landing_ai_key),
+            "bedrock": True  # Bedrock uses IAM, always available if AWS creds work
+        }
     }
 
 
