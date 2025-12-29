@@ -266,7 +266,7 @@ class BatchJob(Base):
     model = Column(String(100), nullable=True)
 
     # Progress tracking
-    status = Column(String(20), default="pending")  # pending, processing, completed, failed, cancelled
+    status = Column(String(30), default="pending")  # pending, processing, completed, completed_with_errors, failed, cancelled
     total_documents = Column(Integer, default=0)
     completed_documents = Column(Integer, default=0)
     failed_documents = Column(Integer, default=0)
