@@ -589,10 +589,10 @@ export default function DashboardPage({
                     <button
                       onClick={() => handleProcessSelected()}
                       disabled={selectedDocIds.size === 0}
-                      className={`px-4 py-2 rounded-full transition-colors flex items-center gap-2 disabled:opacity-50 ${
+                      className={`px-4 py-2 rounded-full transition-colors flex items-center gap-2 disabled:opacity-50 border ${
                         isDark
-                          ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                          : 'bg-amber-500 hover:bg-amber-600 text-white'
+                          ? 'bg-transparent border-slate-600 text-slate-300 hover:bg-slate-700/50 hover:border-slate-500'
+                          : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
                       }`}
                       title={selectedDocIds.size === 0 ? 'Select documents to process' : `Process ${selectedDocIds.size} selected document(s)`}
                     >
@@ -606,10 +606,10 @@ export default function DashboardPage({
                   <button
                     onClick={() => handleRunChecksSelected()}
                     disabled={isRunningBatchCheck || selectedDocIds.size === 0}
-                    className={`px-4 py-2 rounded-full transition-colors flex items-center gap-2 disabled:opacity-50 ${
+                    className={`px-4 py-2 rounded-full transition-colors flex items-center gap-2 disabled:opacity-50 border ${
                       isDark
-                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                        : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                        ? 'bg-transparent border-slate-600 text-slate-300 hover:bg-slate-700/50 hover:border-slate-500'
+                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
                     }`}
                     title={selectedDocIds.size === 0 ? 'Select documents to run checks' : `Run checks on ${selectedDocIds.size} selected document(s)`}
                   >
