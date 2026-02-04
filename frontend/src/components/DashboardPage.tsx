@@ -9,6 +9,7 @@ import { runBatchChecks, getBatchRuns, getProjectSettings } from '../services/ch
 import { startBatchProcess, listBatchJobs, getBatchJob, cancelBatchJob } from '../services/batchService';
 import type { BatchJob } from '../types/batch';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import DocumentTypeBadge from './DocumentTypeBadge';
 import BatchCheckProgress from './BatchCheckProgress';
 import UserMenu from './UserMenu';
@@ -28,6 +29,23 @@ export default function DashboardPage({
 }: DashboardPageProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
+  const { getAccessToken, signOut } = useAuth();
+
+  // Proactively check session validity on mount
+  // GET endpoints work without auth, so user won't know their session expired
+  // until they try a write operation. This catches it early.
+  useEffect(() => {
+    const checkSession = async () => {
+      const token = await getAccessToken();
+      if (!token) {
+        console.warn('[Dashboard] No valid auth token - session may have expired');
+        await signOut();
+        window.location.reload();
+      }
+    };
+    checkSession();
+  }, [getAccessToken, signOut]);
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [documents, setDocuments] = useState<DocumentStatusSummary[]>([]);
