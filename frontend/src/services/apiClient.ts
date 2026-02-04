@@ -36,10 +36,14 @@ async function getAccessToken(): Promise<string | null> {
   }
 
   try {
-    const session = await fetchAuthSession();
-    // Use ID token - it contains name, email, etc. for user attribution
-    return session.tokens?.idToken?.toString() || null;
-  } catch {
+    const session = await fetchAuthSession({ forceRefresh: false });
+    const token = session.tokens?.idToken?.toString() || null;
+    if (!token) {
+      console.warn('[API] No ID token available from session - user may need to re-authenticate');
+    }
+    return token;
+  } catch (err) {
+    console.error('[API] Failed to get auth session:', err);
     return null;
   }
 }
@@ -83,6 +87,19 @@ export async function apiFetch<T = unknown>(
 
   // Handle non-2xx responses
   if (!response.ok) {
+    // On 401, the session may have expired - force re-login
+    if (response.status === 401 && !AUTH_DISABLED) {
+      console.warn('[API] 401 Unauthorized - session may have expired, reloading to re-authenticate');
+      try {
+        const { signOut } = await import('aws-amplify/auth');
+        await signOut();
+      } catch {
+        // Ignore signOut errors
+      }
+      window.location.reload();
+      throw new ApiError('Session expired. Please sign in again.', 401, 'Session expired');
+    }
+
     let detail: string | undefined;
     try {
       const errorData = await response.json();
