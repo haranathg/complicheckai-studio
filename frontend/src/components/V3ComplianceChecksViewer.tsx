@@ -9,65 +9,92 @@ import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 interface V3Check {
   id: string;
   name: string;
+  prompt: string;
   category: 'completeness' | 'compliance';
   applies_to: string[];
-  description: string;
-  search_terms?: string[];
-  pass_criteria: string;
-  fail_criteria: string;
+  required: boolean;
+  rule_reference?: string;
 }
 
-// Hardcoded V3 checks (from compliance_checks_v3.json)
-// In future, this could be fetched from an API endpoint
+// Actual V3 checks from compliance_checks_v3.json
 const V3_CHECKS: V3Check[] = [
+  // Scale & Orientation
+  { id: "scale_indicator", name: "Scale Indicator", prompt: "Does this page have a scale indicator (e.g., 1:100, 1:50, scale bar)?", applies_to: ["floor_plan", "site_plan", "elevation", "section", "detail"], category: "completeness", required: true },
+  { id: "north_arrow", name: "North Arrow", prompt: "Is there a north arrow or north direction indicator on this plan?", applies_to: ["floor_plan", "site_plan"], category: "completeness", required: true },
+  { id: "dimensions_marked", name: "Dimensions Marked", prompt: "Are dimensions clearly marked on this drawing (room sizes, setbacks, heights)?", applies_to: ["floor_plan", "site_plan", "elevation", "section", "detail"], category: "completeness", required: true },
+
   // Floor Plan checks
-  { id: "fp_scale_bar", name: "Scale Bar Present", category: "completeness", applies_to: ["floor_plan"], description: "Floor plan includes a scale bar or scale notation", search_terms: ["scale", "1:100", "1:50", "1:200"], pass_criteria: "Scale bar or scale notation is clearly visible", fail_criteria: "No scale indication found" },
-  { id: "fp_north_arrow", name: "North Arrow", category: "completeness", applies_to: ["floor_plan"], description: "Floor plan shows orientation with north arrow", search_terms: ["north", "N", "compass", "orientation"], pass_criteria: "North arrow or orientation indicator present", fail_criteria: "No orientation indicator found" },
-  { id: "fp_dimensions", name: "Room Dimensions", category: "completeness", applies_to: ["floor_plan"], description: "Floor plan shows room dimensions", search_terms: ["dimension", "size", "measurement", "m", "mm"], pass_criteria: "Room dimensions are clearly marked", fail_criteria: "Missing or unclear room dimensions" },
-  { id: "fp_room_labels", name: "Room Labels", category: "completeness", applies_to: ["floor_plan"], description: "All rooms are labeled with their function", search_terms: ["bedroom", "bathroom", "kitchen", "living", "garage", "laundry"], pass_criteria: "All rooms have clear labels", fail_criteria: "Some rooms are unlabeled" },
-  { id: "fp_door_swing", name: "Door Swing Direction", category: "completeness", applies_to: ["floor_plan"], description: "Door swing directions are shown", search_terms: ["door", "swing", "arc"], pass_criteria: "Door swing directions are indicated", fail_criteria: "Door swing directions not shown" },
-  { id: "fp_window_schedule", name: "Window References", category: "completeness", applies_to: ["floor_plan"], description: "Windows are referenced or scheduled", search_terms: ["window", "W1", "W2", "glazing"], pass_criteria: "Windows are referenced with schedule codes", fail_criteria: "Windows not referenced" },
+  { id: "room_labels", name: "Room Labels", prompt: "Are all rooms labelled with their intended use (e.g., Bedroom, Kitchen, Living)?", applies_to: ["floor_plan"], category: "completeness", required: true },
+  { id: "floor_level_identifier", name: "Floor Level Identifier", prompt: "Is the floor level or storey clearly identified (e.g., Ground Floor, Level 1)?", applies_to: ["floor_plan"], category: "completeness", required: true },
+  { id: "door_positions", name: "Door Positions", prompt: "Are door positions and swing directions shown on this floor plan?", applies_to: ["floor_plan"], category: "completeness", required: true },
+  { id: "window_positions", name: "Window Positions", prompt: "Are window positions indicated on this floor plan?", applies_to: ["floor_plan"], category: "completeness", required: true },
 
   // Site Plan checks
-  { id: "sp_boundaries", name: "Property Boundaries", category: "completeness", applies_to: ["site_plan"], description: "Site plan shows property boundaries with dimensions", search_terms: ["boundary", "property line", "lot"], pass_criteria: "Property boundaries clearly shown with dimensions", fail_criteria: "Property boundaries missing or unclear" },
-  { id: "sp_setbacks", name: "Building Setbacks", category: "completeness", applies_to: ["site_plan"], description: "Building setbacks from boundaries are dimensioned", search_terms: ["setback", "offset", "distance"], pass_criteria: "Setback dimensions are provided", fail_criteria: "Setback dimensions missing" },
-  { id: "sp_north_point", name: "North Point", category: "completeness", applies_to: ["site_plan"], description: "Site plan includes north point orientation", search_terms: ["north", "N", "compass"], pass_criteria: "North point is shown", fail_criteria: "North point missing" },
-  { id: "sp_scale", name: "Site Plan Scale", category: "completeness", applies_to: ["site_plan"], description: "Site plan includes scale notation", search_terms: ["scale", "1:200", "1:500", "1:100"], pass_criteria: "Scale is clearly indicated", fail_criteria: "Scale not shown" },
-  { id: "sp_access", name: "Vehicle Access", category: "completeness", applies_to: ["site_plan"], description: "Vehicle access and driveway shown", search_terms: ["driveway", "access", "vehicle", "crossing"], pass_criteria: "Vehicle access is shown", fail_criteria: "Vehicle access not indicated" },
-  { id: "sp_services", name: "Services Location", category: "completeness", applies_to: ["site_plan"], description: "Location of services (water, sewer, power) indicated", search_terms: ["water", "sewer", "power", "services", "connection"], pass_criteria: "Service connections shown", fail_criteria: "Service locations not indicated" },
+  { id: "boundary_dimensions", name: "Boundary Dimensions", prompt: "Are all property boundary dimensions shown on this site plan?", applies_to: ["site_plan"], category: "completeness", required: true },
+  { id: "site_area", name: "Site Area", prompt: "Is the total site area specified on this site plan?", applies_to: ["site_plan"], category: "completeness", required: true },
+  { id: "setback_dimensions", name: "Setback Dimensions", prompt: "Are setback distances from boundaries shown for buildings on this site plan?", applies_to: ["site_plan"], category: "completeness", required: true },
+  { id: "existing_buildings", name: "Existing Buildings", prompt: "Are existing buildings or structures shown and labelled on this site plan?", applies_to: ["site_plan"], category: "completeness", required: false },
+  { id: "proposed_works", name: "Proposed Works", prompt: "Are proposed works clearly identified and distinguished from existing on this plan?", applies_to: ["site_plan", "floor_plan"], category: "completeness", required: true },
 
   // Elevation checks
-  { id: "el_heights", name: "Building Heights", category: "completeness", applies_to: ["elevation"], description: "Building heights and levels are dimensioned", search_terms: ["height", "RL", "level", "FFL"], pass_criteria: "Heights and levels are dimensioned", fail_criteria: "Height dimensions missing" },
-  { id: "el_materials", name: "External Materials", category: "completeness", applies_to: ["elevation"], description: "External materials and finishes are noted", search_terms: ["cladding", "finish", "material", "brick", "render"], pass_criteria: "Materials are specified", fail_criteria: "Material specifications missing" },
-  { id: "el_roof_pitch", name: "Roof Pitch", category: "completeness", applies_to: ["elevation"], description: "Roof pitch angle is indicated", search_terms: ["pitch", "degree", "roof angle", "fall"], pass_criteria: "Roof pitch is shown", fail_criteria: "Roof pitch not indicated" },
-  { id: "el_windows", name: "Window Positions", category: "completeness", applies_to: ["elevation"], description: "Windows are shown in correct positions", search_terms: ["window", "glazing", "opening"], pass_criteria: "Windows shown in elevations", fail_criteria: "Windows not clearly shown" },
-
-  // Section checks
-  { id: "sec_foundation", name: "Foundation Detail", category: "completeness", applies_to: ["section"], description: "Foundation type and depth shown", search_terms: ["foundation", "footing", "slab", "ground"], pass_criteria: "Foundation details are shown", fail_criteria: "Foundation details missing" },
-  { id: "sec_ceiling_height", name: "Ceiling Heights", category: "completeness", applies_to: ["section"], description: "Ceiling heights are dimensioned", search_terms: ["ceiling", "height", "clearance"], pass_criteria: "Ceiling heights dimensioned", fail_criteria: "Ceiling heights not shown" },
-  { id: "sec_insulation", name: "Insulation Shown", category: "completeness", applies_to: ["section"], description: "Insulation locations and R-values indicated", search_terms: ["insulation", "R-value", "thermal"], pass_criteria: "Insulation is indicated", fail_criteria: "Insulation not shown" },
+  { id: "elevation_direction", name: "Elevation Direction", prompt: "Is the elevation direction clearly identified (e.g., North Elevation, Street Elevation)?", applies_to: ["elevation"], category: "completeness", required: true },
+  { id: "height_dimensions", name: "Height Dimensions", prompt: "Are building heights shown on this elevation (floor to ceiling, overall height)?", applies_to: ["elevation", "section"], category: "completeness", required: true },
+  { id: "ground_level_rl", name: "Ground Level (RL)", prompt: "Is the ground level or finished floor level shown (RL - Reduced Level)?", applies_to: ["elevation", "section"], category: "completeness", required: true },
+  { id: "external_materials", name: "External Materials", prompt: "Are external materials and finishes indicated on this elevation?", applies_to: ["elevation"], category: "completeness", required: false },
 
   // Detail checks
-  { id: "det_scale", name: "Detail Scale", category: "completeness", applies_to: ["detail"], description: "Construction detail includes scale", search_terms: ["scale", "1:5", "1:10", "1:20"], pass_criteria: "Scale is indicated", fail_criteria: "Scale missing" },
-  { id: "det_materials", name: "Material Specification", category: "completeness", applies_to: ["detail"], description: "Materials are specified in detail", search_terms: ["material", "specification", "mm"], pass_criteria: "Materials clearly specified", fail_criteria: "Material specs missing" },
+  { id: "detail_title", name: "Detail Title", prompt: "Is this detail drawing clearly titled and labelled?", applies_to: ["detail"], category: "completeness", required: true },
+  { id: "materials_identified", name: "Materials Identified", prompt: "Are materials and components clearly identified in this detail?", applies_to: ["detail"], category: "completeness", required: true },
 
-  // Schedule checks
-  { id: "sch_window", name: "Window Schedule Complete", category: "completeness", applies_to: ["schedule"], description: "Window schedule includes all required information", search_terms: ["window", "size", "type", "glazing"], pass_criteria: "Window schedule is complete", fail_criteria: "Window schedule incomplete" },
-  { id: "sch_door", name: "Door Schedule Complete", category: "completeness", applies_to: ["schedule"], description: "Door schedule includes all required information", search_terms: ["door", "size", "type", "hardware"], pass_criteria: "Door schedule is complete", fail_criteria: "Door schedule incomplete" },
-  { id: "sch_finish", name: "Finishes Schedule", category: "completeness", applies_to: ["schedule"], description: "Room finishes are scheduled", search_terms: ["finish", "floor", "wall", "ceiling"], pass_criteria: "Finishes schedule present", fail_criteria: "Finishes schedule missing" },
+  // Drawing meta checks
+  { id: "drawing_date", name: "Drawing Date", prompt: "Is a drawing date or revision date shown on this page?", applies_to: ["floor_plan", "site_plan", "elevation", "section", "detail", "cover_sheet"], category: "completeness", required: true },
+  { id: "author_company", name: "Author/Company", prompt: "Is the author, designer or company who prepared this drawing shown?", applies_to: ["floor_plan", "site_plan", "elevation", "section", "detail", "cover_sheet"], category: "completeness", required: true },
+  { id: "site_address", name: "Site Address", prompt: "Is the site/property address shown on this page?", applies_to: ["site_plan", "cover_sheet", "form", "certificate"], category: "completeness", required: true },
+  { id: "legal_description", name: "Legal Description", prompt: "Is the legal description (Lot/DP reference) shown?", applies_to: ["site_plan", "cover_sheet", "form"], category: "completeness", required: true },
+  { id: "consent_number", name: "Consent Number", prompt: "Is a building consent or application number shown?", applies_to: ["form", "certificate", "cover_sheet"], category: "completeness", required: true },
 
-  // Cover Sheet checks
-  { id: "cs_address", name: "Site Address", category: "completeness", applies_to: ["cover_sheet"], description: "Project address is clearly stated", search_terms: ["address", "street", "road", "location"], pass_criteria: "Site address is shown", fail_criteria: "Site address missing" },
-  { id: "cs_drawing_list", name: "Drawing List", category: "completeness", applies_to: ["cover_sheet"], description: "List of drawings included in set", search_terms: ["drawing", "list", "index", "sheet"], pass_criteria: "Drawing list provided", fail_criteria: "Drawing list missing" },
-  { id: "cs_legend", name: "Symbols Legend", category: "completeness", applies_to: ["cover_sheet"], description: "Legend of symbols used in drawings", search_terms: ["legend", "symbol", "key", "notation"], pass_criteria: "Symbol legend provided", fail_criteria: "Symbol legend missing" },
+  // Form/Certificate checks
+  { id: "signature_present", name: "Signature Present", prompt: "Is a signature present on this document?", applies_to: ["form", "certificate", "letter"], category: "completeness", required: true },
+  { id: "date_signed", name: "Date Signed", prompt: "Is the document dated?", applies_to: ["form", "certificate", "letter"], category: "completeness", required: true },
+  { id: "registration_number", name: "Registration/Accreditation", prompt: "Is the issuer's registration or accreditation number shown (LBP, CPEng, etc.)?", applies_to: ["certificate"], category: "completeness", required: true },
+  { id: "scope_of_work", name: "Scope of Work", prompt: "Is the scope of work or certification clearly defined?", applies_to: ["certificate"], category: "completeness", required: true },
+  { id: "certificate_reference", name: "Certificate Reference", prompt: "Does the certificate reference the specific project, address, or consent number?", applies_to: ["certificate"], category: "completeness", required: true },
+  { id: "form_complete", name: "Form Completeness", prompt: "Are all required fields on this form filled in (no blank mandatory fields)?", applies_to: ["form"], category: "completeness", required: true },
+
+  // Specification checks
+  { id: "manufacturer_name", name: "Manufacturer Name", prompt: "Is the manufacturer name clearly shown?", applies_to: ["specification"], category: "completeness", required: true },
+  { id: "model_number", name: "Model Number", prompt: "Is the product model name or number shown?", applies_to: ["specification"], category: "completeness", required: true },
+  { id: "clearance_requirements", name: "Clearance Requirements", prompt: "Are clearance or spacing requirements specified?", applies_to: ["specification"], category: "completeness", required: true },
+  { id: "installation_instructions", name: "Installation Instructions", prompt: "Are installation instructions present?", applies_to: ["specification"], category: "completeness", required: true },
+
+  // Schedule/Table checks
+  { id: "schedule_complete", name: "Schedule Completeness", prompt: "Does this schedule contain all required entries with complete information (no blank fields)?", applies_to: ["schedule", "table"], category: "completeness", required: true },
+  { id: "schedule_references", name: "Schedule References", prompt: "Do the items in this schedule reference specific drawing numbers or locations?", applies_to: ["schedule", "table"], category: "completeness", required: false },
+
+  // Report checks
+  { id: "report_author", name: "Report Author", prompt: "Is the report author or company identified?", applies_to: ["report"], category: "completeness", required: true },
+  { id: "report_dated", name: "Report Dated", prompt: "Is there a date on this report?", applies_to: ["report"], category: "completeness", required: true },
+  { id: "report_findings", name: "Report Findings", prompt: "Does the report include clear findings or conclusions?", applies_to: ["report"], category: "completeness", required: true },
+
+  // Cover sheet checks
+  { id: "cover_drawing_list", name: "Drawing List", prompt: "Is there a drawing list or index on this cover sheet?", applies_to: ["cover_sheet"], category: "completeness", required: true },
+  { id: "cover_project_info", name: "Project Information", prompt: "Is the project name, address, or description provided on this cover sheet?", applies_to: ["cover_sheet"], category: "completeness", required: true },
+
+  // Letter checks
+  { id: "letter_dated", name: "Letter Dated", prompt: "Is there a date on this letter?", applies_to: ["letter"], category: "completeness", required: true },
+  { id: "letter_signed", name: "Letter Signed", prompt: "Is this letter signed?", applies_to: ["letter"], category: "completeness", required: true },
+
+  // Photo/Unknown checks
+  { id: "photo_labelled", name: "Photo Labelled", prompt: "Is this photo labelled with what it shows (location, date, or subject)?", applies_to: ["photo"], category: "completeness", required: false },
+  { id: "unknown_identifiable", name: "Content Identifiable", prompt: "Can the purpose or content of this page be determined?", applies_to: ["unknown"], category: "completeness", required: false },
 
   // Compliance checks
-  { id: "fp_egress", name: "Egress Requirements", category: "compliance", applies_to: ["floor_plan"], description: "Emergency egress paths meet minimum requirements", search_terms: ["egress", "exit", "escape", "emergency"], pass_criteria: "Egress paths appear adequate", fail_criteria: "Egress may not meet requirements" },
-  { id: "fp_accessibility", name: "Accessibility Compliance", category: "compliance", applies_to: ["floor_plan"], description: "Accessible routes and facilities where required", search_terms: ["accessible", "disabled", "wheelchair", "ramp"], pass_criteria: "Accessibility features shown where required", fail_criteria: "Accessibility features may be missing" },
-  { id: "sp_coverage", name: "Site Coverage", category: "compliance", applies_to: ["site_plan"], description: "Building coverage within allowable limits", search_terms: ["coverage", "site area", "building area", "%"], pass_criteria: "Site coverage appears compliant", fail_criteria: "Site coverage may exceed limits" },
-  { id: "sp_height_limit", name: "Height Restrictions", category: "compliance", applies_to: ["site_plan", "elevation"], description: "Building height within zone limits", search_terms: ["height", "limit", "zone", "maximum"], pass_criteria: "Height appears within limits", fail_criteria: "Height may exceed zone limits" },
-  { id: "el_recession", name: "Recession Planes", category: "compliance", applies_to: ["elevation"], description: "Building within recession plane requirements", search_terms: ["recession", "plane", "daylight", "height in relation"], pass_criteria: "Within recession planes", fail_criteria: "May breach recession planes" },
-  { id: "sec_bracing", name: "Bracing Requirements", category: "compliance", applies_to: ["section"], description: "Structural bracing elements indicated", search_terms: ["bracing", "brace", "structural", "shear"], pass_criteria: "Bracing elements shown", fail_criteria: "Bracing not clearly indicated" },
+  { id: "standards_compliance", name: "Standards Compliance", prompt: "Are compliance standards referenced (AS/NZS)?", applies_to: ["specification", "certificate"], category: "compliance", rule_reference: "AS/NZS Standards", required: true },
+  { id: "site_coverage_compliant", name: "Site Coverage Compliance", prompt: "Based on the site plan, does the site coverage appear to be within typical limits (35-40%)?", applies_to: ["site_plan"], category: "compliance", rule_reference: "District Plan - Site Coverage", required: false },
+  { id: "height_limit_compliant", name: "Height Limit Compliance", prompt: "Based on the elevations, does the building height appear to be within typical residential limits (8-9m)?", applies_to: ["elevation"], category: "compliance", rule_reference: "District Plan - Height Limits", required: false },
+  { id: "setback_compliant", name: "Setback Compliance", prompt: "Do the setback distances shown meet typical minimum requirements (front 4.5m, side 1.5m)?", applies_to: ["site_plan"], category: "compliance", rule_reference: "District Plan - Yard Requirements", required: false },
+  { id: "vehicle_access", name: "Vehicle Access", prompt: "Is vehicle access or driveway shown on the site plan?", applies_to: ["site_plan"], category: "compliance", rule_reference: "District Plan - Access Requirements", required: false },
+  { id: "stormwater_indicated", name: "Stormwater Disposal", prompt: "Is stormwater disposal indicated on the site plan?", applies_to: ["site_plan"], category: "compliance", rule_reference: "Building Code E1", required: false },
 ];
 
 // Page type display names
@@ -79,6 +106,14 @@ const PAGE_TYPE_LABELS: Record<string, string> = {
   detail: 'Detail',
   schedule: 'Schedule',
   cover_sheet: 'Cover Sheet',
+  form: 'Form',
+  certificate: 'Certificate',
+  letter: 'Letter',
+  report: 'Report',
+  photo: 'Photo',
+  table: 'Table',
+  specification: 'Specification',
+  unknown: 'Unknown',
 };
 
 // Page type colors
@@ -90,6 +125,14 @@ const PAGE_TYPE_COLORS: Record<string, string> = {
   detail: '#f59e0b',
   schedule: '#84cc16',
   cover_sheet: '#0ea5e9',
+  form: '#f97316',
+  certificate: '#22c55e',
+  letter: '#a855f7',
+  report: '#ec4899',
+  photo: '#6366f1',
+  table: '#eab308',
+  specification: '#ef4444',
+  unknown: '#6b7280',
 };
 
 export default function V3ComplianceChecksViewer() {
@@ -124,8 +167,8 @@ export default function V3ComplianceChecksViewer() {
           V3 Page-Level Compliance Checks
         </h3>
         <p className={`text-xs ${theme.textMuted}`}>
-          {V3_CHECKS.length} checks across {Object.keys(PAGE_TYPE_LABELS).length} page types.
-          These checks run automatically based on page type classification.
+          {V3_CHECKS.length} AI-evaluated checks across {Object.keys(PAGE_TYPE_LABELS).length} page types.
+          Checks run automatically based on page type classification.
         </p>
         <p className={`text-xs ${theme.textSubtle} mt-1`}>
           To modify checks, edit <code className={`px-1 py-0.5 rounded ${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}>backend/config/compliance_checks_v3.json</code>
@@ -205,27 +248,26 @@ export default function V3ComplianceChecksViewer() {
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className={`text-sm font-medium ${theme.textPrimary}`}>{check.name}</span>
                           <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
                             {check.id}
                           </span>
+                          {check.required ? (
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
+                              required
+                            </span>
+                          ) : (
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-slate-600 text-slate-400' : 'bg-slate-200 text-slate-500'}`}>
+                              optional
+                            </span>
+                          )}
                         </div>
-                        <p className={`text-xs ${theme.textMuted} mt-1`}>{check.description}</p>
-                        {check.search_terms && check.search_terms.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {check.search_terms.slice(0, 5).map(term => (
-                              <span
-                                key={term}
-                                className={`text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-slate-700/50 text-slate-400' : 'bg-slate-100 text-slate-500'}`}
-                              >
-                                {term}
-                              </span>
-                            ))}
-                            {check.search_terms.length > 5 && (
-                              <span className={`text-xs ${theme.textSubtle}`}>+{check.search_terms.length - 5} more</span>
-                            )}
-                          </div>
+                        <p className={`text-xs ${theme.textMuted} mt-1.5 italic`}>"{check.prompt}"</p>
+                        {check.rule_reference && (
+                          <p className={`text-xs ${theme.textSubtle} mt-1`}>
+                            Rule: {check.rule_reference}
+                          </p>
                         )}
                       </div>
                     </div>
