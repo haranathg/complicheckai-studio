@@ -1,12 +1,9 @@
 /**
- * Service for interacting with the v2 checks API
+ * Service for interacting with the checks API (V3 page-level checks)
  * Uses authenticated API client with Bearer token
  */
 import { apiGet, apiPost, apiPut } from './apiClient';
 import type {
-  DocumentCheckResult,
-  CheckHistoryResponse,
-  RunChecksResponse,
   BatchCheckRun,
   BatchCheckRequest,
   BatchRunsListResponse,
@@ -22,36 +19,7 @@ import type {
   PageClassificationsResponse,
 } from '../types/checksV2';
 
-// ============ DOCUMENT CHECKS ============
-
-export async function runDocumentChecks(
-  documentId: string,
-  forceReclassify: boolean = false
-): Promise<RunChecksResponse> {
-  return apiPost<RunChecksResponse>(
-    `/api/checks/documents/${documentId}/run`,
-    { force_reclassify: forceReclassify }
-  );
-}
-
-export async function getDocumentCheckHistory(
-  documentId: string,
-  limit: number = 10
-): Promise<CheckHistoryResponse> {
-  return apiGet<CheckHistoryResponse>(`/api/checks/documents/${documentId}/history?limit=${limit}`);
-}
-
-export async function getLatestCheckResults(
-  documentId: string
-): Promise<{ has_results: boolean } & Partial<DocumentCheckResult>> {
-  return apiGet(`/api/checks/documents/${documentId}/results/latest`);
-}
-
-export async function getCheckResultById(resultId: string): Promise<DocumentCheckResult> {
-  return apiGet<DocumentCheckResult>(`/api/checks/results/${resultId}`);
-}
-
-// ============ V3 PAGE-LEVEL CHECKS ============
+// ============ DOCUMENT CHECKS (V3 Page-Level) ============
 
 export async function runDocumentChecksV3(
   documentId: string,

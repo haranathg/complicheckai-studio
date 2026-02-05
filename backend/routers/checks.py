@@ -13,7 +13,7 @@ from models.database_models import (
     CheckResult, BatchCheckRun, PageClassification, PageCheckResult
 )
 from services.config_service import (
-    load_default_checks_config, get_document_type_config,
+    load_default_checks_config,
     load_checks_config_v3, get_checks_for_page_type, get_checks_v3
 )
 from routers.compliance import get_bedrock_client, resolve_model_id
@@ -120,6 +120,7 @@ def create_smart_batches(
 
 
 # ============ SINGLE DOCUMENT CHECKS ============
+# Note: V2 endpoint redirects to V3 for backwards compatibility
 
 @router.post("/documents/{document_id}/run")
 async def run_document_checks(
@@ -127,104 +128,10 @@ async def run_document_checks(
     body: RunChecksRequest = RunChecksRequest(),
     db: Session = Depends(get_db)
 ):
-    """Run checks on a single document."""
-    document = db.query(Document).filter(Document.id == document_id).first()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    # Get parse result
-    parse_result = db.query(ParseResult).filter(
-        ParseResult.document_id == document_id,
-        ParseResult.status == "completed"
-    ).order_by(ParseResult.created_at.desc()).first()
-
-    if not parse_result:
-        raise HTTPException(status_code=400, detail="Document must be parsed first")
-
-    # Auto-classify if needed
-    if not document.document_type or body.force_reclassify:
-        await classify_document_internal(document, parse_result, db)
-
-    # Get project settings
-    settings = db.query(ProjectSettings).filter(
-        ProjectSettings.project_id == document.project_id
-    ).first()
-
-    checks_config = settings.checks_config if settings else load_default_checks_config()
-    model = settings.compliance_model if settings else "bedrock-claude-sonnet-3.5"
-
-    # Get checks for this document type
-    doc_type_config = get_document_type_config(
-        document.document_type or "unknown",
-        checks_config
-    )
-    completeness_checks = doc_type_config.get("completeness_checks", [])
-    compliance_checks = doc_type_config.get("compliance_checks", [])
-
-    # Get chunks
-    chunks = db.query(Chunk).filter(Chunk.parse_result_id == parse_result.id).all()
-    chunk_data = [
-        {"id": c.chunk_id, "type": c.chunk_type, "content_preview": (c.markdown or "")[:300]}
-        for c in chunks
-    ]
-
-    # Get run number
-    run_count = db.query(CheckResult).filter(CheckResult.document_id == document_id).count()
-
-    start_time = datetime.utcnow()
-
-    # Run checks via AI
-    result = await run_checks_ai(
-        markdown=parse_result.markdown,
-        chunks=chunk_data,
-        completeness_checks=completeness_checks,
-        compliance_checks=compliance_checks,
-        document_type=document.document_type,
-        model=model
-    )
-
-    processing_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
-
-    # Save result
-    check_result = CheckResult(
-        document_id=document_id,
-        parse_result_id=parse_result.id,
-        project_id=document.project_id,
-        run_number=run_count + 1,
-        document_type=document.document_type,
-        completeness_results=result["completeness_results"],
-        compliance_results=result["compliance_results"],
-        summary=result["summary"],
-        checks_config_snapshot={
-            "document_type": document.document_type,
-            "completeness_checks": completeness_checks,
-            "compliance_checks": compliance_checks
-        },
-        model=model,
-        input_tokens=result.get("usage", {}).get("input_tokens"),
-        output_tokens=result.get("usage", {}).get("output_tokens"),
-        status="completed",
-        processing_time_ms=processing_time
-    )
-    db.add(check_result)
-
-    # Update project usage
-    if settings:
-        settings.total_input_tokens = (settings.total_input_tokens or 0) + (result.get("usage", {}).get("input_tokens") or 0)
-        settings.total_output_tokens = (settings.total_output_tokens or 0) + (result.get("usage", {}).get("output_tokens") or 0)
-
-    db.commit()
-
-    return {
-        "id": check_result.id,
-        "run_number": check_result.run_number,
-        "document_type": document.document_type,
-        "completeness_results": result["completeness_results"],
-        "compliance_results": result["compliance_results"],
-        "summary": result["summary"],
-        "checked_at": check_result.created_at.isoformat(),
-        "usage": result.get("usage")
-    }
+    """Run checks on a single document. Redirects to V3 page-level checks."""
+    # Convert V2 request to V3 and call V3 endpoint
+    v3_body = RunChecksV3Request(force_reclassify=body.force_reclassify)
+    return await run_document_checks_v3(document_id, v3_body, db)
 
 
 # ============ CHECK HISTORY ============
