@@ -28,6 +28,7 @@ class RunChecksRequest(BaseModel):
 class BatchCheckRequest(BaseModel):
     force_rerun: bool = False
     skip_unparsed: bool = True
+    document_ids: Optional[List[str]] = None  # If provided, only run on these documents
 
 
 class RunChecksV3Request(BaseModel):
@@ -328,9 +329,17 @@ async def run_checks_all_documents(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    documents = db.query(Document).filter(Document.project_id == project_id).all()
+    # Filter documents by document_ids if provided
+    if body.document_ids:
+        documents = db.query(Document).filter(
+            Document.project_id == project_id,
+            Document.id.in_(body.document_ids)
+        ).all()
+    else:
+        documents = db.query(Document).filter(Document.project_id == project_id).all()
+
     if not documents:
-        raise HTTPException(status_code=400, detail="No documents in project")
+        raise HTTPException(status_code=400, detail="No documents to process")
 
     settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
     model = settings.compliance_model if settings else "bedrock-claude-sonnet-3.5"
@@ -353,7 +362,8 @@ async def run_checks_all_documents(
         batch_run_id=batch_run.id,
         project_id=project_id,
         force_rerun=body.force_rerun,
-        skip_unparsed=body.skip_unparsed
+        skip_unparsed=body.skip_unparsed,
+        document_ids=body.document_ids
     )
 
     return {
@@ -1270,7 +1280,7 @@ Respond ONLY with valid JSON in this exact format:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def process_batch_checks(batch_run_id: str, project_id: str, force_rerun: bool, skip_unparsed: bool):
+def process_batch_checks(batch_run_id: str, project_id: str, force_rerun: bool, skip_unparsed: bool, document_ids: Optional[List[str]] = None):
     """Background task to process batch checks."""
     from database import SessionLocal
 
@@ -1284,7 +1294,14 @@ def process_batch_checks(batch_run_id: str, project_id: str, force_rerun: bool, 
         batch_run.started_at = datetime.utcnow()
         db.commit()
 
-        documents = db.query(Document).filter(Document.project_id == project_id).all()
+        # Filter documents by document_ids if provided
+        if document_ids:
+            documents = db.query(Document).filter(
+                Document.project_id == project_id,
+                Document.id.in_(document_ids)
+            ).all()
+        else:
+            documents = db.query(Document).filter(Document.project_id == project_id).all()
         settings = db.query(ProjectSettings).filter(ProjectSettings.project_id == project_id).first()
 
         total_passed = 0

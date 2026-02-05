@@ -180,6 +180,7 @@ export interface CheckHistoryResponse {
 export interface BatchCheckRequest {
   force_rerun?: boolean;
   skip_unparsed?: boolean;
+  document_ids?: string[];  // If provided, only run checks on these documents
 }
 
 export interface BatchCheckRun {

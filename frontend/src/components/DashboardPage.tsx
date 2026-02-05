@@ -446,6 +446,7 @@ export default function DashboardPage({
       const response = await runBatchChecks(selectedProject.id, {
         force_rerun: forceRerun,
         skip_unparsed: true,
+        document_ids: processedSelected.map(doc => doc.id),  // Only run on selected documents
       });
       setActiveBatchRunId(response.batch_run_id);
       setSelectedDocIds(new Set()); // Clear selection after starting
