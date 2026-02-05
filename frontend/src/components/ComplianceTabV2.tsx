@@ -416,8 +416,8 @@ export default function ComplianceTabV2({
             </button>
           </div>
 
-          {/* Page Classifications Filter */}
-          {pageClassifications.length > 0 && (
+          {/* Page Classifications Filter - only show if checks have page numbers */}
+          {pageClassifications.length > 0 && currentChecks.some(c => (c as unknown as CheckResultItemV3).page_number !== undefined) && (
             <div className={`mb-3 p-2 rounded-lg ${isDark ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Pages:</span>
