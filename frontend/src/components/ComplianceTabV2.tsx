@@ -88,7 +88,15 @@ export default function ComplianceTabV2({
           usage: v3Results.usage,
           checked_at: v3Results.checked_at,
         });
-        setPageClassifications(v3Results.page_classifications || []);
+        // Map page_number (from API) to page (used by frontend)
+        const mappedClassifications = (v3Results.page_classifications || [])
+          .map((c: { page_number?: number; page?: number; page_type: string; confidence?: number }) => ({
+            page: c.page_number ?? c.page ?? 0,
+            page_type: c.page_type as PageClassification['page_type'],
+            confidence: c.confidence ?? 0,
+          }))
+          .filter((c: { page: number }) => c.page > 0) as PageClassification[];
+        setPageClassifications(mappedClassifications);
       } else {
         setResults(null);
         setPageClassifications([]);
@@ -130,7 +138,15 @@ export default function ComplianceTabV2({
         usage: response.usage,
         checked_at: response.checked_at,
       });
-      setPageClassifications(response.page_classifications || []);
+      // Map page_number (from API) to page (used by frontend)
+      const mappedClassifications = (response.page_classifications || [])
+        .map((c: { page_number?: number; page?: number; page_type: string; confidence?: number }) => ({
+          page: c.page_number ?? c.page ?? 0,
+          page_type: c.page_type as PageClassification['page_type'],
+          confidence: c.confidence ?? 0,
+        }))
+        .filter((c: { page: number }) => c.page > 0) as PageClassification[];
+      setPageClassifications(mappedClassifications);
     } catch (err) {
       console.error('Failed to run checks:', err);
       setError('Failed to run checks. Make sure the document has been processed first.');
