@@ -381,6 +381,158 @@
       "category": "compliance",
       "rule_reference": "Building Code E1",
       "required": false
+    },
+    {
+      "id": "schedule_complete",
+      "name": "Schedule Completeness",
+      "prompt": "Does this schedule contain all required entries with complete information (no blank fields)?",
+      "applies_to": ["schedule", "table"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "schedule_references",
+      "name": "Schedule References",
+      "prompt": "Do the items in this schedule reference specific drawing numbers or locations?",
+      "applies_to": ["schedule", "table"],
+      "category": "completeness",
+      "required": false
+    },
+    {
+      "id": "specification_manufacturer",
+      "name": "Manufacturer Details",
+      "prompt": "Is the manufacturer name and contact information provided?",
+      "applies_to": ["specification"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "specification_model",
+      "name": "Model Information",
+      "prompt": "Is the product model name or number specified?",
+      "applies_to": ["specification"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "specification_installation",
+      "name": "Installation Requirements",
+      "prompt": "Are installation requirements or clearances specified?",
+      "applies_to": ["specification"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "certificate_signed",
+      "name": "Certificate Signed",
+      "prompt": "Is this certificate signed by the certifier?",
+      "applies_to": ["certificate"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "certificate_dated",
+      "name": "Certificate Dated",
+      "prompt": "Is there a date on this certificate?",
+      "applies_to": ["certificate"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "certificate_reference",
+      "name": "Certificate Reference",
+      "prompt": "Does the certificate reference the specific project, address, or consent number?",
+      "applies_to": ["certificate"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "form_complete",
+      "name": "Form Completeness",
+      "prompt": "Are all required fields on this form filled in (no blank mandatory fields)?",
+      "applies_to": ["form"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "form_signed",
+      "name": "Form Signed",
+      "prompt": "Is this form signed where required?",
+      "applies_to": ["form"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "letter_dated",
+      "name": "Letter Dated",
+      "prompt": "Is there a date on this letter?",
+      "applies_to": ["letter"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "letter_signed",
+      "name": "Letter Signed",
+      "prompt": "Is this letter signed?",
+      "applies_to": ["letter"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "report_author",
+      "name": "Report Author",
+      "prompt": "Is the report author or company identified?",
+      "applies_to": ["report"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "report_dated",
+      "name": "Report Dated",
+      "prompt": "Is there a date on this report?",
+      "applies_to": ["report"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "report_findings",
+      "name": "Report Findings",
+      "prompt": "Does the report include clear findings or conclusions?",
+      "applies_to": ["report"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "cover_drawing_list",
+      "name": "Drawing List",
+      "prompt": "Is there a drawing list or index on this cover sheet?",
+      "applies_to": ["cover_sheet"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "cover_project_info",
+      "name": "Project Information",
+      "prompt": "Is the project name, address, or description provided on this cover sheet?",
+      "applies_to": ["cover_sheet"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "photo_labelled",
+      "name": "Photo Labelled",
+      "prompt": "Is this photo labelled with what it shows (location, date, or subject)?",
+      "applies_to": ["photo"],
+      "category": "completeness",
+      "required": false
+    },
+    {
+      "id": "unknown_identifiable",
+      "name": "Content Identifiable",
+      "prompt": "Can the purpose or content of this page be determined?",
+      "applies_to": ["unknown"],
+      "category": "completeness",
+      "required": false
     }
   ],
 

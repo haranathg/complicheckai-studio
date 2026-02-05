@@ -1338,39 +1338,125 @@ def process_batch_checks(batch_run_id: str, project_id: str, force_rerun: bool, 
                         db.commit()
                         continue
 
-                # Classify if needed
-                if not doc.document_type:
+                # Use V3 page-level checks
+                model = settings.compliance_model if settings else "bedrock-claude-sonnet-3.5"
+
+                # Get or create page classifications
+                page_classifications = db.query(PageClassification).filter(
+                    PageClassification.parse_result_id == parse_result.id
+                ).order_by(PageClassification.page_number).all()
+
+                if not page_classifications:
+                    # Classify pages first
+                    from services.page_classification_service import get_page_classification_service
+                    classification_service = get_page_classification_service()
+
+                    chunks = db.query(Chunk).filter(Chunk.parse_result_id == parse_result.id).all()
+                    chunk_data = [
+                        {
+                            "chunk_id": c.chunk_id,
+                            "page_number": c.page_number,
+                            "chunk_type": c.chunk_type,
+                            "markdown": c.markdown
+                        }
+                        for c in chunks
+                    ]
+
                     import asyncio
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
-                    loop.run_until_complete(classify_document_internal(doc, parse_result, db))
+                    classifications = loop.run_until_complete(classification_service.classify_pages(
+                        chunks=chunk_data,
+                        page_count=parse_result.page_count or 1,
+                        model="bedrock-claude-sonnet-3.5"
+                    ))
+                    classification_service.save_classifications(
+                        db=db,
+                        parse_result_id=parse_result.id,
+                        classifications=classifications
+                    )
+                    page_classifications = db.query(PageClassification).filter(
+                        PageClassification.parse_result_id == parse_result.id
+                    ).order_by(PageClassification.page_number).all()
 
-                # Get checks config
-                checks_config = settings.checks_config if settings else load_default_checks_config()
-                model = settings.compliance_model if settings else "bedrock-claude-sonnet-3.5"
-
-                doc_type_config = get_document_type_config(doc.document_type or "unknown", checks_config)
-                completeness_checks = doc_type_config.get("completeness_checks", [])
-                compliance_checks = doc_type_config.get("compliance_checks", [])
-
+                # Get chunks grouped by page
                 chunks = db.query(Chunk).filter(Chunk.parse_result_id == parse_result.id).all()
-                chunk_data = [
-                    {"id": c.chunk_id, "type": c.chunk_type, "content_preview": (c.markdown or "")[:300]}
-                    for c in chunks
-                ]
+                chunks_by_page = {}
+                for c in chunks:
+                    page_num = c.page_number or 1
+                    if page_num not in chunks_by_page:
+                        chunks_by_page[page_num] = []
+                    chunks_by_page[page_num].append({
+                        "id": c.chunk_id,
+                        "type": c.chunk_type,
+                        "content": c.markdown[:500] if c.markdown else ""
+                    })
 
-                # Run checks
-                import asyncio
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(run_checks_ai(
-                    markdown=parse_result.markdown,
-                    chunks=chunk_data,
-                    completeness_checks=completeness_checks,
-                    compliance_checks=compliance_checks,
-                    document_type=doc.document_type,
-                    model=model
-                ))
+                # Create smart batches and run V3 checks
+                batches = create_smart_batches(page_classifications, chunks_by_page)
+                pc_by_page = {pc.page_number: pc for pc in page_classifications}
+
+                all_page_results = []
+                doc_input_tokens = 0
+                doc_output_tokens = 0
+
+                for batch in batches:
+                    page_type = batch["page_type"]
+                    applicable_checks = get_checks_for_page_type(page_type)
+
+                    if not applicable_checks:
+                        continue
+
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    batch_result = loop.run_until_complete(run_batch_checks_ai(
+                        batch=batch,
+                        checks=applicable_checks,
+                        model=model
+                    ))
+
+                    for page_result in batch_result.get("page_results", []):
+                        page_num = page_result["page_number"]
+                        pc = pc_by_page.get(page_num)
+                        if pc:
+                            page_result["page_classification_id"] = pc.id
+                        all_page_results.append(page_result)
+
+                    doc_input_tokens += batch_result.get("usage", {}).get("input_tokens", 0)
+                    doc_output_tokens += batch_result.get("usage", {}).get("output_tokens", 0)
+
+                # Aggregate results with page info
+                all_check_results = []
+                for page_result in all_page_results:
+                    for check_result_item in page_result.get("results", []):
+                        check_result_item["page_number"] = page_result["page_number"]
+                        check_result_item["page_type"] = page_result["page_type"]
+                        all_check_results.append(check_result_item)
+
+                completeness_results = [r for r in all_check_results if r.get("category") == "completeness"]
+                compliance_results = [r for r in all_check_results if r.get("category") == "compliance"]
+
+                passed = sum(1 for r in all_check_results if r["status"] == "pass")
+                failed = sum(1 for r in all_check_results if r["status"] == "fail")
+                needs_review = sum(1 for r in all_check_results if r["status"] == "needs_review")
+                na = sum(1 for r in all_check_results if r["status"] == "na")
+
+                result = {
+                    "completeness_results": completeness_results,
+                    "compliance_results": compliance_results,
+                    "summary": {
+                        "total_checks": len(all_check_results),
+                        "passed": passed,
+                        "failed": failed,
+                        "needs_review": needs_review,
+                        "na": na
+                    },
+                    "usage": {
+                        "input_tokens": doc_input_tokens,
+                        "output_tokens": doc_output_tokens
+                    }
+                }
 
                 # Save result
                 run_count = db.query(CheckResult).filter(CheckResult.document_id == doc.id).count()
@@ -1385,9 +1471,11 @@ def process_batch_checks(batch_run_id: str, project_id: str, force_rerun: bool, 
                     compliance_results=result["compliance_results"],
                     summary=result["summary"],
                     checks_config_snapshot={
-                        "document_type": doc.document_type,
-                        "completeness_checks": completeness_checks,
-                        "compliance_checks": compliance_checks
+                        "version": "3.0",
+                        "page_classifications": [
+                            {"page": pc.page_number, "type": pc.page_type}
+                            for pc in page_classifications
+                        ]
                     },
                     model=model,
                     input_tokens=result.get("usage", {}).get("input_tokens"),
@@ -1395,6 +1483,22 @@ def process_batch_checks(batch_run_id: str, project_id: str, force_rerun: bool, 
                     status="completed"
                 )
                 db.add(check_result)
+
+                # Save page check results
+                for page_result in all_page_results:
+                    for check_res in page_result.get("results", []):
+                        page_check = PageCheckResult(
+                            page_classification_id=page_result.get("page_classification_id"),
+                            check_result_id=check_result.id,
+                            check_id=check_res["check_id"],
+                            check_name=check_res.get("check_name"),
+                            status=check_res["status"],
+                            confidence=check_res.get("confidence"),
+                            found_value=check_res.get("found_value"),
+                            notes=check_res.get("notes"),
+                            chunk_ids=check_res.get("chunk_ids", [])
+                        )
+                        db.add(page_check)
 
                 # Update totals
                 summary = result.get("summary", {})
