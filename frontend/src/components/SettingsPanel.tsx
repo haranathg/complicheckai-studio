@@ -3,9 +3,8 @@ import { useState, useEffect } from 'react';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 import ModelSelector from './ModelSelector';
 import ParserSelector from './ParserSelector';
-import ComplianceChecksManager from './ComplianceChecksManager';
+import V3ComplianceChecksViewer from './V3ComplianceChecksViewer';
 import { formatTokensWithCost } from '../utils/tokenCost';
-import type { ComplianceCheck } from '../types/compliance';
 import type { Project, ProjectUsageResponse } from '../types/project';
 import { getProjectUsage } from '../services/projectService';
 
@@ -24,10 +23,6 @@ interface SettingsPanelProps {
   onModelChange: (model: string) => void;
   selectedParser: string;
   onParserChange: (parser: string) => void;
-  completenessChecks: ComplianceCheck[];
-  complianceChecks: ComplianceCheck[];
-  onCompletenessChecksChange: (checks: ComplianceCheck[]) => void;
-  onComplianceChecksChange: (checks: ComplianceCheck[]) => void;
   chatUsage?: UsageData;
   complianceUsage?: UsageData;
   parseCredits?: number | null;
@@ -42,10 +37,6 @@ export default function SettingsPanel({
   onModelChange,
   selectedParser,
   onParserChange,
-  completenessChecks,
-  complianceChecks,
-  onCompletenessChecksChange,
-  onComplianceChecksChange,
   chatUsage,
   complianceUsage,
   parseCredits,
@@ -250,12 +241,7 @@ export default function SettingsPanel({
 
           {activeTab === 'checks' && (
             <div className="space-y-6">
-              <ComplianceChecksManager
-                completenessChecks={completenessChecks}
-                complianceChecks={complianceChecks}
-                onCompletenessChecksChange={onCompletenessChecksChange}
-                onComplianceChecksChange={onComplianceChecksChange}
-              />
+              <V3ComplianceChecksViewer />
             </div>
           )}
 

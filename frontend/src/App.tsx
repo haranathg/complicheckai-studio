@@ -14,7 +14,6 @@ import SaveToProjectDropdown from './components/SaveToProjectDropdown';
 import LoginPage from './components/LoginPage';
 import UserMenu from './components/UserMenu';
 import type { ParseResponse, Chunk, TabType, ChatMessage, ChunkReference, BoundingBox } from './types/ade';
-import type { ComplianceCheck } from './types/compliance';
 import { apiUpload } from './services/apiClient';
 import { useAuth } from './contexts/AuthContext';
 import { getDefaultModelForParser } from './components/ModelSelector';
@@ -24,7 +23,6 @@ import { listDocumentAnnotations, listProjectAnnotations } from './services/anno
 import { useTheme, getThemeStyles } from './contexts/ThemeContext';
 import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
 import cognaifySymbol from './assets/cognaify-symbol.png';
-import complianceConfig from './config/complianceChecks.json';
 
 type ViewType = 'dashboard' | 'document';
 
@@ -49,12 +47,6 @@ function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [selectedParser, setSelectedParser] = useState(DEFAULT_PARSER);
-  const [completenessChecks, setCompletenessChecks] = useState<ComplianceCheck[]>(
-    complianceConfig.completeness_checks as ComplianceCheck[]
-  );
-  const [complianceChecks, setComplianceChecks] = useState<ComplianceCheck[]>(
-    complianceConfig.compliance_checks as ComplianceCheck[]
-  );
 
   const [isPdfReady, setIsPdfReady] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -685,10 +677,6 @@ function App() {
           onModelChange={setSelectedModel}
           selectedParser={selectedParser}
           onParserChange={handleParserChange}
-          completenessChecks={completenessChecks}
-          complianceChecks={complianceChecks}
-          onCompletenessChecksChange={setCompletenessChecks}
-          onComplianceChecksChange={setComplianceChecks}
           currentProject={currentProject}
         />
       </>
@@ -1121,10 +1109,6 @@ function App() {
         onModelChange={setSelectedModel}
         selectedParser={selectedParser}
         onParserChange={handleParserChange}
-        completenessChecks={completenessChecks}
-        complianceChecks={complianceChecks}
-        onCompletenessChecksChange={setCompletenessChecks}
-        onComplianceChecksChange={setComplianceChecks}
         chatUsage={chatMessages.reduce(
           (acc, msg) => {
             if (msg.usage) {
