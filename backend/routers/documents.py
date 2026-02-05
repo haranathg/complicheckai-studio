@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db
-from models.database_models import Project, Document, ParseResult, Chunk, DocumentAnnotation, ProjectSettings, CheckResult
+from models.database_models import Project, Document, ParseResult, Chunk, DocumentAnnotation, ProjectSettings, CheckResult, PageClassification
 from services import s3_service
 from services.config_service import load_default_checks_config, list_document_types
 from services.classification_service import classify_document as classify_document_service
@@ -190,10 +190,12 @@ class DocumentStatusSummary(BaseModel):
     parser_model: Optional[str] = None
     uploaded_by: Optional[str] = None
     annotations: AnnotationSummary
-    # V2 Classification fields
+    # V2 Classification fields (document-level)
     document_type: Optional[str] = None
     classification_confidence: Optional[int] = None
     classification_override: bool = False
+    # V3 Page-level types (list of unique page types in this document)
+    page_types: List[str] = []
     # V2 Check results summary
     check_summary: Optional[CheckSummary] = None
 
@@ -264,6 +266,19 @@ async def get_documents_status(
                 checked_at=latest_check.created_at
             )
 
+        # Get V3 page-level types from latest parse result
+        page_types = []
+        if latest_parse:
+            page_classifications = db.query(PageClassification).filter(
+                PageClassification.parse_result_id == latest_parse.id
+            ).all()
+            # Get unique page types, preserving order of first occurrence
+            seen = set()
+            for pc in page_classifications:
+                if pc.page_type not in seen:
+                    page_types.append(pc.page_type)
+                    seen.add(pc.page_type)
+
         result.append(DocumentStatusSummary(
             id=doc.id,
             project_id=doc.project_id,
@@ -287,6 +302,8 @@ async def get_documents_status(
             document_type=doc.document_type,
             classification_confidence=doc.classification_confidence,
             classification_override=doc.classification_override or False,
+            # V3 page types
+            page_types=page_types,
             check_summary=check_summary
         ))
 

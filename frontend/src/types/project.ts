@@ -147,11 +147,13 @@ export interface DocumentStatusSummary {
   parser_model?: string;
   uploaded_by?: string;
   annotations: AnnotationSummary;
-  // V2 Classification fields
+  // V2 Classification fields (document-level)
   document_type?: string;
   classification_confidence?: number;
   classification_override?: boolean;
-  // V2 Check results summary
+  // V3 Page-level types (list of unique page types in this document)
+  page_types?: string[];
+  // Check results summary
   check_summary?: CheckSummary;
 }
 

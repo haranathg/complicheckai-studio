@@ -818,6 +818,7 @@ export default function DashboardPage({
                             documentType={doc.document_type}
                             confidence={doc.classification_confidence}
                             isOverride={doc.classification_override}
+                            pageTypes={doc.page_types}
                           />
                         </td>
                         {/* Status Column */}
