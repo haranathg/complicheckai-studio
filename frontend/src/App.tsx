@@ -158,7 +158,13 @@ function App() {
         const cachedResponse = await getLatestParseResult(currentProject.id, currentDocument.id);
         if (cachedResponse.cached && cachedResponse.result?.parse_result_id) {
           const response = await getPageClassifications(cachedResponse.result.parse_result_id);
-          setPageClassifications(response.classifications || []);
+          // Map page_number (from API) to page (used by frontend)
+          const mappedClassifications = (response.classifications || []).map(c => ({
+            page: (c as { page_number?: number }).page_number ?? c.page,
+            page_type: c.page_type,
+            confidence: c.confidence,
+          }));
+          setPageClassifications(mappedClassifications);
         } else {
           setPageClassifications([]);
         }
