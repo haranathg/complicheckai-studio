@@ -63,21 +63,6 @@ def get_upload_slots() -> List[Dict[str, Any]]:
     return config.get("upload_slots", {}).get("slots", [])
 
 
-def get_checks_for_document_type(doc_type: str, custom_config: Optional[Dict] = None) -> Dict[str, List]:
-    """Get completeness and compliance checks for a document type."""
-    doc_config = get_document_type_config(doc_type, custom_config)
-    return {
-        "completeness_checks": doc_config.get("completeness_checks", []),
-        "compliance_checks": doc_config.get("compliance_checks", [])
-    }
-
-
-def get_classification_signals(doc_type: str) -> Dict[str, Any]:
-    """Get classification signals for a document type."""
-    doc_config = get_document_type_config(doc_type)
-    return doc_config.get("classification_signals", {})
-
-
 # ============ V3 CONFIG FUNCTIONS (Page-level) ============
 
 @lru_cache()
