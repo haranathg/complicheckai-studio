@@ -15,6 +15,7 @@ from services.claude_vision_service import get_claude_vision_service
 from services.gemini_vision_service import get_gemini_vision_service
 from services.bedrock_vision_service import get_bedrock_vision_service
 from services.classification_service import classify_document
+from services.page_classification_service import get_page_classification_service
 
 logger = logging.getLogger(__name__)
 
@@ -255,16 +256,48 @@ async def process_single_document(
             db.commit()
             logger.info(f"[Batch] Saved parse result {parse_result.id} with {len(result.get('chunks', []))} chunks")
 
-            # Auto-classify document after parsing
+            # Auto-classify document after parsing (V2 document-level)
             try:
-                logger.info(f"[Batch] Starting classification for document {document_id}")
+                logger.info(f"[Batch] Starting document classification for {document_id}")
                 await classify_document(document, parse_result, db)
-                logger.info(f"[Batch] Classification completed for document {document_id}, type: {document.document_type}")
-                task.progress = 95
+                logger.info(f"[Batch] Document classification completed: {document.document_type}")
+                task.progress = 90
                 db.commit()
             except Exception as classify_err:
                 # Classification failure shouldn't fail the whole task
-                logger.error(f"[Batch] Classification failed for document {document_id}: {classify_err}", exc_info=True)
+                logger.error(f"[Batch] Document classification failed for {document_id}: {classify_err}", exc_info=True)
+
+            # Auto-classify pages after parsing (V3 page-level)
+            try:
+                logger.info(f"[Batch] Starting page classification for {document_id}")
+                chunks = db.query(Chunk).filter(Chunk.parse_result_id == parse_result.id).all()
+                chunk_data = [
+                    {
+                        "id": c.chunk_id,
+                        "type": c.chunk_type,
+                        "markdown": c.markdown or "",
+                        "page": c.page_number
+                    }
+                    for c in chunks
+                ]
+
+                classification_service = get_page_classification_service()
+                page_classifications = await classification_service.classify_pages(
+                    chunks=chunk_data,
+                    page_count=parse_result.page_count or 1,
+                    model="bedrock-claude-sonnet-3.5"
+                )
+                classification_service.save_classifications(
+                    db=db,
+                    parse_result_id=parse_result.id,
+                    classifications=page_classifications
+                )
+                logger.info(f"[Batch] Page classification completed: {len(page_classifications)} pages classified")
+                task.progress = 95
+                db.commit()
+            except Exception as page_classify_err:
+                # Page classification failure shouldn't fail the whole task
+                logger.error(f"[Batch] Page classification failed for {document_id}: {page_classify_err}", exc_info=True)
 
             task.status = "completed"
             task.progress = 100
