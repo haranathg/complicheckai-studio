@@ -59,12 +59,13 @@ class ChatRequest(BaseModel):
 def build_single_doc_prompt(markdown: str, chunks: List[dict]) -> str:
     """Build system prompt for single document mode."""
     chunk_info = []
-    for chunk in chunks:
+    for i, chunk in enumerate(chunks):
         chunk_id = chunk.get('id', '')
         chunk_type = chunk.get('type', 'text')
         chunk_text = chunk.get('markdown', '')[:200]  # First 200 chars for context
         page = chunk.get('grounding', {}).get('page', 'unknown')
-        chunk_info.append(f"- ID: {chunk_id}, Type: {chunk_type}, Page: {page}, Preview: {chunk_text}...")
+        page_display = f"Page {page + 1}" if isinstance(page, int) else "Unknown page"
+        chunk_info.append(f"- [{i+1}] {chunk_type.title()} on {page_display} (ref:{chunk_id}): {chunk_text}...")
 
     chunks_reference = "\n".join(chunk_info)
 
@@ -74,19 +75,19 @@ The document has been parsed into the following markdown:
 
 {markdown}
 
-The document contains the following components (chunks) that you can reference:
+The document contains these components:
 
 {chunks_reference}
 
 When answering:
-1. Be specific and cite relevant sections
+1. Be specific and cite WHERE information is found (e.g., "on page 3", "in the table", "in the floor plan")
 2. If information isn't in the document, say so
-3. Reference chunk types (tables, figures, etc.) when relevant
-4. IMPORTANT: At the end of your response, include a JSON block with the IDs of chunks that are relevant to your answer, in this format:
+3. NEVER mention chunk IDs, reference codes, or technical identifiers in your response - use human-friendly descriptions only
+4. At the end of your response, include the technical reference codes in this hidden format (the user won't see these):
    ```sources
-   ["chunk_id_1", "chunk_id_2"]
+   ["ref_code_1", "ref_code_2"]
    ```
-   Only include chunk IDs that directly support your answer. If no specific chunks are relevant, use an empty array [].
+   Only include refs that directly support your answer. If none are relevant, use [].
 """
 
 
@@ -96,22 +97,23 @@ def build_multi_doc_prompt(document_contexts: List[DocumentContext]) -> str:
 
     for doc in document_contexts:
         chunk_info = []
-        for chunk in doc.chunks:
+        for i, chunk in enumerate(doc.chunks):
             chunk_id = chunk.get('id', '')
             chunk_type = chunk.get('type', 'text')
             chunk_text = chunk.get('markdown', '')[:200]
             page = chunk.get('grounding', {}).get('page', 'unknown')
-            chunk_info.append(f"  - ID: {chunk_id}, Type: {chunk_type}, Page: {page}, Preview: {chunk_text}...")
+            page_display = f"Page {page + 1}" if isinstance(page, int) else "Unknown page"
+            chunk_info.append(f"  - [{i+1}] {chunk_type.title()} on {page_display} (ref:{chunk_id}): {chunk_text}...")
 
-        chunks_reference = "\n".join(chunk_info) if chunk_info else "  (No chunks extracted)"
+        chunks_reference = "\n".join(chunk_info) if chunk_info else "  (No content extracted)"
 
         doc_sections.append(f"""
-=== DOCUMENT: {doc.document_name} (ID: {doc.document_id}) ===
+=== DOCUMENT: {doc.document_name} ===
 
 Content:
 {doc.markdown}
 
-Components (chunks):
+Components:
 {chunks_reference}
 """)
 
@@ -124,16 +126,15 @@ The following documents are available:
 {all_docs}
 
 When answering:
-1. Be specific and cite relevant sections from the appropriate document(s)
-2. When referencing content, always mention which document it comes from
+1. Be specific and cite WHERE information is found (e.g., "on page 3 of the Plans document", "in the table in the Specifications")
+2. Always mention which document the information comes from by name
 3. If information isn't in any document, say so
-4. Reference chunk types (tables, figures, etc.) when relevant
-5. IMPORTANT: At the end of your response, include a JSON block with sources organized by document:
+4. NEVER mention reference codes, chunk IDs, or technical identifiers in your response - use human-friendly descriptions only
+5. At the end of your response, include technical references in this hidden format (the user won't see these):
    ```sources
-   {{"document_sources": [{{"document_id": "doc_id_1", "document_name": "filename1.pdf", "chunk_ids": ["chunk_1", "chunk_2"]}}, {{"document_id": "doc_id_2", "document_name": "filename2.pdf", "chunk_ids": ["chunk_3"]}}]}}
+   {{"document_sources": [{{"document_id": "doc_id_1", "document_name": "filename1.pdf", "chunk_ids": ["ref_1", "ref_2"]}}, {{"document_id": "doc_id_2", "document_name": "filename2.pdf", "chunk_ids": ["ref_3"]}}]}}
    ```
-   Only include documents and chunks that directly support your answer. If no specific chunks are relevant, use an empty array for document_sources.
-   Note: The chunk_ids you reference should match the IDs shown in the Components sections above.
+   Only include documents and refs that directly support your answer. If none are relevant, use an empty array for document_sources.
 """
 
 
