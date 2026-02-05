@@ -103,6 +103,7 @@ class ParseResult(Base):
     # Relationships
     document = relationship("Document", back_populates="parse_results")
     chunks = relationship("Chunk", back_populates="parse_result", cascade="all, delete-orphan")
+    page_classifications = relationship("PageClassification", back_populates="parse_result", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_parse_results_document_id", "document_id"),
@@ -137,6 +138,66 @@ class Chunk(Base):
     __table_args__ = (
         Index("ix_chunks_parse_result_id", "parse_result_id"),
         Index("ix_chunks_page_number", "page_number"),
+    )
+
+
+class PageClassification(Base):
+    """Page-level classification for documents."""
+    __tablename__ = "page_classifications"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    parse_result_id = Column(String(36), ForeignKey("parse_results.id", ondelete="CASCADE"), nullable=False)
+    page_number = Column(Integer, nullable=False)  # 1-indexed page number
+
+    # Classification
+    page_type = Column(String(50), nullable=False)  # floor_plan, site_plan, elevation, etc.
+    confidence = Column(Integer, nullable=True)  # 0-100 confidence score
+    classification_signals = Column(JSON, nullable=True)  # Signals found that led to classification
+
+    # Classification metadata
+    classification_model = Column(String(100), nullable=True)
+    classified_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    parse_result = relationship("ParseResult", back_populates="page_classifications")
+    check_results = relationship("PageCheckResult", back_populates="page_classification", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_page_classifications_parse_result_id", "parse_result_id"),
+        Index("ix_page_classifications_page_type", "page_type"),
+        Index("ix_page_classifications_page_number", "parse_result_id", "page_number"),
+    )
+
+
+class PageCheckResult(Base):
+    """Check results for individual pages."""
+    __tablename__ = "page_check_results"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    page_classification_id = Column(String(36), ForeignKey("page_classifications.id", ondelete="CASCADE"), nullable=False)
+    check_result_id = Column(String(36), ForeignKey("check_results.id", ondelete="CASCADE"), nullable=False)
+
+    # Check identification
+    check_id = Column(String(50), nullable=False)
+    check_name = Column(String(255), nullable=True)
+
+    # Result
+    status = Column(String(20), nullable=False)  # pass, fail, needs_review, na
+    confidence = Column(Integer, nullable=True)  # 0-100
+    found_value = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    chunk_ids = Column(JSON, nullable=True)  # Array of chunk IDs where found
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    page_classification = relationship("PageClassification", back_populates="check_results")
+    check_result = relationship("CheckResult", back_populates="page_check_results")
+
+    __table_args__ = (
+        Index("ix_page_check_results_page_classification_id", "page_classification_id"),
+        Index("ix_page_check_results_check_result_id", "check_result_id"),
+        Index("ix_page_check_results_check_id", "check_id"),
     )
 
 
@@ -432,6 +493,7 @@ class CheckResult(Base):
 
     document = relationship("Document", back_populates="check_results")
     batch_run = relationship("BatchCheckRun", back_populates="results")
+    page_check_results = relationship("PageCheckResult", back_populates="check_result", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_check_results_document_id", "document_id"),

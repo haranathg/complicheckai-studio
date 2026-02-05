@@ -17,6 +17,15 @@ export interface Chunk {
   grounding: Grounding | null;
 }
 
+export interface PageClassificationInfo {
+  page: number;
+  page_type: string;
+  confidence: number;
+  signals?: string[];
+  classification_model?: string;
+  classified_at?: string;
+}
+
 export interface ParseResponse {
   markdown: string;
   chunks: Chunk[];
@@ -34,6 +43,8 @@ export interface ParseResponse {
     };
   };
   file_id?: string;
+  parse_result_id?: string;
+  page_classifications?: PageClassificationInfo[];
 }
 
 export interface ExtractResponse {

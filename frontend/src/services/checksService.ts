@@ -16,6 +16,10 @@ import type {
   DocumentTypesResponse,
   DocumentClassification,
   ChecksConfig,
+  RunChecksV3Request,
+  RunChecksV3Response,
+  DocumentCheckResultV3,
+  PageClassificationsResponse,
 } from '../types/checksV2';
 
 // ============ DOCUMENT CHECKS ============
@@ -45,6 +49,40 @@ export async function getLatestCheckResults(
 
 export async function getCheckResultById(resultId: string): Promise<DocumentCheckResult> {
   return apiGet<DocumentCheckResult>(`/api/checks/results/${resultId}`);
+}
+
+// ============ V3 PAGE-LEVEL CHECKS ============
+
+export async function runDocumentChecksV3(
+  documentId: string,
+  options: RunChecksV3Request = {}
+): Promise<RunChecksV3Response> {
+  return apiPost<RunChecksV3Response>(
+    `/api/checks/documents/${documentId}/run-v3`,
+    options
+  );
+}
+
+export async function getLatestCheckResultsV3(
+  documentId: string
+): Promise<{ has_results: boolean } & Partial<DocumentCheckResultV3>> {
+  return apiGet(`/api/checks/documents/${documentId}/results/latest-v3`);
+}
+
+export async function getPageClassifications(
+  parseResultId: string
+): Promise<PageClassificationsResponse> {
+  return apiGet<PageClassificationsResponse>(`/api/parse/${parseResultId}/page-classifications`);
+}
+
+export async function classifyPages(
+  parseResultId: string,
+  forceReclassify: boolean = false
+): Promise<PageClassificationsResponse> {
+  return apiPost<PageClassificationsResponse>(
+    `/api/parse/${parseResultId}/classify-pages`,
+    { force_reclassify: forceReclassify }
+  );
 }
 
 // ============ BATCH CHECKS ============

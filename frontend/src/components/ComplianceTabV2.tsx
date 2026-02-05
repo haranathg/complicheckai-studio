@@ -1,13 +1,32 @@
 /**
- * V2 Compliance Tab - Shows check results from the database
- * Displays results from batch checks run from the Dashboard
+ * Compliance Tab - Shows page-level check results with smart batching
+ * Uses V3 page-level checks exclusively
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import type { DocumentCheckResult, CheckResultItem } from '../types/checksV2';
+import type { DocumentCheckResult, CheckResultItem, CheckResultItemV3, PageClassification } from '../types/checksV2';
 import type { Project, Document } from '../types/project';
 import type { Chunk } from '../types/ade';
-import { getLatestCheckResults, runDocumentChecks, downloadDocumentReport } from '../services/checksService';
+import { downloadDocumentReport, runDocumentChecksV3, getLatestCheckResultsV3 } from '../services/checksService';
+
+// Page type display config
+const PAGE_TYPE_COLORS: Record<string, string> = {
+  floor_plan: '#3b82f6',
+  site_plan: '#10b981',
+  elevation: '#8b5cf6',
+  section: '#f59e0b',
+  detail: '#ec4899',
+  schedule: '#06b6d4',
+  cover_sheet: '#6366f1',
+  form: '#84cc16',
+  letter: '#14b8a6',
+  certificate: '#f97316',
+  report: '#a855f7',
+  photo: '#64748b',
+  table: '#0ea5e9',
+  specification: '#22c55e',
+  unknown: '#94a3b8',
+};
 
 interface ComplianceTabV2Props {
   project: Project | null;
@@ -41,11 +60,14 @@ export default function ComplianceTabV2({
   const [expandedChecks, setExpandedChecks] = useState<Set<string>>(new Set());
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showFindings, setShowFindings] = useState(true);
+  const [pageClassifications, setPageClassifications] = useState<PageClassification[]>([]);
+  const [pageFilter, setPageFilter] = useState<number | null>(null);
 
   // Load check results when document changes
   const loadResults = useCallback(async () => {
     if (!document) {
       setResults(null);
+      setPageClassifications([]);
       return;
     }
 
@@ -53,11 +75,23 @@ export default function ComplianceTabV2({
     setError(null);
 
     try {
-      const response = await getLatestCheckResults(document.id);
+      const response = await getLatestCheckResultsV3(document.id);
       if (response.has_results && response.id) {
-        setResults(response as DocumentCheckResult);
+        const v3Results = response as any;
+        setResults({
+          id: v3Results.id,
+          run_number: v3Results.run_number,
+          document_type: v3Results.document_type || 'mixed',
+          completeness_results: v3Results.completeness_results || [],
+          compliance_results: v3Results.compliance_results || [],
+          summary: v3Results.summary,
+          usage: v3Results.usage,
+          checked_at: v3Results.checked_at,
+        });
+        setPageClassifications(v3Results.page_classifications || []);
       } else {
         setResults(null);
+        setPageClassifications([]);
       }
     } catch (err) {
       console.error('Failed to load check results:', err);
@@ -79,18 +113,24 @@ export default function ComplianceTabV2({
     setError(null);
 
     try {
-      const response = await runDocumentChecks(document.id);
-      // Convert RunChecksResponse to DocumentCheckResult format
+      const response = await runDocumentChecksV3(document.id, { use_v3_checks: true });
+      // Map V3 results to display format
+      const mapV3ToV2 = (items: CheckResultItemV3[]): CheckResultItem[] =>
+        items.map(item => ({
+          ...item,
+          check_type: item.category as 'completeness' | 'compliance',
+        }));
       setResults({
         id: response.id,
         run_number: response.run_number,
-        document_type: response.document_type,
-        completeness_results: response.completeness_results,
-        compliance_results: response.compliance_results,
+        document_type: 'mixed',
+        completeness_results: mapV3ToV2(response.completeness_results),
+        compliance_results: mapV3ToV2(response.compliance_results),
         summary: response.summary,
         usage: response.usage,
         checked_at: response.checked_at,
       });
+      setPageClassifications(response.page_classifications || []);
     } catch (err) {
       console.error('Failed to run checks:', err);
       setError('Failed to run checks. Make sure the document has been processed first.');
@@ -148,10 +188,14 @@ export default function ComplianceTabV2({
     ? (activeTab === 'completeness' ? results.completeness_results : results.compliance_results)
     : [];
 
-  // Filter by status if set
-  const filteredChecks = statusFilter
-    ? currentChecks.filter(c => c.status === statusFilter)
-    : currentChecks;
+  // Filter by status and page if set
+  let filteredChecks = currentChecks;
+  if (statusFilter) {
+    filteredChecks = filteredChecks.filter(c => c.status === statusFilter);
+  }
+  if (pageFilter !== null) {
+    filteredChecks = filteredChecks.filter(c => (c as unknown as CheckResultItemV3).page_number === pageFilter);
+  }
 
   // Render status badge
   const renderStatusBadge = (status: string) => {
@@ -196,7 +240,7 @@ export default function ComplianceTabV2({
           {results && (
             <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
               Run #{results.run_number} • {new Date(results.checked_at).toLocaleString()}
-              {results.document_type && ` • Type: ${results.document_type}`}
+              {pageClassifications.length > 0 && ` • ${pageClassifications.length} pages classified`}
             </p>
           )}
         </div>
@@ -356,6 +400,48 @@ export default function ComplianceTabV2({
             </button>
           </div>
 
+          {/* Page Classifications Filter */}
+          {pageClassifications.length > 0 && (
+            <div className={`mb-3 p-2 rounded-lg ${isDark ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Pages:</span>
+                <button
+                  onClick={() => setPageFilter(null)}
+                  className={`px-2 py-0.5 rounded text-xs transition-colors ${
+                    pageFilter === null
+                      ? 'bg-sky-500 text-white'
+                      : isDark ? 'bg-slate-700 text-gray-300 hover:bg-slate-600' : 'bg-white text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  All
+                </button>
+                {pageClassifications.map(pc => {
+                  const color = PAGE_TYPE_COLORS[pc.page_type] || PAGE_TYPE_COLORS.unknown;
+                  const isActive = pageFilter === pc.page;
+                  return (
+                    <button
+                      key={pc.page}
+                      onClick={() => setPageFilter(isActive ? null : pc.page)}
+                      className={`px-2 py-0.5 rounded text-xs transition-colors flex items-center gap-1 ${
+                        isActive
+                          ? 'text-white'
+                          : isDark ? 'bg-slate-700 hover:bg-slate-600' : 'bg-white hover:bg-gray-100'
+                      }`}
+                      style={isActive ? { backgroundColor: color } : undefined}
+                      title={`${pc.page_type} (${pc.confidence}% confidence)`}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: isActive ? 'white' : color }}
+                      />
+                      P{pc.page}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Status filters - legend style like PDFViewer */}
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className={`text-xs font-medium mr-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Results:</span>
@@ -404,25 +490,41 @@ export default function ComplianceTabV2({
 
           {/* Check items */}
           <div className="flex-1 overflow-auto space-y-2">
-            {filteredChecks.map((check) => {
-              const isExpanded = expandedChecks.has(check.check_id);
+            {filteredChecks.map((check, idx) => {
               const hasChunks = check.chunk_ids && check.chunk_ids.length > 0;
+              // V3 page info - cast through unknown for type safety
+              const v3Check = check as unknown as CheckResultItemV3;
+              const pageNum = v3Check.page_number;
+              const pageType = v3Check.page_type;
+              const pageColor = pageType ? (PAGE_TYPE_COLORS[pageType] || PAGE_TYPE_COLORS.unknown) : null;
+              // Use unique key combining check_id and page for V3 results
+              const uniqueKey = pageNum ? `${check.check_id}-p${pageNum}-${idx}` : check.check_id;
 
               return (
                 <div
-                  key={check.check_id}
+                  key={uniqueKey}
                   className={`border rounded-lg overflow-hidden ${
                     isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'
                   }`}
                 >
                   <button
-                    onClick={() => toggleCheck(check.check_id)}
+                    onClick={() => toggleCheck(uniqueKey as string)}
                     className={`w-full px-3 py-2 flex items-center justify-between text-left transition-colors ${
                       isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       {renderStatusBadge(check.status)}
+                      {/* Page badge for V3 */}
+                      {pageNum && pageColor && (
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded text-white font-medium"
+                          style={{ backgroundColor: pageColor }}
+                          title={pageType || ''}
+                        >
+                          P{pageNum}
+                        </span>
+                      )}
                       <span className={`font-medium text-sm truncate ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
                         {check.check_name}
                       </span>
@@ -439,7 +541,7 @@ export default function ComplianceTabV2({
                         </span>
                       )}
                       <svg
-                        className={`w-4 h-4 transition-transform ${isDark ? 'text-gray-400' : 'text-gray-500'} ${isExpanded ? 'rotate-180' : ''}`}
+                        className={`w-4 h-4 transition-transform ${isDark ? 'text-gray-400' : 'text-gray-500'} ${expandedChecks.has(uniqueKey) ? 'rotate-180' : ''}`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -449,7 +551,7 @@ export default function ComplianceTabV2({
                     </div>
                   </button>
 
-                  {isExpanded && (
+                  {expandedChecks.has(uniqueKey) && (
                     <div className={`px-3 pb-3 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`}>
                       <div className="pt-2 space-y-2 text-sm">
                         {/* Check question with Q: prefix */}

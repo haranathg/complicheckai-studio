@@ -1,0 +1,462 @@
+{
+  "version": "3.0",
+  "description": "Page-level classification and human-readable compliance checks for building consent documents",
+
+  "page_types": {
+    "floor_plan": {
+      "name": "Floor Plan",
+      "description": "Architectural drawing showing room layout, dimensions and door/window positions",
+      "classification_signals": ["room labels", "door swings", "dimension chains", "wall thicknesses", "FLOOR PLAN", "GROUND FLOOR", "LEVEL"]
+    },
+    "site_plan": {
+      "name": "Site Plan",
+      "description": "Drawing showing property boundaries, buildings, setbacks and site layout",
+      "classification_signals": ["boundary lines", "building footprints", "north arrow", "scale bar", "property dimensions", "SITE PLAN", "SITE LAYOUT", "LOCATION PLAN"]
+    },
+    "elevation": {
+      "name": "Elevation",
+      "description": "External view of building showing height, materials, and facade details",
+      "classification_signals": ["ELEVATION", "NORTH ELEVATION", "SOUTH ELEVATION", "EAST ELEVATION", "WEST ELEVATION", "RL levels", "material callouts", "height annotations"]
+    },
+    "section": {
+      "name": "Section",
+      "description": "Cross-sectional view showing internal structure and heights",
+      "classification_signals": ["SECTION", "CROSS SECTION", "cut line", "structural elements", "floor levels", "A-A", "B-B"]
+    },
+    "detail": {
+      "name": "Detail Drawing",
+      "description": "Enlarged detail showing construction methods, materials and assemblies",
+      "classification_signals": ["DETAIL", "TYPICAL DETAIL", "SECTION DETAIL", "enlarged scale", "material annotations", "assembly diagram", "FLASHING"]
+    },
+    "schedule": {
+      "name": "Schedule",
+      "description": "Table or list of specifications, windows, doors, or finishes",
+      "classification_signals": ["SCHEDULE", "DOOR SCHEDULE", "WINDOW SCHEDULE", "FINISH SCHEDULE", "tabular data", "specification table"]
+    },
+    "cover_sheet": {
+      "name": "Cover Sheet",
+      "description": "Title page with project information, drawing list, and general notes",
+      "classification_signals": ["COVER", "TITLE", "DRAWING LIST", "project information", "general notes", "A0", "A1"]
+    },
+    "form": {
+      "name": "Form",
+      "description": "Official form such as building consent application or certificate",
+      "classification_signals": ["FORM", "APPLICATION", "Building Act", "Section", "consent number", "form fields", "checkbox"]
+    },
+    "letter": {
+      "name": "Letter",
+      "description": "Correspondence letter or memo",
+      "classification_signals": ["Dear", "Regards", "letterhead", "correspondence", "memo", "RE:", "Subject:"]
+    },
+    "certificate": {
+      "name": "Certificate",
+      "description": "Official certificate including producer statements, compliance certificates",
+      "classification_signals": ["CERTIFICATE", "PRODUCER STATEMENT", "PS1", "PS2", "PS3", "PS4", "certify", "COMPLIANCE"]
+    },
+    "report": {
+      "name": "Report",
+      "description": "Technical or inspection report with findings",
+      "classification_signals": ["REPORT", "INSPECTION", "FINDINGS", "ASSESSMENT", "numbered sections", "executive summary"]
+    },
+    "photo": {
+      "name": "Photo",
+      "description": "Photograph or image of site, construction or product",
+      "classification_signals": ["photograph", "site photo", "image only", "no text content"]
+    },
+    "table": {
+      "name": "Table",
+      "description": "Standalone table of data or specifications",
+      "classification_signals": ["tabular data", "rows and columns", "data table", "specification table"]
+    },
+    "specification": {
+      "name": "Product Specification",
+      "description": "Technical specifications for products including installation requirements",
+      "classification_signals": ["SPECIFICATION", "TECHNICAL DATA", "INSTALLATION", "clearance", "model number", "manufacturer"]
+    },
+    "unknown": {
+      "name": "Unknown",
+      "description": "Page type could not be determined",
+      "classification_signals": []
+    }
+  },
+
+  "checks": [
+    {
+      "id": "scale_indicator",
+      "name": "Scale Indicator",
+      "prompt": "Does this page have a scale indicator (e.g., 1:100, 1:50, scale bar)?",
+      "applies_to": ["floor_plan", "site_plan", "elevation", "section", "detail"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "north_arrow",
+      "name": "North Arrow",
+      "prompt": "Is there a north arrow or north direction indicator on this plan?",
+      "applies_to": ["floor_plan", "site_plan"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "dimensions_marked",
+      "name": "Dimensions Marked",
+      "prompt": "Are dimensions clearly marked on this drawing (room sizes, setbacks, heights)?",
+      "applies_to": ["floor_plan", "site_plan", "elevation", "section", "detail"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "room_labels",
+      "name": "Room Labels",
+      "prompt": "Are all rooms labelled with their intended use (e.g., Bedroom, Kitchen, Living)?",
+      "applies_to": ["floor_plan"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "floor_level_identifier",
+      "name": "Floor Level Identifier",
+      "prompt": "Is the floor level or storey clearly identified (e.g., Ground Floor, Level 1)?",
+      "applies_to": ["floor_plan"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "door_positions",
+      "name": "Door Positions",
+      "prompt": "Are door positions and swing directions shown on this floor plan?",
+      "applies_to": ["floor_plan"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "window_positions",
+      "name": "Window Positions",
+      "prompt": "Are window positions indicated on this floor plan?",
+      "applies_to": ["floor_plan"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "boundary_dimensions",
+      "name": "Boundary Dimensions",
+      "prompt": "Are all property boundary dimensions shown on this site plan?",
+      "applies_to": ["site_plan"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "site_area",
+      "name": "Site Area",
+      "prompt": "Is the total site area specified on this site plan?",
+      "applies_to": ["site_plan"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "setback_dimensions",
+      "name": "Setback Dimensions",
+      "prompt": "Are setback distances from boundaries shown for buildings on this site plan?",
+      "applies_to": ["site_plan"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "existing_buildings",
+      "name": "Existing Buildings",
+      "prompt": "Are existing buildings or structures shown and labelled on this site plan?",
+      "applies_to": ["site_plan"],
+      "category": "completeness",
+      "required": false
+    },
+    {
+      "id": "proposed_works",
+      "name": "Proposed Works",
+      "prompt": "Are proposed works clearly identified and distinguished from existing on this plan?",
+      "applies_to": ["site_plan", "floor_plan"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "elevation_direction",
+      "name": "Elevation Direction",
+      "prompt": "Is the elevation direction clearly identified (e.g., North Elevation, Street Elevation)?",
+      "applies_to": ["elevation"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "height_dimensions",
+      "name": "Height Dimensions",
+      "prompt": "Are building heights shown on this elevation (floor to ceiling, overall height)?",
+      "applies_to": ["elevation", "section"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "ground_level_rl",
+      "name": "Ground Level (RL)",
+      "prompt": "Is the ground level or finished floor level shown (RL - Reduced Level)?",
+      "applies_to": ["elevation", "section"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "external_materials",
+      "name": "External Materials",
+      "prompt": "Are external materials and finishes indicated on this elevation?",
+      "applies_to": ["elevation"],
+      "category": "completeness",
+      "required": false
+    },
+    {
+      "id": "detail_title",
+      "name": "Detail Title",
+      "prompt": "Is this detail drawing clearly titled and labelled?",
+      "applies_to": ["detail"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "materials_identified",
+      "name": "Materials Identified",
+      "prompt": "Are materials and components clearly identified in this detail?",
+      "applies_to": ["detail"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "drawing_date",
+      "name": "Drawing Date",
+      "prompt": "Is a drawing date or revision date shown on this page?",
+      "applies_to": ["floor_plan", "site_plan", "elevation", "section", "detail", "cover_sheet"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "author_company",
+      "name": "Author/Company",
+      "prompt": "Is the author, designer or company who prepared this drawing shown?",
+      "applies_to": ["floor_plan", "site_plan", "elevation", "section", "detail", "cover_sheet"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "site_address",
+      "name": "Site Address",
+      "prompt": "Is the site/property address shown on this page?",
+      "applies_to": ["site_plan", "cover_sheet", "form", "certificate"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "legal_description",
+      "name": "Legal Description",
+      "prompt": "Is the legal description (Lot/DP reference) shown?",
+      "applies_to": ["site_plan", "cover_sheet", "form"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "consent_number",
+      "name": "Consent Number",
+      "prompt": "Is a building consent or application number shown?",
+      "applies_to": ["form", "certificate", "cover_sheet"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "signature_present",
+      "name": "Signature Present",
+      "prompt": "Is a signature present on this document?",
+      "applies_to": ["form", "certificate", "letter"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "date_signed",
+      "name": "Date Signed",
+      "prompt": "Is the document dated?",
+      "applies_to": ["form", "certificate", "letter"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "manufacturer_name",
+      "name": "Manufacturer Name",
+      "prompt": "Is the manufacturer name clearly shown?",
+      "applies_to": ["specification"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "model_number",
+      "name": "Model Number",
+      "prompt": "Is the product model name or number shown?",
+      "applies_to": ["specification"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "clearance_requirements",
+      "name": "Clearance Requirements",
+      "prompt": "Are clearance or spacing requirements specified?",
+      "applies_to": ["specification"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "standards_compliance",
+      "name": "Standards Compliance",
+      "prompt": "Are compliance standards referenced (AS/NZS)?",
+      "applies_to": ["specification", "certificate"],
+      "category": "compliance",
+      "required": true
+    },
+    {
+      "id": "installation_instructions",
+      "name": "Installation Instructions",
+      "prompt": "Are installation instructions present?",
+      "applies_to": ["specification"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "registration_number",
+      "name": "Registration/Accreditation",
+      "prompt": "Is the issuer's registration or accreditation number shown (LBP, CPEng, etc.)?",
+      "applies_to": ["certificate"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "scope_of_work",
+      "name": "Scope of Work",
+      "prompt": "Is the scope of work or certification clearly defined?",
+      "applies_to": ["certificate"],
+      "category": "completeness",
+      "required": true
+    },
+    {
+      "id": "site_coverage_compliant",
+      "name": "Site Coverage Compliance",
+      "prompt": "Based on the site plan, does the site coverage appear to be within typical limits (35-40%)?",
+      "applies_to": ["site_plan"],
+      "category": "compliance",
+      "rule_reference": "District Plan - Site Coverage",
+      "required": false
+    },
+    {
+      "id": "height_limit_compliant",
+      "name": "Height Limit Compliance",
+      "prompt": "Based on the elevations, does the building height appear to be within typical residential limits (8-9m)?",
+      "applies_to": ["elevation"],
+      "category": "compliance",
+      "rule_reference": "District Plan - Height Limits",
+      "required": false
+    },
+    {
+      "id": "setback_compliant",
+      "name": "Setback Compliance",
+      "prompt": "Do the setback distances shown meet typical minimum requirements (front 4.5m, side 1.5m)?",
+      "applies_to": ["site_plan"],
+      "category": "compliance",
+      "rule_reference": "District Plan - Yard Requirements",
+      "required": false
+    },
+    {
+      "id": "vehicle_access",
+      "name": "Vehicle Access",
+      "prompt": "Is vehicle access or driveway shown on the site plan?",
+      "applies_to": ["site_plan"],
+      "category": "compliance",
+      "rule_reference": "District Plan - Access Requirements",
+      "required": false
+    },
+    {
+      "id": "stormwater_indicated",
+      "name": "Stormwater Disposal",
+      "prompt": "Is stormwater disposal indicated on the site plan?",
+      "applies_to": ["site_plan"],
+      "category": "compliance",
+      "rule_reference": "Building Code E1",
+      "required": false
+    }
+  ],
+
+  "document_types": {
+    "record_of_title": {
+      "name": "Record of Title",
+      "description": "Land ownership and interests documentation from LINZ",
+      "upload_slot": "Record of Title",
+      "expected_page_types": ["form", "table"]
+    },
+    "plans": {
+      "name": "Plans Set",
+      "description": "Architectural drawings including site plan, floor plans, elevations",
+      "upload_slot": "Plans",
+      "expected_page_types": ["cover_sheet", "site_plan", "floor_plan", "elevation", "section", "detail", "schedule"]
+    },
+    "specifications": {
+      "name": "Specifications",
+      "description": "Technical specifications and product documentation",
+      "upload_slot": "Specifications",
+      "expected_page_types": ["specification", "detail", "table"]
+    },
+    "certificates": {
+      "name": "Certificates",
+      "description": "Producer statements and compliance certificates",
+      "upload_slot": "Certificates",
+      "expected_page_types": ["certificate", "form"]
+    },
+    "supporting": {
+      "name": "Supporting Documents",
+      "description": "Letters, reports, photos and other supporting documentation",
+      "upload_slot": "Supporting Documents",
+      "expected_page_types": ["letter", "report", "photo", "form"]
+    }
+  },
+
+  "work_types": {
+    "solid_fuel_heater": {
+      "name": "Solid Fuel Heater Installation",
+      "description": "Installation or replacement of wood burner, pellet fire, or other solid fuel heater",
+      "required_document_types": ["record_of_title", "plans", "specifications", "certificates"],
+      "default_settings": {
+        "vision_parser": "landing_ai",
+        "chat_model": "bedrock-claude-sonnet-3.5",
+        "compliance_model": "bedrock-claude-sonnet-3.5"
+      }
+    },
+    "new_dwelling": {
+      "name": "New Dwelling",
+      "description": "Construction of a new residential dwelling",
+      "required_document_types": ["record_of_title", "plans"],
+      "default_settings": {
+        "vision_parser": "landing_ai",
+        "chat_model": "bedrock-claude-sonnet-3.5",
+        "compliance_model": "bedrock-claude-sonnet-3.5"
+      }
+    },
+    "minor_works": {
+      "name": "Minor Works / Alterations",
+      "description": "Small alterations, additions or repairs to existing buildings",
+      "required_document_types": ["record_of_title", "plans"],
+      "default_settings": {
+        "vision_parser": "landing_ai",
+        "chat_model": "bedrock-claude-sonnet-3.5",
+        "compliance_model": "bedrock-claude-sonnet-3.5"
+      }
+    },
+    "custom": {
+      "name": "Custom / Other",
+      "description": "Custom project type - configure documents manually",
+      "required_document_types": [],
+      "default_settings": {
+        "vision_parser": "landing_ai",
+        "chat_model": "bedrock-claude-sonnet-3.5",
+        "compliance_model": "bedrock-claude-sonnet-3.5"
+      }
+    }
+  }
+}

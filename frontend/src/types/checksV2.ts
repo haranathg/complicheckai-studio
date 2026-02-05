@@ -261,3 +261,125 @@ export interface RunChecksResponse {
     output_tokens: number;
   };
 }
+
+// ============ V3 PAGE-LEVEL TYPES ============
+
+export type PageType =
+  | 'floor_plan'
+  | 'site_plan'
+  | 'elevation'
+  | 'section'
+  | 'detail'
+  | 'schedule'
+  | 'cover_sheet'
+  | 'form'
+  | 'letter'
+  | 'certificate'
+  | 'report'
+  | 'photo'
+  | 'table'
+  | 'specification'
+  | 'unknown';
+
+export interface PageTypeInfo {
+  id: PageType;
+  name: string;
+  description: string;
+  classification_signals: string[];
+}
+
+export interface PageClassification {
+  id?: string;
+  page: number;
+  page_type: PageType;
+  confidence: number;
+  signals?: string[];
+  classification_model?: string;
+  classified_at?: string;
+}
+
+export interface CheckV3 {
+  id: string;
+  name: string;
+  prompt: string;
+  applies_to: PageType[];
+  category: 'completeness' | 'compliance';
+  execution_mode: 'per_page' | 'batched';
+  rule_reference?: string;
+  required: boolean;
+}
+
+export interface CheckResultItemV3 {
+  check_id: string;
+  check_name: string;
+  category: 'completeness' | 'compliance';
+  status: 'pass' | 'fail' | 'needs_review' | 'na';
+  confidence: number;
+  found_value?: string | null;
+  notes: string;
+  rule_reference?: string;
+  chunk_ids: string[];
+  page_number?: number;
+  page_type?: PageType;
+}
+
+export interface PageCheckResult {
+  id: string;
+  page_classification_id: string;
+  check_id: string;
+  check_name: string;
+  status: 'pass' | 'fail' | 'needs_review' | 'na';
+  confidence: number;
+  found_value?: string | null;
+  notes: string;
+  chunk_ids: string[];
+}
+
+export interface DocumentCheckResultV3 {
+  id: string;
+  run_number: number;
+  version: string;
+  document_type?: string;
+  page_classifications: PageClassification[];
+  completeness_results: CheckResultItemV3[];
+  compliance_results: CheckResultItemV3[];
+  summary: CheckResultSummary;
+  page_results?: PageCheckResult[];
+  checks_config?: {
+    version: string;
+    page_classifications: Array<{ page: number; type: PageType }>;
+  };
+  usage?: {
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+  };
+  checked_at: string;
+  processing_time_ms?: number;
+}
+
+export interface RunChecksV3Request {
+  force_reclassify?: boolean;
+  use_v3_checks?: boolean;
+}
+
+export interface RunChecksV3Response {
+  id: string;
+  run_number: number;
+  version: string;
+  page_classifications: PageClassification[];
+  completeness_results: CheckResultItemV3[];
+  compliance_results: CheckResultItemV3[];
+  summary: CheckResultSummary;
+  checked_at: string;
+  usage?: {
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+  };
+}
+
+export interface PageClassificationsResponse {
+  parse_result_id: string;
+  classifications: PageClassification[];
+}

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import FileResponse
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -40,7 +40,8 @@ def save_parse_result_to_db(
     parser: str,
     model: Optional[str],
     result: dict,
-    processing_time_ms: int
+    processing_time_ms: int,
+    classify_pages: bool = True
 ):
     """Save parse result to database and S3."""
     from models.database_models import ParseResult, Chunk, Document
@@ -81,24 +82,39 @@ def save_parse_result_to_db(
         document.page_count = result.get("metadata", {}).get("page_count")
 
     # Save chunks
+    chunk_data_list = []
     for idx, chunk_data in enumerate(result.get("chunks", [])):
         grounding = chunk_data.get("grounding")
+        page_num = grounding.get("page", 0) + 1 if grounding else None  # Convert to 1-indexed
         chunk = Chunk(
             parse_result_id=parse_result.id,
             chunk_index=idx,
             chunk_id=chunk_data.get("id", f"chunk_{idx}"),
             markdown=chunk_data.get("markdown"),
             chunk_type=chunk_data.get("type"),
-            page_number=grounding.get("page", 0) + 1 if grounding else None,  # Convert to 1-indexed
+            page_number=page_num,
             bbox_left=grounding.get("box", {}).get("left") if grounding else None,
             bbox_top=grounding.get("box", {}).get("top") if grounding else None,
             bbox_right=grounding.get("box", {}).get("right") if grounding else None,
             bbox_bottom=grounding.get("box", {}).get("bottom") if grounding else None,
         )
         db.add(chunk)
+        # Store chunk data for page classification
+        chunk_data_list.append({
+            "chunk_id": chunk_data.get("id", f"chunk_{idx}"),
+            "page_number": page_num,
+            "chunk_type": chunk_data.get("type"),
+            "markdown": chunk_data.get("markdown")
+        })
 
     db.commit()
-    return parse_result.id
+
+    # Return data for page classification
+    return {
+        "parse_result_id": parse_result.id,
+        "page_count": result.get("metadata", {}).get("page_count") or 1,
+        "chunks": chunk_data_list
+    }
 
 
 @router.post("")
@@ -108,6 +124,7 @@ async def parse_document(
     model: Optional[str] = Form(None),
     project_id: Optional[str] = Form(None),
     document_id: Optional[str] = Form(None),
+    classify_pages: Optional[bool] = Form(True),
     db: Optional[Session] = Depends(get_db_optional)
 ):
     """Parse an uploaded document.
@@ -118,6 +135,7 @@ async def parse_document(
         model: For vision parsers, the model to use
         project_id: Optional project ID to save result to
         document_id: Optional document ID (if already uploaded to a project)
+        classify_pages: Whether to classify individual pages after parsing (default: True)
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
@@ -182,7 +200,7 @@ async def parse_document(
         # Save to database if project_id and document_id provided and DB is available
         if db and project_id and document_id:
             try:
-                parse_result_id = save_parse_result_to_db(
+                parse_data = save_parse_result_to_db(
                     db=db,
                     document_id=document_id,
                     project_id=project_id,
@@ -191,7 +209,28 @@ async def parse_document(
                     result=result,
                     processing_time_ms=processing_time_ms
                 )
-                result["parse_result_id"] = parse_result_id
+                result["parse_result_id"] = parse_data["parse_result_id"]
+
+                # Classify pages if requested
+                if classify_pages and parse_data["page_count"] > 0:
+                    try:
+                        from services.page_classification_service import get_page_classification_service
+                        classification_service = get_page_classification_service()
+                        classifications = await classification_service.classify_pages(
+                            chunks=parse_data["chunks"],
+                            page_count=parse_data["page_count"],
+                            model="bedrock-claude-sonnet-3.5"
+                        )
+                        classification_service.save_classifications(
+                            db=db,
+                            parse_result_id=parse_data["parse_result_id"],
+                            classifications=classifications
+                        )
+                        # Add page classifications to result
+                        result["page_classifications"] = classifications
+                    except Exception as e:
+                        print(f"Warning: Failed to classify pages: {e}")
+                        result["page_classifications"] = []
             except Exception as e:
                 print(f"Warning: Failed to save parse result to database: {e}")
 
@@ -215,3 +254,105 @@ async def get_uploaded_file(file_id: str):
         media_type="application/pdf",
         filename=f"document{Path(file_path).suffix}"
     )
+
+
+@router.get("/{parse_result_id}/page-classifications")
+async def get_page_classifications(
+    parse_result_id: str,
+    db: Session = Depends(get_db_optional)
+):
+    """Get page classifications for a parse result."""
+    if not db:
+        raise HTTPException(status_code=500, detail="Database not available")
+
+    from models.database_models import PageClassification
+
+    classifications = db.query(PageClassification).filter(
+        PageClassification.parse_result_id == parse_result_id
+    ).order_by(PageClassification.page_number).all()
+
+    return {
+        "parse_result_id": parse_result_id,
+        "classifications": [
+            {
+                "id": c.id,
+                "page_number": c.page_number,
+                "page_type": c.page_type,
+                "confidence": c.confidence,
+                "classification_signals": c.classification_signals,
+                "classification_model": c.classification_model,
+                "classified_at": c.classified_at.isoformat() if c.classified_at else None
+            }
+            for c in classifications
+        ]
+    }
+
+
+@router.post("/{parse_result_id}/classify-pages")
+async def classify_pages(
+    parse_result_id: str,
+    force_reclassify: bool = False,
+    db: Session = Depends(get_db_optional)
+):
+    """Classify or re-classify pages for a parse result."""
+    if not db:
+        raise HTTPException(status_code=500, detail="Database not available")
+
+    from models.database_models import ParseResult, Chunk, PageClassification
+    from services.page_classification_service import get_page_classification_service
+
+    # Get parse result
+    parse_result = db.query(ParseResult).filter(ParseResult.id == parse_result_id).first()
+    if not parse_result:
+        raise HTTPException(status_code=404, detail="Parse result not found")
+
+    # Check if already classified
+    existing = db.query(PageClassification).filter(
+        PageClassification.parse_result_id == parse_result_id
+    ).first()
+
+    if existing and not force_reclassify:
+        raise HTTPException(
+            status_code=400,
+            detail="Pages already classified. Set force_reclassify=true to re-classify."
+        )
+
+    # Delete existing classifications if re-classifying
+    if existing:
+        db.query(PageClassification).filter(
+            PageClassification.parse_result_id == parse_result_id
+        ).delete()
+        db.commit()
+
+    # Get chunks
+    chunks = db.query(Chunk).filter(Chunk.parse_result_id == parse_result_id).all()
+    chunk_data = [
+        {
+            "chunk_id": c.chunk_id,
+            "page_number": c.page_number,
+            "chunk_type": c.chunk_type,
+            "markdown": c.markdown
+        }
+        for c in chunks
+    ]
+
+    # Classify pages
+    classification_service = get_page_classification_service()
+    classifications = await classification_service.classify_pages(
+        chunks=chunk_data,
+        page_count=parse_result.page_count or 1,
+        model="bedrock-claude-sonnet-3.5"
+    )
+
+    # Save classifications
+    classification_service.save_classifications(
+        db=db,
+        parse_result_id=parse_result_id,
+        classifications=classifications
+    )
+
+    return {
+        "parse_result_id": parse_result_id,
+        "page_count": parse_result.page_count,
+        "classifications": classifications
+    }

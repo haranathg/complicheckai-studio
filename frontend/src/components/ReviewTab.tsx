@@ -16,6 +16,7 @@ import {
   resolveAnnotation,
 } from '../services/annotationService';
 import { downloadPDFWithAnnotations } from '../utils/pdfExport';
+import { Modal, Button } from './ui';
 
 export type ViewMode = 'page' | 'document' | 'project';
 
@@ -49,6 +50,8 @@ export default function ReviewTab({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [isExporting, setIsExporting] = useState(false);
+  const [deleteAnnotationId, setDeleteAnnotationId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Load annotations based on view mode
   const loadAnnotations = useCallback(async () => {
@@ -127,13 +130,15 @@ export default function ReviewTab({
 
   // Delete annotation
   const handleDeleteAnnotation = async (id: string) => {
-    if (!confirm('Delete this annotation?')) return;
-
+    setIsDeleting(true);
     try {
       await deleteAnnotation(id);
       setAnnotations(prev => prev.filter(a => a.id !== id));
+      setDeleteAnnotationId(null);
     } catch (err) {
       console.error('Failed to delete annotation:', err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -524,7 +529,7 @@ export default function ReviewTab({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDeleteAnnotation(annotation.id);
+                          setDeleteAnnotationId(annotation.id);
                         }}
                         className="hover:text-red-500"
                       >
@@ -538,6 +543,38 @@ export default function ReviewTab({
           </div>
         )}
       </div>
+
+      {/* Delete Annotation Confirmation Modal */}
+      <Modal
+        isOpen={!!deleteAnnotationId}
+        onClose={() => setDeleteAnnotationId(null)}
+        title="Delete Annotation"
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setDeleteAnnotationId(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => deleteAnnotationId && handleDeleteAnnotation(deleteAnnotationId)}
+              isLoading={isDeleting}
+            >
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <p className={`text-sm ${theme.textSecondary}`}>
+          Are you sure you want to delete this annotation?
+        </p>
+        <p className={`text-sm mt-2 ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+          This action cannot be undone.
+        </p>
+      </Modal>
     </div>
   );
 }

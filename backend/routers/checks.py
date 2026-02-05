@@ -10,9 +10,12 @@ import threading
 from database import get_db
 from models.database_models import (
     Document, ParseResult, Chunk, Project, ProjectSettings,
-    CheckResult, BatchCheckRun
+    CheckResult, BatchCheckRun, PageClassification, PageCheckResult
 )
-from services.config_service import load_default_checks_config, get_document_type_config
+from services.config_service import (
+    load_default_checks_config, get_document_type_config,
+    load_checks_config_v3, get_checks_for_page_type, get_checks_v3
+)
 from routers.compliance import get_bedrock_client, resolve_model_id
 
 router = APIRouter()
@@ -25,6 +28,94 @@ class RunChecksRequest(BaseModel):
 class BatchCheckRequest(BaseModel):
     force_rerun: bool = False
     skip_unparsed: bool = True
+
+
+class RunChecksV3Request(BaseModel):
+    """Request body for V3 page-level checks."""
+    force_reclassify: bool = False
+
+
+# Maximum characters per batch for smart batching
+MAX_BATCH_CHARS = 50000
+
+
+def create_smart_batches(
+    page_classifications: List,
+    chunks_by_page: Dict[int, List[Dict]],
+    max_chars: int = MAX_BATCH_CHARS
+) -> List[Dict]:
+    """
+    Group pages by type and create batches that fit within the character limit.
+
+    Returns a list of batches, each containing:
+    - page_type: the shared page type
+    - pages: list of page numbers in this batch
+    - page_classifications: list of PageClassification objects
+    - combined_content: merged markdown content from all pages
+    - chunks: combined chunk data from all pages
+    """
+    # Group pages by type
+    pages_by_type: Dict[str, List] = {}
+    for pc in page_classifications:
+        page_type = pc.page_type
+        if page_type not in pages_by_type:
+            pages_by_type[page_type] = []
+        pages_by_type[page_type].append(pc)
+
+    batches = []
+
+    for page_type, classifications in pages_by_type.items():
+        current_batch_pages = []
+        current_batch_classifications = []
+        current_batch_content = []
+        current_batch_chunks = []
+        current_chars = 0
+
+        for pc in classifications:
+            page_num = pc.page_number
+            page_chunks = chunks_by_page.get(page_num, [])
+
+            # Calculate content size for this page
+            page_content = "\n\n".join([
+                f"[{c.get('type', 'text')}]: {c.get('content', '')}"
+                for c in page_chunks
+            ])
+            page_chars = len(page_content)
+
+            # If adding this page would exceed limit, finalize current batch
+            if current_chars > 0 and current_chars + page_chars > max_chars:
+                batches.append({
+                    "page_type": page_type,
+                    "pages": current_batch_pages,
+                    "page_classifications": current_batch_classifications,
+                    "combined_content": "\n\n---PAGE BOUNDARY---\n\n".join(current_batch_content),
+                    "chunks": current_batch_chunks
+                })
+                # Start new batch
+                current_batch_pages = []
+                current_batch_classifications = []
+                current_batch_content = []
+                current_batch_chunks = []
+                current_chars = 0
+
+            # Add page to current batch
+            current_batch_pages.append(page_num)
+            current_batch_classifications.append(pc)
+            current_batch_content.append(f"=== PAGE {page_num} ===\n{page_content}")
+            current_batch_chunks.extend([{**c, "page_number": page_num} for c in page_chunks])
+            current_chars += page_chars
+
+        # Don't forget the last batch
+        if current_batch_pages:
+            batches.append({
+                "page_type": page_type,
+                "pages": current_batch_pages,
+                "page_classifications": current_batch_classifications,
+                "combined_content": "\n\n---PAGE BOUNDARY---\n\n".join(current_batch_content),
+                "chunks": current_batch_chunks
+            })
+
+    return batches
 
 
 # ============ SINGLE DOCUMENT CHECKS ============
@@ -341,6 +432,598 @@ async def get_batch_run_status(batch_run_id: str, db: Session = Depends(get_db))
         "started_at": batch_run.started_at.isoformat() if batch_run.started_at else None,
         "completed_at": batch_run.completed_at.isoformat() if batch_run.completed_at else None
     }
+
+
+# ============ V3 PAGE-LEVEL CHECKS ============
+
+@router.post("/documents/{document_id}/run-v3")
+async def run_document_checks_v3(
+    document_id: str,
+    body: RunChecksV3Request = RunChecksV3Request(),
+    db: Session = Depends(get_db)
+):
+    """Run V3 page-level checks on a document using page classifications."""
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Get parse result
+    parse_result = db.query(ParseResult).filter(
+        ParseResult.document_id == document_id,
+        ParseResult.status == "completed"
+    ).order_by(ParseResult.created_at.desc()).first()
+
+    if not parse_result:
+        raise HTTPException(status_code=400, detail="Document must be parsed first")
+
+    # Get or create page classifications
+    page_classifications = db.query(PageClassification).filter(
+        PageClassification.parse_result_id == parse_result.id
+    ).order_by(PageClassification.page_number).all()
+
+    if not page_classifications or body.force_reclassify:
+        # Classify pages first
+        from services.page_classification_service import get_page_classification_service
+        classification_service = get_page_classification_service()
+
+        # Get chunks for classification
+        chunks = db.query(Chunk).filter(Chunk.parse_result_id == parse_result.id).all()
+        chunk_data = [
+            {
+                "chunk_id": c.chunk_id,
+                "page_number": c.page_number,
+                "chunk_type": c.chunk_type,
+                "markdown": c.markdown
+            }
+            for c in chunks
+        ]
+
+        # Delete existing classifications if re-classifying
+        if page_classifications:
+            db.query(PageClassification).filter(
+                PageClassification.parse_result_id == parse_result.id
+            ).delete()
+            db.commit()
+
+        classifications = await classification_service.classify_pages(
+            chunks=chunk_data,
+            page_count=parse_result.page_count or 1,
+            model="bedrock-claude-sonnet-3.5"
+        )
+        classification_service.save_classifications(
+            db=db,
+            parse_result_id=parse_result.id,
+            classifications=classifications
+        )
+
+        # Re-fetch classifications
+        page_classifications = db.query(PageClassification).filter(
+            PageClassification.parse_result_id == parse_result.id
+        ).order_by(PageClassification.page_number).all()
+
+    # Get project settings
+    settings = db.query(ProjectSettings).filter(
+        ProjectSettings.project_id == document.project_id
+    ).first()
+    model = settings.compliance_model if settings else "bedrock-claude-sonnet-3.5"
+
+    # Get chunks grouped by page
+    chunks = db.query(Chunk).filter(Chunk.parse_result_id == parse_result.id).all()
+    chunks_by_page = {}
+    for c in chunks:
+        page_num = c.page_number or 1
+        if page_num not in chunks_by_page:
+            chunks_by_page[page_num] = []
+        chunks_by_page[page_num].append({
+            "id": c.chunk_id,
+            "type": c.chunk_type,
+            "content": c.markdown[:500] if c.markdown else ""
+        })
+
+    # Get run number
+    run_count = db.query(CheckResult).filter(CheckResult.document_id == document_id).count()
+
+    start_time = datetime.utcnow()
+
+    # Create smart batches - group pages by type with size limits
+    batches = create_smart_batches(page_classifications, chunks_by_page)
+
+    # Map page classifications by page number for later lookup
+    pc_by_page = {pc.page_number: pc for pc in page_classifications}
+
+    # Run checks for each batch
+    all_page_results = []
+    total_input_tokens = 0
+    total_output_tokens = 0
+
+    for batch in batches:
+        page_type = batch["page_type"]
+
+        # Get applicable checks for this page type
+        applicable_checks = get_checks_for_page_type(page_type)
+
+        if not applicable_checks:
+            continue
+
+        # Run batch checks
+        batch_result = await run_batch_checks_ai(
+            batch=batch,
+            checks=applicable_checks,
+            model=model
+        )
+
+        # Process results for each page in the batch
+        for page_result in batch_result.get("page_results", []):
+            page_num = page_result["page_number"]
+            pc = pc_by_page.get(page_num)
+            if pc:
+                page_result["page_classification_id"] = pc.id
+            all_page_results.append(page_result)
+
+        total_input_tokens += batch_result.get("usage", {}).get("input_tokens", 0)
+        total_output_tokens += batch_result.get("usage", {}).get("output_tokens", 0)
+
+    processing_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+
+    # Aggregate results
+    all_check_results = []
+    for page_result in all_page_results:
+        for check_result in page_result.get("results", []):
+            check_result["page_number"] = page_result["page_number"]
+            check_result["page_type"] = page_result["page_type"]
+            all_check_results.append(check_result)
+
+    # Split into completeness and compliance
+    completeness_results = [r for r in all_check_results if r.get("category") == "completeness"]
+    compliance_results = [r for r in all_check_results if r.get("category") == "compliance"]
+
+    # Calculate summary
+    passed = sum(1 for r in all_check_results if r["status"] == "pass")
+    failed = sum(1 for r in all_check_results if r["status"] == "fail")
+    needs_review = sum(1 for r in all_check_results if r["status"] == "needs_review")
+    na = sum(1 for r in all_check_results if r["status"] == "na")
+
+    # Save main check result
+    check_result = CheckResult(
+        document_id=document_id,
+        parse_result_id=parse_result.id,
+        project_id=document.project_id,
+        run_number=run_count + 1,
+        document_type=document.document_type,
+        completeness_results=completeness_results,
+        compliance_results=compliance_results,
+        summary={
+            "total_checks": len(all_check_results),
+            "passed": passed,
+            "failed": failed,
+            "needs_review": needs_review,
+            "na": na,
+        },
+        checks_config_snapshot={
+            "version": "3.0",
+            "page_classifications": [
+                {"page": pc.page_number, "type": pc.page_type}
+                for pc in page_classifications
+            ]
+        },
+        model=model,
+        input_tokens=total_input_tokens,
+        output_tokens=total_output_tokens,
+        status="completed",
+        processing_time_ms=processing_time
+    )
+    db.add(check_result)
+    db.flush()
+
+    # Save individual page check results
+    for page_result in all_page_results:
+        for check_res in page_result.get("results", []):
+            page_check = PageCheckResult(
+                page_classification_id=page_result["page_classification_id"],
+                check_result_id=check_result.id,
+                check_id=check_res["check_id"],
+                check_name=check_res.get("check_name"),
+                status=check_res["status"],
+                confidence=check_res.get("confidence"),
+                found_value=check_res.get("found_value"),
+                notes=check_res.get("notes"),
+                chunk_ids=check_res.get("chunk_ids", [])
+            )
+            db.add(page_check)
+
+    # Update project usage
+    if settings:
+        settings.total_input_tokens = (settings.total_input_tokens or 0) + total_input_tokens
+        settings.total_output_tokens = (settings.total_output_tokens or 0) + total_output_tokens
+
+    db.commit()
+
+    return {
+        "id": check_result.id,
+        "run_number": check_result.run_number,
+        "version": "3.0",
+        "page_classifications": [
+            {"page": pc.page_number, "type": pc.page_type, "confidence": pc.confidence}
+            for pc in page_classifications
+        ],
+        "completeness_results": completeness_results,
+        "compliance_results": compliance_results,
+        "summary": check_result.summary,
+        "checked_at": check_result.created_at.isoformat(),
+        "usage": {
+            "input_tokens": total_input_tokens,
+            "output_tokens": total_output_tokens,
+            "model": model
+        }
+    }
+
+
+@router.get("/documents/{document_id}/results/latest-v3")
+async def get_latest_check_results_v3(document_id: str, db: Session = Depends(get_db)):
+    """Get most recent V3 check results for a document, including page-level details."""
+    result = db.query(CheckResult).filter(
+        CheckResult.document_id == document_id
+    ).order_by(CheckResult.created_at.desc()).first()
+
+    if not result:
+        return {"has_results": False}
+
+    # Get page check results
+    page_results = db.query(PageCheckResult).filter(
+        PageCheckResult.check_result_id == result.id
+    ).all()
+
+    # Get page classifications
+    parse_result = db.query(ParseResult).filter(
+        ParseResult.document_id == document_id,
+        ParseResult.status == "completed"
+    ).order_by(ParseResult.created_at.desc()).first()
+
+    page_classifications = []
+    if parse_result:
+        classifications = db.query(PageClassification).filter(
+            PageClassification.parse_result_id == parse_result.id
+        ).order_by(PageClassification.page_number).all()
+        page_classifications = [
+            {
+                "id": pc.id,
+                "page": pc.page_number,
+                "type": pc.page_type,
+                "confidence": pc.confidence,
+                "signals": pc.classification_signals
+            }
+            for pc in classifications
+        ]
+
+    return {
+        "has_results": True,
+        "id": result.id,
+        "run_number": result.run_number,
+        "document_type": result.document_type,
+        "page_classifications": page_classifications,
+        "completeness_results": result.completeness_results,
+        "compliance_results": result.compliance_results,
+        "summary": result.summary,
+        "page_results": [
+            {
+                "id": pr.id,
+                "page_classification_id": pr.page_classification_id,
+                "check_id": pr.check_id,
+                "check_name": pr.check_name,
+                "status": pr.status,
+                "confidence": pr.confidence,
+                "found_value": pr.found_value,
+                "notes": pr.notes,
+                "chunk_ids": pr.chunk_ids
+            }
+            for pr in page_results
+        ],
+        "checked_at": result.created_at.isoformat(),
+        "checks_config": result.checks_config_snapshot,
+        "usage": {
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
+            "model": result.model
+        }
+    }
+
+
+async def run_batch_checks_ai(
+    batch: Dict,
+    checks: List[Dict],
+    model: str
+) -> Dict[str, Any]:
+    """
+    Run checks on a batch of pages of the same type using AI.
+
+    This enables the LLM to see all pages of the same type together,
+    which can improve accuracy for checks that benefit from cross-page context.
+    """
+    client = get_bedrock_client()
+    model_id = resolve_model_id(model)
+
+    page_type = batch["page_type"]
+    pages = batch["pages"]
+    combined_content = batch["combined_content"]
+    chunks = batch["chunks"]
+
+    # Build checks list
+    checks_list = "\n".join([
+        f"- {c['id']}: {c['name']} - {c['prompt']}" +
+        (f" (Rule: {c.get('rule_reference')})" if c.get('rule_reference') else "")
+        for c in checks
+    ])
+
+    pages_str = ", ".join(str(p) for p in pages)
+
+    prompt = f"""Analyze these {len(pages)} pages (pages {pages_str}) which are all classified as "{page_type}" and evaluate each check FOR EACH PAGE.
+
+COMBINED PAGE CONTENT:
+{combined_content[:50000] if combined_content else "No content extracted"}
+
+CHUNKS (with page numbers):
+{json.dumps(chunks[:30], indent=2)[:4000]}
+
+CHECKS TO EVALUATE FOR PAGE TYPE ({page_type}):
+{checks_list}
+
+For EACH PAGE, evaluate EACH check and determine:
+- page_number: which page this result is for
+- status: "pass" (found and meets criteria), "fail" (not found or doesn't meet criteria), "needs_review" (found but unclear), or "na" (not applicable)
+- confidence: 0-100 (how confident you are)
+- found_value: the actual value/text found (if any)
+- notes: brief explanation
+- chunk_ids: array of chunk IDs where found
+
+Respond ONLY with valid JSON:
+{{
+  "results": [
+    {{"page_number": 1, "check_id": "id", "status": "pass", "confidence": 90, "found_value": "value", "notes": "explanation", "chunk_ids": ["chunk-0"]}}
+  ]
+}}"""
+
+    try:
+        body = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+
+        response = client.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(body)
+        )
+
+        response_body = json.loads(response["body"].read())
+        response_text = response_body["content"][0]["text"]
+
+        # Parse JSON
+        try:
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0]
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0]
+            ai_results = json.loads(response_text.strip())
+        except:
+            ai_results = {"results": []}
+
+        # Organize results by page
+        results_by_page = {p: [] for p in pages}
+
+        # Process AI results
+        for ai_result in ai_results.get("results", []):
+            page_num = ai_result.get("page_number")
+            if page_num in results_by_page:
+                results_by_page[page_num].append(ai_result)
+
+        # Build full results for each page
+        page_results = []
+        for page_num in pages:
+            page_check_results = []
+            for check in checks:
+                ai_result = next(
+                    (r for r in results_by_page[page_num] if r.get("check_id") == check["id"]),
+                    {
+                        "check_id": check["id"],
+                        "status": "fail",
+                        "confidence": 0,
+                        "found_value": None,
+                        "notes": "Not evaluated",
+                        "chunk_ids": []
+                    }
+                )
+                page_check_results.append({
+                    "check_id": check["id"],
+                    "check_name": check.get("name"),
+                    "category": check.get("category", "completeness"),
+                    "status": ai_result.get("status", "fail"),
+                    "confidence": ai_result.get("confidence", 0),
+                    "found_value": ai_result.get("found_value"),
+                    "notes": ai_result.get("notes", ""),
+                    "rule_reference": check.get("rule_reference"),
+                    "chunk_ids": ai_result.get("chunk_ids", [])
+                })
+
+            page_results.append({
+                "page_number": page_num,
+                "page_type": page_type,
+                "results": page_check_results
+            })
+
+        return {
+            "batch_pages": pages,
+            "page_type": page_type,
+            "page_results": page_results,
+            "usage": {
+                "input_tokens": response_body.get("usage", {}).get("input_tokens", 0),
+                "output_tokens": response_body.get("usage", {}).get("output_tokens", 0)
+            }
+        }
+
+    except Exception as e:
+        print(f"Error running batch checks: {e}")
+        # Return error results for all pages
+        page_results = []
+        for page_num in pages:
+            page_results.append({
+                "page_number": page_num,
+                "page_type": page_type,
+                "results": [
+                    {
+                        "check_id": c["id"],
+                        "check_name": c.get("name"),
+                        "category": c.get("category", "completeness"),
+                        "status": "fail",
+                        "confidence": 0,
+                        "notes": f"Error: {str(e)}",
+                        "chunk_ids": []
+                    }
+                    for c in checks
+                ]
+            })
+        return {
+            "batch_pages": pages,
+            "page_type": page_type,
+            "page_results": page_results,
+            "usage": {"input_tokens": 0, "output_tokens": 0},
+            "error": str(e)
+        }
+
+
+async def run_page_checks_ai(
+    page_number: int,
+    page_type: str,
+    chunks: List[Dict],
+    checks: List[Dict],
+    model: str
+) -> Dict[str, Any]:
+    """Run checks on a single page using AI."""
+    client = get_bedrock_client()
+    model_id = resolve_model_id(model)
+
+    # Build page content from chunks
+    page_content = "\n\n".join([
+        f"[{c.get('type', 'text')}]: {c.get('content', '')}"
+        for c in chunks
+    ])
+
+    # Build checks list
+    checks_list = "\n".join([
+        f"- {c['id']}: {c['name']} - {c['prompt']}" +
+        (f" (Rule: {c.get('rule_reference')})" if c.get('rule_reference') else "")
+        for c in checks
+    ])
+
+    prompt = f"""Analyze this PAGE {page_number} which is classified as a "{page_type}" and evaluate each check.
+
+PAGE CONTENT:
+{page_content[:8000] if page_content else "No content extracted from this page"}
+
+CHUNKS ON THIS PAGE (use these IDs to reference where you found information):
+{json.dumps(chunks[:10], indent=2)[:2000]}
+
+CHECKS TO EVALUATE FOR THIS PAGE TYPE ({page_type}):
+{checks_list}
+
+For each check, determine:
+- status: "pass" (found and meets criteria), "fail" (not found or doesn't meet criteria), "needs_review" (found but unclear), or "na" (not applicable)
+- confidence: 0-100 (how confident you are)
+- found_value: the actual value/text found (if any)
+- notes: brief explanation
+- chunk_ids: array of chunk IDs where found
+
+Respond ONLY with valid JSON:
+{{
+  "results": [
+    {{"check_id": "id", "status": "pass", "confidence": 90, "found_value": "value", "notes": "explanation", "chunk_ids": ["chunk-0"]}}
+  ]
+}}"""
+
+    try:
+        body = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 2048,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+
+        response = client.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(body)
+        )
+
+        response_body = json.loads(response["body"].read())
+        response_text = response_body["content"][0]["text"]
+
+        # Parse JSON
+        try:
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0]
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0]
+            ai_results = json.loads(response_text.strip())
+        except:
+            ai_results = {"results": []}
+
+        # Build full results with check metadata
+        results = []
+        for check in checks:
+            ai_result = next(
+                (r for r in ai_results.get("results", []) if r.get("check_id") == check["id"]),
+                {
+                    "check_id": check["id"],
+                    "status": "fail",
+                    "confidence": 0,
+                    "found_value": None,
+                    "notes": "Not evaluated",
+                    "chunk_ids": []
+                }
+            )
+            results.append({
+                "check_id": check["id"],
+                "check_name": check.get("name"),
+                "category": check.get("category", "completeness"),
+                "status": ai_result.get("status", "fail"),
+                "confidence": ai_result.get("confidence", 0),
+                "found_value": ai_result.get("found_value"),
+                "notes": ai_result.get("notes", ""),
+                "rule_reference": check.get("rule_reference"),
+                "chunk_ids": ai_result.get("chunk_ids", [])
+            })
+
+        return {
+            "page_number": page_number,
+            "page_type": page_type,
+            "results": results,
+            "usage": {
+                "input_tokens": response_body.get("usage", {}).get("input_tokens", 0),
+                "output_tokens": response_body.get("usage", {}).get("output_tokens", 0)
+            }
+        }
+
+    except Exception as e:
+        print(f"Error running page checks: {e}")
+        return {
+            "page_number": page_number,
+            "page_type": page_type,
+            "results": [
+                {
+                    "check_id": c["id"],
+                    "check_name": c.get("name"),
+                    "category": c.get("category", "completeness"),
+                    "status": "fail",
+                    "confidence": 0,
+                    "notes": f"Error: {str(e)}",
+                    "chunk_ids": []
+                }
+                for c in checks
+            ],
+            "usage": {"input_tokens": 0, "output_tokens": 0},
+            "error": str(e)
+        }
 
 
 # ============ HELPER FUNCTIONS ============

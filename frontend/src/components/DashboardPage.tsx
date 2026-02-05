@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Project, DocumentStatusSummary } from '../types/project';
 import type { ProjectSettings } from '../types/checksV2';
-import { listProjects, getProjectDocumentStatus, uploadDocument, createProject } from '../services/projectService';
+import { listProjects, getProjectDocumentStatus, uploadDocument, createProject, deleteProject, deleteDocument } from '../services/projectService';
 import { runBatchChecks, getBatchRuns, getProjectSettings } from '../services/checksService';
 import { startBatchProcess, listBatchJobs, getBatchJob, cancelBatchJob } from '../services/batchService';
 import type { BatchJob } from '../types/batch';
@@ -13,6 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 import DocumentTypeBadge from './DocumentTypeBadge';
 import BatchCheckProgress from './BatchCheckProgress';
 import UserMenu from './UserMenu';
+import { Modal, Button } from './ui';
 import cognaifySymbol from '../assets/cognaify-symbol.png';
 import cognaifyLogo from '../assets/Cognaify-logo-white-bg.png';
 
@@ -63,6 +64,9 @@ export default function DashboardPage({
   const [showReprocessModal, setShowReprocessModal] = useState(false);
   const [reprocessAction, setReprocessAction] = useState<'process' | 'check' | null>(null);
   const [projectSettings, setProjectSettings] = useState<ProjectSettings | null>(null);
+  const [showDeleteProjectModal, setShowDeleteProjectModal] = useState(false);
+  const [showDeleteDocModal, setShowDeleteDocModal] = useState<string | null>(null); // document ID to delete
+  const [isDeleting, setIsDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadDocumentsRequestId = useRef(0); // Track request ID to prevent stale updates
   const checkBatchJobsRequestId = useRef(0); // Track batch jobs request ID
@@ -310,6 +314,44 @@ export default function DashboardPage({
     setActiveBatchRunId(null);
     // Reload documents to get updated check results
     loadDocuments();
+  };
+
+  // Handle delete project
+  const handleDeleteProject = async () => {
+    if (!selectedProject) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteProject(selectedProject.id);
+      // Remove from projects list and select another
+      const remaining = projects.filter(p => p.id !== selectedProject.id);
+      setProjects(remaining);
+      setSelectedProject(remaining.length > 0 ? remaining[0] : null);
+      setShowDeleteProjectModal(false);
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+      setError('Failed to delete project');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Handle delete document
+  const handleDeleteDocument = async (documentId: string) => {
+    if (!selectedProject) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteDocument(selectedProject.id, documentId);
+      // Remove from documents list
+      setDocuments(docs => docs.filter(d => d.id !== documentId));
+      setShowDeleteDocModal(null);
+    } catch (err) {
+      console.error('Failed to delete document:', err);
+      setError('Failed to delete document');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Selection helpers
@@ -570,6 +612,16 @@ export default function DashboardPage({
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </button>
+                  {/* Delete Project Button */}
+                  <button
+                    onClick={() => setShowDeleteProjectModal(true)}
+                    className={`p-2 rounded-lg transition-colors ${isDark ? 'text-red-400 hover:text-red-300 hover:bg-red-500/20' : 'text-red-500 hover:text-red-600 hover:bg-red-50'}`}
+                    title="Delete Project"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
                 </div>
@@ -835,15 +887,29 @@ export default function DashboardPage({
                         </td>
                         {/* Actions Column */}
                         <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              selectedProject && onOpenDocument(selectedProject, doc.id);
-                            }}
-                            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${isDark ? 'text-sky-400 hover:bg-sky-500/20' : 'text-sky-600 hover:bg-sky-50'}`}
-                          >
-                            Review
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                selectedProject && onOpenDocument(selectedProject, doc.id);
+                              }}
+                              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${isDark ? 'text-sky-400 hover:bg-sky-500/20' : 'text-sky-600 hover:bg-sky-50'}`}
+                            >
+                              Review
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowDeleteDocModal(doc.id);
+                              }}
+                              className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-red-400 hover:bg-red-500/20' : 'text-red-500 hover:bg-red-50'}`}
+                              title="Delete Document"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -980,6 +1046,70 @@ export default function DashboardPage({
           </div>
         </div>
       )}
+
+      {/* Delete Project Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteProjectModal && !!selectedProject}
+        onClose={() => setShowDeleteProjectModal(false)}
+        title="Delete Project"
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setShowDeleteProjectModal(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteProject}
+              isLoading={isDeleting}
+            >
+              Delete Project
+            </Button>
+          </>
+        }
+      >
+        <p className={`text-sm ${theme.textSecondary}`}>
+          Are you sure you want to delete <strong className={theme.textPrimary}>{selectedProject?.name}</strong>?
+        </p>
+        <p className={`text-sm mt-2 ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+          This will permanently delete the project and all {documents.length} document{documents.length !== 1 ? 's' : ''} in it. This action cannot be undone.
+        </p>
+      </Modal>
+
+      {/* Delete Document Confirmation Modal */}
+      <Modal
+        isOpen={!!showDeleteDocModal}
+        onClose={() => setShowDeleteDocModal(null)}
+        title="Delete Document"
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setShowDeleteDocModal(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => showDeleteDocModal && handleDeleteDocument(showDeleteDocModal)}
+              isLoading={isDeleting}
+            >
+              Delete Document
+            </Button>
+          </>
+        }
+      >
+        <p className={`text-sm ${theme.textSecondary}`}>
+          Are you sure you want to delete <strong className={theme.textPrimary}>{documents.find(d => d.id === showDeleteDocModal)?.original_filename}</strong>?
+        </p>
+        <p className={`text-sm mt-2 ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+          This will permanently delete this document and all its check results. This action cannot be undone.
+        </p>
+      </Modal>
     </div>
   );
 }

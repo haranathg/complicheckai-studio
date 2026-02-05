@@ -5,6 +5,7 @@ from functools import lru_cache
 from typing import Dict, Any, Optional, List
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'compliance_checks_v2.json')
+CONFIG_PATH_V3 = os.path.join(os.path.dirname(__file__), '..', 'config', 'compliance_checks_v3.json')
 
 
 @lru_cache()
@@ -75,3 +76,65 @@ def get_classification_signals(doc_type: str) -> Dict[str, Any]:
     """Get classification signals for a document type."""
     doc_config = get_document_type_config(doc_type)
     return doc_config.get("classification_signals", {})
+
+
+# ============ V3 CONFIG FUNCTIONS (Page-level) ============
+
+@lru_cache()
+def load_checks_config_v3() -> Dict[str, Any]:
+    """Load the v3 checks configuration with page-level types."""
+    with open(CONFIG_PATH_V3, 'r') as f:
+        return json.load(f)
+
+
+def get_page_types() -> Dict[str, Any]:
+    """Get all page type definitions from v3 config."""
+    config = load_checks_config_v3()
+    return config.get("page_types", {})
+
+
+def list_page_types() -> List[Dict[str, Any]]:
+    """List all available page types."""
+    page_types = get_page_types()
+    return [
+        {
+            "id": pt_id,
+            "name": pt.get("name"),
+            "description": pt.get("description"),
+            "classification_signals": pt.get("classification_signals", [])
+        }
+        for pt_id, pt in page_types.items()
+    ]
+
+
+def get_checks_v3() -> List[Dict[str, Any]]:
+    """Get all checks from v3 config."""
+    config = load_checks_config_v3()
+    return config.get("checks", [])
+
+
+def get_checks_for_page_type(page_type: str) -> List[Dict[str, Any]]:
+    """Get checks that apply to a specific page type."""
+    checks = get_checks_v3()
+    return [
+        check for check in checks
+        if page_type in check.get("applies_to", [])
+    ]
+
+
+def get_checks_by_execution_mode(mode: str) -> List[Dict[str, Any]]:
+    """Get checks filtered by execution mode ('per_page' or 'batched')."""
+    checks = get_checks_v3()
+    return [
+        check for check in checks
+        if check.get("execution_mode") == mode
+    ]
+
+
+def get_checks_for_page_type_by_category(page_type: str) -> Dict[str, List[Dict[str, Any]]]:
+    """Get checks for a page type, grouped by category (completeness/compliance)."""
+    checks = get_checks_for_page_type(page_type)
+    return {
+        "completeness": [c for c in checks if c.get("category") == "completeness"],
+        "compliance": [c for c in checks if c.get("category") == "compliance"]
+    }

@@ -1,9 +1,28 @@
-import { useState, useEffect, useRef } from 'react';
-import type { ParseResponse, Chunk } from '../types/ade';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import type { ParseResponse, Chunk, PageClassificationInfo } from '../types/ade';
 import type { Document } from '../types/project';
 import { getChunkColor } from '../utils/boundingBox';
 import { getMarkdownPreview } from '../utils/cleanMarkdown';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
+
+// Page type display names and colors
+const PAGE_TYPE_CONFIG: Record<string, { name: string; color: string }> = {
+  floor_plan: { name: 'Floor Plan', color: '#3b82f6' },
+  site_plan: { name: 'Site Plan', color: '#10b981' },
+  elevation: { name: 'Elevation', color: '#8b5cf6' },
+  section: { name: 'Section', color: '#f59e0b' },
+  detail: { name: 'Detail', color: '#ec4899' },
+  schedule: { name: 'Schedule', color: '#06b6d4' },
+  cover_sheet: { name: 'Cover Sheet', color: '#6366f1' },
+  form: { name: 'Form', color: '#84cc16' },
+  letter: { name: 'Letter', color: '#14b8a6' },
+  certificate: { name: 'Certificate', color: '#f97316' },
+  report: { name: 'Report', color: '#a855f7' },
+  photo: { name: 'Photo', color: '#64748b' },
+  table: { name: 'Table', color: '#0ea5e9' },
+  specification: { name: 'Specification', color: '#22c55e' },
+  unknown: { name: 'Unknown', color: '#94a3b8' },
+};
 
 interface ParseResultsProps {
   result: ParseResponse | null;
@@ -19,7 +38,7 @@ interface ParseResultsProps {
   onDocumentSelect?: (doc: Document) => void;
 }
 
-type ViewMode = 'markdown' | 'components';
+type ViewMode = 'markdown' | 'components' | 'pages';
 type ChunkFilter = 'all' | 'page';
 
 export default function ParseResults({
@@ -45,6 +64,17 @@ export default function ParseResults({
 
   // Filter to only processed documents
   const processedDocs = documents.filter(d => d.has_cached_result);
+
+  // Get current page classification
+  const currentPageClassification = useMemo(() => {
+    if (!result?.page_classifications) return null;
+    return result.page_classifications.find(pc => pc.page === currentPage) || null;
+  }, [result?.page_classifications, currentPage]);
+
+  // Get page type info
+  const getPageTypeInfo = (pageType: string) => {
+    return PAGE_TYPE_CONFIG[pageType] || PAGE_TYPE_CONFIG.unknown;
+  };
 
   // Auto-scroll to highlighted chunk when it changes (from PDF click)
   useEffect(() => {
@@ -189,6 +219,18 @@ export default function ParseResults({
               {filteredChunks.length} components
               {chunkFilter === 'page' && <span className={theme.textMuted}> on page {currentPage}</span>}
             </span>
+            {currentPageClassification && (
+              <>
+                <span className={theme.textSubtle}>•</span>
+                <span
+                  className="px-2 py-0.5 rounded text-xs font-medium text-white"
+                  style={{ backgroundColor: getPageTypeInfo(currentPageClassification.page_type).color }}
+                  title={`Page ${currentPage}: ${getPageTypeInfo(currentPageClassification.page_type).name} (${currentPageClassification.confidence}% confidence)`}
+                >
+                  {getPageTypeInfo(currentPageClassification.page_type).name}
+                </span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {/* Document Info label with tooltip */}
@@ -232,6 +274,18 @@ export default function ParseResults({
               >
                 Components
               </button>
+              {result.page_classifications && result.page_classifications.length > 0 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setViewMode('pages'); }}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                    viewMode === 'pages'
+                      ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
+                      : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Pages
+                </button>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); setViewMode('markdown'); }}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
@@ -301,6 +355,69 @@ export default function ParseResults({
             <pre className={`whitespace-pre-wrap text-sm font-mono ${theme.textSecondary} overflow-x-auto`}>
               {result.markdown}
             </pre>
+          </div>
+        ) : viewMode === 'pages' && result.page_classifications ? (
+          <div className={`rounded-xl border p-4 ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : '#ffffff' }}>
+            <h4 className={`text-sm font-medium mb-3 ${theme.textSecondary}`}>Page Classifications</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              {result.page_classifications.map((pc: PageClassificationInfo) => {
+                const typeInfo = getPageTypeInfo(pc.page_type);
+                const isCurrentPage = pc.page === currentPage;
+                return (
+                  <div
+                    key={pc.page}
+                    className={`p-2 rounded-lg border cursor-pointer transition-all ${
+                      isCurrentPage
+                        ? 'ring-2 ring-sky-500 border-sky-500'
+                        : isDark ? 'border-slate-700 hover:border-slate-600' : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                    style={{ background: isDark ? 'rgba(30, 41, 59, 0.4)' : '#f8fafc' }}
+                    onClick={() => {
+                      // Trigger page navigation - this would need to be passed as a prop
+                      // For now, just highlight
+                    }}
+                    title={pc.signals?.join(', ') || 'No signals'}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-xs font-medium ${theme.textMuted}`}>Page {pc.page}</span>
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: typeInfo.color }}
+                      />
+                    </div>
+                    <div
+                      className="text-xs font-medium px-1.5 py-0.5 rounded text-white text-center"
+                      style={{ backgroundColor: typeInfo.color }}
+                    >
+                      {typeInfo.name}
+                    </div>
+                    {pc.confidence !== undefined && (
+                      <div className={`text-[10px] text-center mt-1 ${theme.textSubtle}`}>
+                        {pc.confidence}% confidence
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {/* Legend */}
+            <div className={`mt-4 pt-3 border-t ${theme.border}`}>
+              <h5 className={`text-xs font-medium mb-2 ${theme.textMuted}`}>Page Types</h5>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(PAGE_TYPE_CONFIG)
+                  .filter(([key]) => result.page_classifications?.some((pc: PageClassificationInfo) => pc.page_type === key))
+                  .map(([key, info]) => (
+                    <span
+                      key={key}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded"
+                      style={{ backgroundColor: `${info.color}20`, color: info.color }}
+                    >
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: info.color }} />
+                      {info.name}
+                    </span>
+                  ))}
+              </div>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col flex-1 min-h-0">
