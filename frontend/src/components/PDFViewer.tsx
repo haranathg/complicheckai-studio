@@ -10,6 +10,32 @@ import 'react-pdf/dist/esm/Page/TextLayer.css';
 // Set worker for react-pdf v9 with pdfjs-dist v4
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
 
+// Page classification type
+interface PageClassification {
+  page: number;
+  page_type: string;
+  confidence?: number;
+}
+
+// Page type labels for display
+const PAGE_TYPE_LABELS: Record<string, string> = {
+  floor_plan: 'Floor Plan',
+  site_plan: 'Site Plan',
+  elevation: 'Elevation',
+  section: 'Section',
+  detail: 'Detail',
+  schedule: 'Schedule',
+  cover_sheet: 'Cover Sheet',
+  form: 'Form',
+  letter: 'Letter',
+  certificate: 'Certificate',
+  report: 'Report',
+  photo: 'Photo',
+  table: 'Table',
+  specification: 'Specification',
+  unknown: 'Unknown',
+};
+
 interface PDFViewerProps {
   file: File;
   chunks: Chunk[];
@@ -33,6 +59,11 @@ interface PDFViewerProps {
   showNotesLegend?: boolean;
   // Focus mode: only show the selected chunk, hide all others
   focusMode?: boolean;
+  // Page classifications for V3 page-level types
+  pageClassifications?: PageClassification[];
+  // Fullscreen mode
+  isFullscreen?: boolean;
+  onFullscreenToggle?: () => void;
 }
 
 // Default all chunk types visible
@@ -59,6 +90,9 @@ export default function PDFViewer({
   showComponentsLegend = true,
   showNotesLegend = false,
   focusMode = false,
+  pageClassifications = [],
+  isFullscreen = false,
+  onFullscreenToggle,
 }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -308,6 +342,18 @@ export default function PDFViewer({
           >
             →
           </button>
+          {/* Page Type Badge */}
+          {(() => {
+            const pageType = pageClassifications.find(pc => pc.page === currentPage)?.page_type;
+            if (pageType) {
+              return (
+                <span className="ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-sky-100 text-sky-700 border border-sky-200">
+                  {PAGE_TYPE_LABELS[pageType] || pageType}
+                </span>
+              );
+            }
+            return null;
+          })()}
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -334,6 +380,24 @@ export default function PDFViewer({
           >
             Fit
           </button>
+          {/* Fullscreen Toggle */}
+          {onFullscreenToggle && (
+            <button
+              onClick={onFullscreenToggle}
+              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+              )}
+            </button>
+          )}
         </div>
       </div>
 

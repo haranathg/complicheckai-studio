@@ -20,6 +20,7 @@ import { getDefaultModelForParser } from './components/ModelSelector';
 import { getParserType, getModelForParser } from './components/ParserSelector';
 import { uploadDocument, checkProjectsAvailable, getOrCreateDefaultProject, listDocuments, getLatestParseResult, getDocumentDownloadUrl } from './services/projectService';
 import { listDocumentAnnotations, listProjectAnnotations } from './services/annotationService';
+import { getPageClassifications } from './services/checksService';
 import { useTheme, getThemeStyles } from './contexts/ThemeContext';
 import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
 import cognaifySymbol from './assets/cognaify-symbol.png';
@@ -70,6 +71,10 @@ function App() {
   const showReviewOverlays = visibleNoteLevels.size > 0;
   // Focus mode: when true, only show the selected chunk (hide all others)
   const [focusMode, setFocusMode] = useState(false);
+  // Page classifications for V3 page-level types
+  const [pageClassifications, setPageClassifications] = useState<Array<{ page: number; page_type: string; confidence?: number }>>([]);
+  // Fullscreen mode for PDF viewer
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Ref to store pending chunk to highlight after PDF loads (for cross-document navigation)
@@ -140,6 +145,30 @@ function App() {
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
+
+  // Fetch page classifications when document/parseResult changes
+  useEffect(() => {
+    const fetchPageClassifications = async () => {
+      if (!currentProject || !currentDocument) {
+        setPageClassifications([]);
+        return;
+      }
+      try {
+        // Get parse result ID from the latest parse result
+        const cachedResponse = await getLatestParseResult(currentProject.id, currentDocument.id);
+        if (cachedResponse.cached && cachedResponse.result?.parse_result_id) {
+          const response = await getPageClassifications(cachedResponse.result.parse_result_id);
+          setPageClassifications(response.classifications || []);
+        } else {
+          setPageClassifications([]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch page classifications:', err);
+        setPageClassifications([]);
+      }
+    };
+    fetchPageClassifications();
+  }, [currentProject, currentDocument]);
 
   // Handle document selection from Parse tab dropdown
   const handleParseDocumentSelect = useCallback(async (doc: Document) => {
@@ -790,7 +819,7 @@ function App() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - PDF Viewer + Annotation Panel */}
-        <div className={`w-1/2 border-r ${theme.border} overflow-hidden flex flex-col`} style={{ background: theme.panelBg }}>
+        <div className={`${isFullscreen ? 'w-full' : 'w-1/2'} ${!isFullscreen ? `border-r ${theme.border}` : ''} overflow-hidden flex flex-col transition-all duration-300`} style={{ background: theme.panelBg }}>
           {file ? (
             <>
               <div className="flex-1 overflow-hidden">
@@ -859,39 +888,44 @@ function App() {
                   showComponentsLegend={!focusMode}
                   showNotesLegend={!focusMode && activeTab === 'review'}
                   focusMode={focusMode}
+                  pageClassifications={pageClassifications}
+                  isFullscreen={isFullscreen}
+                  onFullscreenToggle={() => setIsFullscreen(!isFullscreen)}
                 />
               </div>
-              {/* Annotation Panel - below PDF */}
-              <AnnotationPanel
-                currentProject={currentProject}
-                currentDocument={currentDocument}
-                currentPage={currentPage}
-                prefilledChunk={prefilledChunk}
-                onClearPrefilledChunk={() => setPrefilledChunk(null)}
-                onAnnotationClick={(annotation) => {
-                  // Enter focus mode to show only this annotation (and its linked chunk if any)
-                  setFocusMode(true);
-                  setSelectedAnnotation(annotation);
-                  setHighlightedChunk(null); // Clear highlighted chunk - focus mode filter will show linked chunk
-                  // Navigate to the annotation's page
-                  if (annotation.chunk_id) {
-                    const linkedChunk = parseResult?.chunks?.find(c => c.id === annotation.chunk_id);
-                    if (linkedChunk?.grounding) {
-                      setTargetPage(linkedChunk.grounding.page + 1);
+              {/* Annotation Panel - below PDF (hidden in fullscreen) */}
+              {!isFullscreen && (
+                <AnnotationPanel
+                  currentProject={currentProject}
+                  currentDocument={currentDocument}
+                  currentPage={currentPage}
+                  prefilledChunk={prefilledChunk}
+                  onClearPrefilledChunk={() => setPrefilledChunk(null)}
+                  onAnnotationClick={(annotation) => {
+                    // Enter focus mode to show only this annotation (and its linked chunk if any)
+                    setFocusMode(true);
+                    setSelectedAnnotation(annotation);
+                    setHighlightedChunk(null); // Clear highlighted chunk - focus mode filter will show linked chunk
+                    // Navigate to the annotation's page
+                    if (annotation.chunk_id) {
+                      const linkedChunk = parseResult?.chunks?.find(c => c.id === annotation.chunk_id);
+                      if (linkedChunk?.grounding) {
+                        setTargetPage(linkedChunk.grounding.page + 1);
+                      } else {
+                        setTargetPage(1);
+                      }
+                    } else if (annotation.page_number) {
+                      setTargetPage(annotation.page_number);
                     } else {
+                      // Document or project level annotation - go to page 1
                       setTargetPage(1);
                     }
-                  } else if (annotation.page_number) {
-                    setTargetPage(annotation.page_number);
-                  } else {
-                    // Document or project level annotation - go to page 1
-                    setTargetPage(1);
-                  }
-                }}
-                onAnnotationsChange={loadAnnotations}
-                file={file}
-                chunks={parseResult?.chunks}
-              />
+                  }}
+                  onAnnotationsChange={loadAnnotations}
+                  file={file}
+                  chunks={parseResult?.chunks}
+                />
+              )}
             </>
           ) : (
             <label className={`h-full w-full flex flex-col items-center justify-center ${theme.textSubtle} cursor-pointer hover:opacity-80 transition-opacity`}>
@@ -913,7 +947,8 @@ function App() {
           )}
         </div>
 
-        {/* Right Panel - Results */}
+        {/* Right Panel - Results (hidden in fullscreen) */}
+        {!isFullscreen && (
         <div className="w-1/2 flex flex-col overflow-hidden" style={{ background: theme.panelBgAlt }}>
           <TabNavigation
             activeTab={activeTab}
@@ -1082,6 +1117,7 @@ function App() {
             )}
           </div>
         </div>
+        )}
       </div>
 
       {/* Footer */}
