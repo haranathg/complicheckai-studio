@@ -1,4 +1,12 @@
 """API endpoints for generating PDF reports."""
+# Monkey-patch hashlib.md5 for App Runner's OpenSSL which doesn't support usedforsecurity kwarg
+import hashlib
+_orig_md5 = hashlib.md5
+def _patched_md5(*args, **kwargs):
+    kwargs.pop('usedforsecurity', None)
+    return _orig_md5(*args)
+hashlib.md5 = _patched_md5
+
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
