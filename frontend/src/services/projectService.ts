@@ -2,7 +2,7 @@
  * API service for project and document management
  * Uses authenticated API client with Bearer token
  */
-import { apiGet, apiPost, apiDelete, apiUpload, API_URL } from './apiClient';
+import { apiGet, apiPost, apiPatch, apiDelete, apiUpload, API_URL } from './apiClient';
 import type {
   Project,
   ProjectListResponse,
@@ -164,4 +164,17 @@ export async function getProjectDocumentStatus(projectId: string): Promise<Docum
   const data = await apiGet<DocumentStatusListResponse>(url);
   console.log('[getProjectDocumentStatus] Response data:', JSON.stringify(data).slice(0, 200));
   return data;
+}
+
+/**
+ * Update the review status of a document
+ */
+export async function updateDocumentReview(
+  projectId: string,
+  documentId: string,
+  reviewStatus: 'not_reviewed' | 'needs_info' | 'ok'
+): Promise<{ status: string; review_status: string }> {
+  return apiPatch(`/api/projects/${projectId}/documents/${documentId}/review`, {
+    review_status: reviewStatus,
+  });
 }

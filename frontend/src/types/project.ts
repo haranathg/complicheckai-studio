@@ -155,6 +155,8 @@ export interface DocumentStatusSummary {
   page_types?: string[];
   // Check results summary
   check_summary?: CheckSummary;
+  // Review status
+  review_status?: 'not_reviewed' | 'needs_info' | 'ok';
 }
 
 export interface DocumentStatusListResponse {

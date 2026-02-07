@@ -4,8 +4,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Project, DocumentStatusSummary } from '../types/project';
 import type { ProjectSettings } from '../types/checksV2';
-import { listProjects, getProjectDocumentStatus, uploadDocument, createProject, deleteProject, deleteDocument } from '../services/projectService';
-import { runBatchChecks, getBatchRuns, getProjectSettings } from '../services/checksService';
+import { listProjects, getProjectDocumentStatus, uploadDocument, createProject, deleteProject, deleteDocument, updateDocumentReview } from '../services/projectService';
+import { runBatchChecks, getBatchRuns, getProjectSettings, downloadReviewReport } from '../services/checksService';
 import { startBatchProcess, listBatchJobs, getBatchJob, cancelBatchJob } from '../services/batchService';
 import type { BatchJob } from '../types/batch';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
@@ -314,6 +314,35 @@ export default function DashboardPage({
     setActiveBatchRunId(null);
     // Reload documents to get updated check results
     loadDocuments();
+  };
+
+  // Handle review status change
+  const handleReviewStatusChange = async (docId: string, newStatus: 'not_reviewed' | 'needs_info' | 'ok') => {
+    if (!selectedProject) return;
+    try {
+      await updateDocumentReview(selectedProject.id, docId, newStatus);
+      // Update local state
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, review_status: newStatus } : d));
+    } catch (err) {
+      console.error('Failed to update review status:', err);
+    }
+  };
+
+  // Handle download review report
+  const handleDownloadReviewReport = async () => {
+    if (!selectedProject) return;
+    try {
+      const blob = await downloadReviewReport(selectedProject.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `review_report_${selectedProject.name.replace(/\s+/g, '_')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download review report:', err);
+      setError('Failed to generate review report');
+    }
   };
 
   // Handle delete project
@@ -698,6 +727,22 @@ export default function DashboardPage({
                       </>
                     )}
                   </button>
+                  {/* Review Report Button */}
+                  <button
+                    onClick={handleDownloadReviewReport}
+                    disabled={documents.length === 0}
+                    className={`px-4 py-2 rounded-full transition-colors flex items-center gap-2 disabled:opacity-50 border ${
+                      isDark
+                        ? 'bg-transparent border-slate-600 text-slate-300 hover:bg-slate-700/50 hover:border-slate-500'
+                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
+                    }`}
+                    title="Download review status report"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Report</span>
+                  </button>
                   {/* Upload Button */}
                   <button
                     onClick={() => fileInputRef.current?.click()}
@@ -773,6 +818,7 @@ export default function DashboardPage({
                       <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Document</th>
                       <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Type</th>
                       <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Status</th>
+                      <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Review</th>
                       <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Check Results</th>
                       <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Comments</th>
                       <th className={`text-right px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Actions</th>
@@ -845,6 +891,24 @@ export default function DashboardPage({
                               Pending
                             </span>
                           )}
+                        </td>
+                        {/* Review Status Column */}
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <select
+                            value={doc.review_status || 'not_reviewed'}
+                            onChange={(e) => handleReviewStatusChange(doc.id, e.target.value as 'not_reviewed' | 'needs_info' | 'ok')}
+                            className={`text-xs px-2 py-1 rounded border font-medium cursor-pointer ${
+                              (doc.review_status || 'not_reviewed') === 'ok'
+                                ? isDark ? 'bg-green-900/30 border-green-700 text-green-400' : 'bg-green-50 border-green-300 text-green-700'
+                                : (doc.review_status || 'not_reviewed') === 'needs_info'
+                                  ? isDark ? 'bg-amber-900/30 border-amber-700 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-700'
+                                  : isDark ? 'bg-slate-800 border-slate-600 text-slate-400' : 'bg-slate-50 border-slate-300 text-slate-500'
+                            }`}
+                          >
+                            <option value="not_reviewed">Not Reviewed</option>
+                            <option value="needs_info">Needs Info</option>
+                            <option value="ok">OK</option>
+                          </select>
                         </td>
                         {/* Check Results Column */}
                         <td className="px-4 py-3">

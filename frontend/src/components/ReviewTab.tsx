@@ -16,6 +16,7 @@ import {
   resolveAnnotation,
 } from '../services/annotationService';
 import { downloadPDFWithAnnotations } from '../utils/pdfExport';
+import { updateDocumentReview } from '../services/projectService';
 import { Modal, Button } from './ui';
 
 export type ViewMode = 'page' | 'document' | 'project';
@@ -52,6 +53,24 @@ export default function ReviewTab({
   const [isExporting, setIsExporting] = useState(false);
   const [deleteAnnotationId, setDeleteAnnotationId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState<'not_reviewed' | 'needs_info' | 'ok'>('not_reviewed');
+
+  // Sync review status when document changes
+  useEffect(() => {
+    if (currentDocument) {
+      setReviewStatus((currentDocument as { review_status?: 'not_reviewed' | 'needs_info' | 'ok' }).review_status || 'not_reviewed');
+    }
+  }, [currentDocument]);
+
+  const handleReviewStatusChange = async (newStatus: 'not_reviewed' | 'needs_info' | 'ok') => {
+    if (!currentProject || !currentDocument) return;
+    setReviewStatus(newStatus);
+    try {
+      await updateDocumentReview(currentProject.id, currentDocument.id, newStatus);
+    } catch (err) {
+      console.error('Failed to update review status:', err);
+    }
+  };
 
   // Load annotations based on view mode
   const loadAnnotations = useCallback(async () => {
@@ -226,6 +245,25 @@ export default function ReviewTab({
                 </button>
               ))}
             </div>
+
+            {/* Review Status Dropdown */}
+            {currentDocument && (
+              <select
+                value={reviewStatus}
+                onChange={(e) => handleReviewStatusChange(e.target.value as 'not_reviewed' | 'needs_info' | 'ok')}
+                className={`text-xs px-2 py-1 rounded border font-medium ${
+                  reviewStatus === 'ok'
+                    ? isDark ? 'bg-green-900/30 border-green-700 text-green-400' : 'bg-green-50 border-green-300 text-green-700'
+                    : reviewStatus === 'needs_info'
+                      ? isDark ? 'bg-amber-900/30 border-amber-700 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-700'
+                      : isDark ? 'bg-slate-800 border-slate-600 text-slate-400' : 'bg-slate-50 border-slate-300 text-slate-500'
+                }`}
+              >
+                <option value="not_reviewed">Not Reviewed</option>
+                <option value="needs_info">Needs Info</option>
+                <option value="ok">OK</option>
+              </select>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
