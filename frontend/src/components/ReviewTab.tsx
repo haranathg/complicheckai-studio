@@ -151,7 +151,7 @@ export default function ReviewTab({
   return (
     <div className="h-full flex flex-col">
       {/* Header - Two-row layout */}
-      <div className={`px-4 py-3 border-b ${theme.border} ${isDark ? 'bg-slate-800/30' : 'bg-slate-50'} space-y-2`}>
+      <div className={`px-5 py-3 border-b ${theme.border} ${isDark ? 'bg-slate-800/30' : 'bg-slate-50'} space-y-2`}>
         {/* Row 1: View mode toggle | Review status + Add Note */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -367,7 +367,7 @@ export default function ReviewTab({
             </p>
           </div>
         ) : (
-          <div className="p-2 space-y-2">
+          <div className="p-3 space-y-3">
             {annotations.map(annotation => (
               <div
                 key={annotation.id}

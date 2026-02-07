@@ -279,7 +279,7 @@ export default function ChatPanel({
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] p-3 rounded-xl ${
+                  className={`max-w-[85%] p-4 rounded-xl ${
                     msg.role === 'user'
                       ? 'text-white'
                       : isDark

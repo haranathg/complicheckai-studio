@@ -15,7 +15,6 @@ import BatchCheckProgress from './BatchCheckProgress';
 import UserMenu from './UserMenu';
 import { Modal, Button } from './ui';
 import cognaifySymbol from '../assets/cognaify-symbol.png';
-import cognaifyLogo from '../assets/Cognaify-logo-white-bg.png';
 
 interface DashboardPageProps {
   onOpenDocument: (project: Project, documentId: string) => void;
@@ -831,9 +830,7 @@ export default function DashboardPage({
                       <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Document</th>
                       <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Type</th>
                       <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Status</th>
-                      <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Review</th>
-                      <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Check Results</th>
-                      <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Comments</th>
+                      <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Checks</th>
                       <th className={`text-right px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Actions</th>
                     </tr>
                   </thead>
@@ -881,90 +878,65 @@ export default function DashboardPage({
                             pageTypes={doc.page_types}
                           />
                         </td>
-                        {/* Status Column */}
-                        <td className="px-4 py-3">
-                          {doc.processed_at ? (
-                            <div className="flex items-center gap-2 group relative">
-                              <span
-                                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium cursor-help ${isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700'}`}
-                              >
-                                Parsed
-                              </span>
-                              {/* Tooltip */}
-                              <div className={`absolute left-0 bottom-full mb-2 px-3 py-2 rounded-lg text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none ${isDark ? 'bg-slate-700 text-slate-200' : 'bg-slate-800 text-white'}`}>
-                                <div className="flex flex-col gap-1">
-                                  <span>{new Date(doc.processed_at).toLocaleString()}</span>
-                                  <span>Parser: {doc.parser === 'landing_ai' ? 'Landing AI' : doc.parser === 'gemini_vision' ? 'Gemini Vision' : doc.parser === 'bedrock_claude' ? 'Bedrock Claude' : doc.parser || 'Unknown'}{doc.parser_model ? ` (${doc.parser_model})` : ''}</span>
-                                  {doc.uploaded_by && <span>By: {doc.uploaded_by}</span>}
+                        {/* Status + Review Column (merged) */}
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-col gap-1.5">
+                            {doc.processed_at ? (
+                              <div className="flex items-center gap-2 group relative">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium cursor-help ${isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700'}`}
+                                >
+                                  Parsed
+                                </span>
+                                <div className={`absolute left-0 bottom-full mb-2 px-3 py-2 rounded-lg text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none ${isDark ? 'bg-slate-700 text-slate-200' : 'bg-slate-800 text-white'}`}>
+                                  <div className="flex flex-col gap-1">
+                                    <span>{new Date(doc.processed_at).toLocaleString()}</span>
+                                    <span>Parser: {doc.parser === 'landing_ai' ? 'Landing AI' : doc.parser === 'gemini_vision' ? 'Gemini Vision' : doc.parser === 'bedrock_claude' ? 'Bedrock Claude' : doc.parser || 'Unknown'}{doc.parser_model ? ` (${doc.parser_model})` : ''}</span>
+                                    {doc.uploaded_by && <span>By: {doc.uploaded_by}</span>}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ) : (
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-                              Pending
-                            </span>
-                          )}
+                            ) : (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
+                                Pending
+                              </span>
+                            )}
+                            <select
+                              value={doc.review_status || 'not_reviewed'}
+                              onChange={(e) => handleReviewStatusChange(doc.id, e.target.value as 'not_reviewed' | 'needs_info' | 'ok')}
+                              className={`text-xs px-2 py-1 rounded border font-medium cursor-pointer ${
+                                (doc.review_status || 'not_reviewed') === 'ok'
+                                  ? isDark ? 'bg-green-900/30 border-green-700 text-green-400' : 'bg-green-50 border-green-300 text-green-700'
+                                  : (doc.review_status || 'not_reviewed') === 'needs_info'
+                                    ? isDark ? 'bg-amber-900/30 border-amber-700 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-700'
+                                    : isDark ? 'bg-slate-800 border-slate-600 text-slate-400' : 'bg-slate-50 border-slate-300 text-slate-500'
+                              }`}
+                            >
+                              <option value="not_reviewed">Not Reviewed</option>
+                              <option value="needs_info">Needs Info</option>
+                              <option value="ok">OK</option>
+                            </select>
+                          </div>
                         </td>
-                        {/* Review Status Column */}
-                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                          <select
-                            value={doc.review_status || 'not_reviewed'}
-                            onChange={(e) => handleReviewStatusChange(doc.id, e.target.value as 'not_reviewed' | 'needs_info' | 'ok')}
-                            className={`text-xs px-2 py-1 rounded border font-medium cursor-pointer ${
-                              (doc.review_status || 'not_reviewed') === 'ok'
-                                ? isDark ? 'bg-green-900/30 border-green-700 text-green-400' : 'bg-green-50 border-green-300 text-green-700'
-                                : (doc.review_status || 'not_reviewed') === 'needs_info'
-                                  ? isDark ? 'bg-amber-900/30 border-amber-700 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-700'
-                                  : isDark ? 'bg-slate-800 border-slate-600 text-slate-400' : 'bg-slate-50 border-slate-300 text-slate-500'
-                            }`}
-                          >
-                            <option value="not_reviewed">Not Reviewed</option>
-                            <option value="needs_info">Needs Info</option>
-                            <option value="ok">OK</option>
-                          </select>
-                        </td>
-                        {/* Check Results Column */}
+                        {/* Checks Column (compact) */}
                         <td className="px-4 py-3">
-                          {doc.check_summary ? (
-                            <div className="flex items-center gap-2">
-                              {doc.check_summary.passed > 0 && (
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700'}`}>
-                                  {doc.check_summary.passed} ✓
-                                </span>
-                              )}
-                              {doc.check_summary.failed > 0 && (
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700'}`}>
-                                  {doc.check_summary.failed} ✗
-                                </span>
-                              )}
-                              {doc.check_summary.needs_review > 0 && (
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-                                  {doc.check_summary.needs_review} ⚠
-                                </span>
-                              )}
-                            </div>
-                          ) : (
+                          {doc.check_summary ? (() => {
+                            const total = doc.check_summary.passed + doc.check_summary.failed + doc.check_summary.needs_review;
+                            return (
+                              <div className="flex flex-col gap-1">
+                                <div className="w-16 h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex">
+                                  <div className="bg-green-500 h-full" style={{ width: `${(doc.check_summary.passed / Math.max(total, 1)) * 100}%` }} />
+                                  <div className="bg-red-500 h-full" style={{ width: `${(doc.check_summary.failed / Math.max(total, 1)) * 100}%` }} />
+                                  <div className="bg-amber-400 h-full" style={{ width: `${(doc.check_summary.needs_review / Math.max(total, 1)) * 100}%` }} />
+                                </div>
+                                <span className={`text-[11px] ${theme.textMuted}`}>{doc.check_summary.passed}/{total} pass</span>
+                              </div>
+                            );
+                          })() : (
                             <span className={`text-xs ${theme.textSubtle}`}>Not checked</span>
                           )}
                         </td>
-                        {/* Comments Column */}
-                        <td className="px-4 py-3">
-                          {doc.annotations.total > 0 ? (
-                            <div className="flex items-center gap-2">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-sky-500/20 text-sky-400' : 'bg-sky-100 text-sky-700'}`}>
-                                {doc.annotations.total}
-                              </span>
-                              {doc.annotations.open > 0 && (
-                                <span className={`text-xs ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
-                                  ({doc.annotations.open} open)
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className={`text-sm ${theme.textSubtle}`}>-</span>
-                          )}
-                        </td>
-                        {/* Actions Column */}
+                        {/* Actions Column (with comments badge) */}
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
@@ -972,9 +944,14 @@ export default function DashboardPage({
                                 e.stopPropagation();
                                 selectedProject && onOpenDocument(selectedProject, doc.id);
                               }}
-                              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${isDark ? 'text-sky-400 hover:bg-sky-500/20' : 'text-sky-600 hover:bg-sky-50'}`}
+                              className={`px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-1.5 ${isDark ? 'text-sky-400 hover:bg-sky-500/20' : 'text-sky-600 hover:bg-sky-50'}`}
                             >
                               Review
+                              {doc.annotations.total > 0 && (
+                                <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-medium ${isDark ? 'bg-sky-500/20 text-sky-400' : 'bg-sky-100 text-sky-700'}`}>
+                                  {doc.annotations.total}
+                                </span>
+                              )}
                             </button>
                             <button
                               onClick={(e) => {
@@ -1000,19 +977,6 @@ export default function DashboardPage({
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className={`border-t ${theme.border} px-6 py-2 text-xs ${theme.textSubtle} flex items-center justify-between`} style={{ background: theme.footerBg }}>
-        <span className="flex items-center gap-2">
-          <span>CompliCheck<span className="bg-gradient-to-r from-sky-400 to-purple-500 bg-clip-text text-transparent font-medium">AI</span><sup className="text-[6px]">TM</sup></span>
-          <span>- powered by</span>
-          <a href="https://cognaify.com" target="_blank" rel="noopener noreferrer" className="flex items-center">
-            <img src={cognaifyLogo} alt="Cognaify Solutions" className="h-5 object-contain" />
-          </a>
-        </span>
-        <span className={theme.textMuted}>
-          {projects.length} project{projects.length !== 1 ? 's' : ''} - {documents.length} document{documents.length !== 1 ? 's' : ''}
-        </span>
-      </footer>
 
       {/* New Project Modal */}
       {showNewProjectModal && (

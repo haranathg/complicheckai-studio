@@ -422,7 +422,7 @@ export default function ParseResults({
         ) : (
           <div className="flex flex-col flex-1 min-h-0">
             {/* Chunk list */}
-            <div className="space-y-2 overflow-auto flex-1">
+            <div className="space-y-3 overflow-auto flex-1">
               {filteredChunks.map((chunk) => (
                 <div
                   key={chunk.id}
@@ -433,7 +433,7 @@ export default function ParseResults({
                   }}
                   onClick={() => onChunkSelect(chunk)}
                   className={`
-                    p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md
+                    p-4 rounded-xl border transition-all cursor-pointer hover:shadow-md
                     ${highlightedChunk?.id === chunk.id
                       ? 'border-sky-500 ring-2 ring-sky-500/50 border-2'
                       : isDark ? 'border-slate-700/40 hover:border-slate-600' : 'border-slate-200 hover:border-slate-300'

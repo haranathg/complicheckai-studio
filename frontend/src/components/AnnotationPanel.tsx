@@ -241,7 +241,7 @@ export default function AnnotationPanel({
               No notes for this page
             </div>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {/* Page annotations */}
               {pageAnnotations.map(annotation => (
                 <AnnotationItem

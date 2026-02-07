@@ -22,7 +22,6 @@ import { getParserType, getModelForParser } from './components/ParserSelector';
 import { uploadDocument, checkProjectsAvailable, getOrCreateDefaultProject, listDocuments, getLatestParseResult, getDocumentDownloadUrl } from './services/projectService';
 import { getPageClassifications } from './services/checksService';
 import { useTheme, getThemeStyles } from './contexts/ThemeContext';
-import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
 import cognaifySymbol from './assets/cognaify-symbol.png';
 
 type ViewType = 'dashboard' | 'document';
@@ -1110,22 +1109,6 @@ function App() {
         )}
       </div>
 
-      {/* Footer */}
-      <footer className={`border-t ${theme.border} px-6 py-2 text-xs ${theme.textSubtle} flex items-center justify-between relative`} style={{ background: theme.footerBg }}>
-        <span className="flex items-center gap-2">
-          <span>CompliCheck<span className="bg-gradient-to-r from-sky-400 to-purple-500 bg-clip-text text-transparent font-medium">AI</span><sup className="text-[6px]">TM</sup></span>
-          <span>- powered by</span>
-          <a href="https://cognaify.com" target="_blank" rel="noopener noreferrer" className="flex items-center">
-            <img src={cognaifyLogo} alt="Cognaify Solutions" className="h-5 object-contain" />
-          </a>
-        </span>
-        {parseResult && (
-          <span className={theme.textMuted}>
-            {parseResult.chunks.length} components extracted
-            {parseResult.metadata.page_count && ` from ${parseResult.metadata.page_count} pages`}
-          </span>
-        )}
-      </footer>
 
       {/* Settings Panel */}
       <SettingsPanel

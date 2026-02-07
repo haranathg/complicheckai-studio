@@ -60,6 +60,7 @@ export default function ComplianceTabV2({
   const [expandedChecks, setExpandedChecks] = useState<Set<string>>(new Set());
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showFindings, setShowFindings] = useState(true);
+  const [showSummary, setShowSummary] = useState(true);
   const [pageClassifications, setPageClassifications] = useState<PageClassification[]>([]);
   const [pageFilter, setPageFilter] = useState<number | null>(null);
 
@@ -112,6 +113,23 @@ export default function ComplianceTabV2({
   useEffect(() => {
     loadResults();
   }, [loadResults]);
+
+  // Auto-expand failed and needs_review checks when results load
+  useEffect(() => {
+    if (!results) return;
+    const allChecks = [...results.completeness_results, ...results.compliance_results];
+    const criticalKeys = new Set<string>();
+    allChecks.forEach((check, idx) => {
+      if (check.status === 'fail' || check.status === 'needs_review') {
+        const v3 = check as unknown as CheckResultItemV3;
+        const key = v3.page_number ? `${check.check_id}-p${v3.page_number}-${idx}` : check.check_id;
+        criticalKeys.add(key);
+      }
+    });
+    if (criticalKeys.size > 0) {
+      setExpandedChecks(criticalKeys);
+    }
+  }, [results]);
 
   // Run checks for this document
   const handleRunChecks = async () => {
@@ -246,9 +264,9 @@ export default function ComplianceTabV2({
   }
 
   return (
-    <div className="h-full flex flex-col p-4">
+    <div className="h-full flex flex-col p-5">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-5">
         <div>
           <h3 className={`font-semibold text-lg ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
             Compliance Checks
@@ -329,16 +347,22 @@ export default function ComplianceTabV2({
       {/* Results display */}
       {results && (
         <>
-          {/* Summary bar */}
+          {/* Collapsible summary bar */}
           <div className="mb-4">
-            <div className="flex justify-between text-sm mb-2">
-              <span className={`font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+            <button
+              onClick={() => setShowSummary(!showSummary)}
+              className={`flex items-center justify-between w-full text-sm mb-2`}
+            >
+              <span className={`font-medium flex items-center gap-1.5 ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+                <svg className={`w-3.5 h-3.5 transition-transform ${showSummary ? 'rotate-90' : ''} ${isDark ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
                 Overall Results
               </span>
               <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>
                 {results.summary.passed} passed / {results.summary.total_checks} total
               </span>
-            </div>
+            </button>
             <div className="h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex">
               <div
                 className="bg-green-500 h-full transition-all"
@@ -353,22 +377,24 @@ export default function ComplianceTabV2({
                 style={{ width: `${(results.summary.needs_review / Math.max(results.summary.total_checks, 1)) * 100}%` }}
               />
             </div>
-            <div className="flex gap-4 mt-2 text-xs">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-500" /> Pass: {results.summary.passed}
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-red-500" /> Fail: {results.summary.failed}
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-amber-400" /> Review: {results.summary.needs_review}
-              </span>
-              {results.summary.na > 0 && (
+            {showSummary && (
+              <div className="flex gap-4 mt-2 text-xs">
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-gray-400" /> N/A: {results.summary.na}
+                  <span className="w-2 h-2 rounded-full bg-green-500" /> Pass: {results.summary.passed}
                 </span>
-              )}
-            </div>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-red-500" /> Fail: {results.summary.failed}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" /> Review: {results.summary.needs_review}
+                </span>
+                {results.summary.na > 0 && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-gray-400" /> N/A: {results.summary.na}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Tabs row with Show Findings toggle */}
@@ -416,10 +442,11 @@ export default function ComplianceTabV2({
             </button>
           </div>
 
-          {/* Page Classifications Filter - only show if checks have page numbers */}
-          {pageClassifications.length > 0 && currentChecks.some(c => (c as unknown as CheckResultItemV3).page_number !== undefined) && (
-            <div className={`mb-3 p-2 rounded-lg ${isDark ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
-              <div className="flex items-center gap-2 flex-wrap">
+          {/* Combined filters row — pages + status in one line */}
+          <div className={`flex items-center gap-2 mb-3 flex-wrap p-2 rounded-lg ${isDark ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
+            {/* Page filter pills */}
+            {pageClassifications.length > 0 && currentChecks.some(c => (c as unknown as CheckResultItemV3).page_number !== undefined) && (
+              <>
                 <span className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Pages:</span>
                 <button
                   onClick={() => setPageFilter(null)}
@@ -454,13 +481,13 @@ export default function ComplianceTabV2({
                     </button>
                   );
                 })}
-              </div>
-            </div>
-          )}
+                {/* Divider */}
+                <div className={`w-px h-4 ${isDark ? 'bg-gray-600' : 'bg-gray-300'}`} />
+              </>
+            )}
 
-          {/* Status filters - legend style like PDFViewer */}
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className={`text-xs font-medium mr-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Results:</span>
+            {/* Status filter pills */}
+            <span className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Results:</span>
             {([
               { status: 'pass' as const, color: '#22c55e' },
               { status: 'fail' as const, color: '#ef4444' },
@@ -505,7 +532,7 @@ export default function ComplianceTabV2({
           </div>
 
           {/* Check items */}
-          <div className="flex-1 overflow-auto space-y-2">
+          <div className="flex-1 overflow-auto space-y-3">
             {filteredChecks.map((check, idx) => {
               const hasChunks = check.chunk_ids && check.chunk_ids.length > 0;
               // V3 page info - cast through unknown for type safety
@@ -525,7 +552,7 @@ export default function ComplianceTabV2({
                 >
                   <button
                     onClick={() => toggleCheck(uniqueKey as string)}
-                    className={`w-full px-3 py-2 flex items-center justify-between text-left transition-colors ${
+                    className={`w-full px-4 py-3 flex items-center justify-between text-left transition-colors ${
                       isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
                     }`}
                   >
@@ -541,7 +568,7 @@ export default function ComplianceTabV2({
                           P{pageNum}
                         </span>
                       )}
-                      <span className={`font-medium text-sm truncate ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                      <span className={`font-medium text-sm line-clamp-2 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
                         {check.check_name}
                       </span>
                     </div>
@@ -568,10 +595,10 @@ export default function ComplianceTabV2({
                   </button>
 
                   {expandedChecks.has(uniqueKey) && (
-                    <div className={`px-3 pb-3 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`}>
-                      <div className="pt-2 space-y-2 text-sm">
+                    <div className={`px-4 pb-4 border-t ${isDark ? 'border-gray-700' : 'border-gray-100'}`}>
+                      <div className="pt-3 space-y-3 text-sm">
                         {/* Check question with Q: prefix */}
-                        <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
+                        <div className={`p-3 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
                           <span className={`font-semibold ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>Q: </span>
                           <span className={isDark ? 'text-gray-200' : 'text-gray-700'}>{check.check_name}</span>
                         </div>
