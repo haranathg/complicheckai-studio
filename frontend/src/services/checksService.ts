@@ -253,3 +253,32 @@ export async function downloadBatchReport(batchRunId: string): Promise<Blob> {
   if (!response.ok) throw new Error('Failed to generate report');
   return response.blob();
 }
+
+export async function downloadReviewReport(projectId: string): Promise<Blob> {
+  const { fetchAuthSession } = await import('aws-amplify/auth');
+  const { AUTH_DISABLED } = await import('../config/amplify');
+  const { API_URL } = await import('../config');
+
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+
+  if (!AUTH_DISABLED) {
+    try {
+      const session = await fetchAuthSession();
+      const token = session.tokens?.accessToken?.toString();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    } catch {
+      // Continue without auth
+    }
+  }
+
+  const response = await fetch(`${API_URL}/api/reports/projects/${projectId}/review-report`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({}),
+  });
+
+  if (!response.ok) throw new Error('Failed to generate review report');
+  return response.blob();
+}

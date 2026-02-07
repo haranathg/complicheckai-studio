@@ -153,6 +153,8 @@ export interface DocumentStatusSummary {
   classification_override?: boolean;
   // V2 Check results summary
   check_summary?: CheckSummary;
+  // Review status
+  review_status?: 'not_reviewed' | 'needs_info' | 'ok';
 }
 
 export interface DocumentStatusListResponse {

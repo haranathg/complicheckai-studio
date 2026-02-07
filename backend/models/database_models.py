@@ -60,6 +60,9 @@ class Document(Base):
     classification_override = Column(Boolean, default=False)
     classification_model = Column(String(100), nullable=True)
 
+    # Review status
+    review_status = Column(String(20), default="not_reviewed")
+
     # Relationships
     project = relationship("Project", back_populates="documents")
     parse_results = relationship("ParseResult", back_populates="document", cascade="all, delete-orphan")

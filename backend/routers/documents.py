@@ -196,6 +196,8 @@ class DocumentStatusSummary(BaseModel):
     classification_override: bool = False
     # V2 Check results summary
     check_summary: Optional[CheckSummary] = None
+    # Review status
+    review_status: Optional[str] = "not_reviewed"
 
     class Config:
         from_attributes = True
@@ -287,11 +289,42 @@ async def get_documents_status(
             document_type=doc.document_type,
             classification_confidence=doc.classification_confidence,
             classification_override=doc.classification_override or False,
-            check_summary=check_summary
+            check_summary=check_summary,
+            review_status=doc.review_status or "not_reviewed"
         ))
 
     print(f"[get_documents_status] Returning {len(result)} documents, total={total}")
     return DocumentStatusListResponse(documents=result, total=total)
+
+
+class ReviewStatusUpdate(BaseModel):
+    review_status: str  # "not_reviewed", "needs_info", "ok"
+
+
+@router.patch("/{project_id}/documents/{document_id}/review")
+async def update_document_review_status(
+    project_id: str,
+    document_id: str,
+    body: ReviewStatusUpdate,
+    db: Session = Depends(get_db),
+    user: CognitoUser = Depends(get_optional_user)
+):
+    """Update the review status of a document."""
+    if body.review_status not in ("not_reviewed", "needs_info", "ok"):
+        raise HTTPException(status_code=400, detail="Invalid review status. Must be 'not_reviewed', 'needs_info', or 'ok'")
+
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.project_id == project_id
+    ).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    document.review_status = body.review_status
+    db.commit()
+
+    return {"status": "updated", "review_status": body.review_status}
 
 
 class DuplicateDocumentResponse(BaseModel):
