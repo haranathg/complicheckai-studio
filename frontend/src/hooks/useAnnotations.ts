@@ -2,7 +2,7 @@
  * useAnnotations - Shared hook for annotation state management
  * Single source of truth for annotations across ReviewTab, AnnotationPanel, and PDFViewer
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { Annotation, AnnotationCreate, AnnotationUpdate } from '../types/annotation';
 import type { Chunk } from '../types/ade';
 import {
@@ -58,6 +58,9 @@ export function useAnnotations({ projectId, documentId, currentPage }: UseAnnota
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
 
+  // Track request freshness to avoid race conditions when rapidly switching documents
+  const loadIdRef = useRef(0);
+
   // Load all annotations for the current document (or project if no document)
   const loadAnnotations = useCallback(async () => {
     if (!projectId) {
@@ -65,23 +68,31 @@ export function useAnnotations({ projectId, documentId, currentPage }: UseAnnota
       return;
     }
 
+    const thisLoadId = ++loadIdRef.current;
     setIsLoading(true);
     setError(null);
 
     try {
+      let response;
       if (documentId) {
-        const response = await listDocumentAnnotations(projectId, documentId);
-        setAnnotations(response.annotations);
+        response = await listDocumentAnnotations(projectId, documentId);
       } else {
-        const response = await listProjectAnnotations(projectId);
+        response = await listProjectAnnotations(projectId);
+      }
+      // Only apply if this is still the most recent request
+      if (thisLoadId === loadIdRef.current) {
         setAnnotations(response.annotations);
       }
     } catch (err) {
-      console.error('Failed to load annotations:', err);
-      setError('Failed to load annotations');
-      setAnnotations([]);
+      if (thisLoadId === loadIdRef.current) {
+        console.error('Failed to load annotations:', err);
+        setError('Failed to load annotations');
+        setAnnotations([]);
+      }
     } finally {
-      setIsLoading(false);
+      if (thisLoadId === loadIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [projectId, documentId]);
 
@@ -103,7 +114,7 @@ export function useAnnotations({ projectId, documentId, currentPage }: UseAnnota
       const p = page ?? currentPage;
       filtered = filtered.filter(a =>
         (a.level === 'page' && a.page_number === p) ||
-        a.level === 'document'
+        (a.level === 'document' && p === 1)
       );
     } else if (viewMode === 'document') {
       filtered = filtered.filter(a =>
@@ -121,11 +132,11 @@ export function useAnnotations({ projectId, documentId, currentPage }: UseAnnota
   }, [annotations]);
 
   // Get document-level annotations
-  const documentAnnotations = annotations.filter(a => a.level === 'document');
+  const documentAnnotations = useMemo(() => annotations.filter(a => a.level === 'document'), [annotations]);
 
   // Counts
-  const openCount = annotations.filter(a => a.status === 'open').length;
-  const resolvedCount = annotations.filter(a => a.status === 'resolved').length;
+  const openCount = useMemo(() => annotations.filter(a => a.status === 'open').length, [annotations]);
+  const resolvedCount = useMemo(() => annotations.filter(a => a.status === 'resolved').length, [annotations]);
 
   // Create annotation
   const create = useCallback(async (annotationData: AnnotationCreate): Promise<Annotation | null> => {
@@ -150,6 +161,7 @@ export function useAnnotations({ projectId, documentId, currentPage }: UseAnnota
       return updated;
     } catch (err) {
       console.error('Failed to update annotation:', err);
+      setError('Failed to update annotation');
       return null;
     }
   }, []);
@@ -162,6 +174,7 @@ export function useAnnotations({ projectId, documentId, currentPage }: UseAnnota
       return true;
     } catch (err) {
       console.error('Failed to delete annotation:', err);
+      setError('Failed to delete annotation');
       return false;
     }
   }, []);
@@ -174,6 +187,7 @@ export function useAnnotations({ projectId, documentId, currentPage }: UseAnnota
       return updated;
     } catch (err) {
       console.error('Failed to resolve annotation:', err);
+      setError('Failed to resolve annotation');
       return null;
     }
   }, []);
