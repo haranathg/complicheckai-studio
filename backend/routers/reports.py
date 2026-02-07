@@ -193,7 +193,7 @@ def generate_review_report_pdf(project, documents: list, doc_annotations: dict, 
         canvas.drawRightString(width - 15*mm, 10*mm, f"Page {doc.page}")
         canvas.restoreState()
 
-    doc = SimpleDocTemplate(
+    pdf_doc = SimpleDocTemplate(
         buffer, pagesize=A4,
         topMargin=20*mm, bottomMargin=25*mm,
         leftMargin=15*mm, rightMargin=15*mm
@@ -350,7 +350,7 @@ def generate_review_report_pdf(project, documents: list, doc_annotations: dict, 
     doc_table.setStyle(TableStyle(table_styles))
     story.append(doc_table)
 
-    doc.build(story, onFirstPage=add_footer, onLaterPages=add_footer)
+    pdf_doc.build(story, onFirstPage=add_footer, onLaterPages=add_footer)
     buffer.seek(0)
     return buffer.getvalue()
 
