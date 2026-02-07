@@ -13,6 +13,21 @@ import { useAuth } from '../contexts/AuthContext';
 import DocumentTypeBadge from './DocumentTypeBadge';
 import BatchCheckProgress from './BatchCheckProgress';
 import UserMenu from './UserMenu';
+
+function timeAgo(dateStr: string): string {
+  const now = Date.now();
+  const date = new Date(dateStr).getTime();
+  const diffMs = now - date;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `${diffH}h ago`;
+  const diffD = Math.floor(diffH / 24);
+  if (diffD < 30) return `${diffD}d ago`;
+  const diffMo = Math.floor(diffD / 30);
+  return `${diffMo}mo ago`;
+}
 import { Modal, Button } from './ui';
 import cognaifySymbol from '../assets/cognaify-symbol.png';
 
@@ -578,14 +593,15 @@ export default function DashboardPage({
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar - Projects */}
-        <div className={`w-64 border-r ${theme.border} flex flex-col`} style={{ background: theme.panelBg }}>
-          <div className="p-4 border-b" style={{ borderColor: isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.8)' }}>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className={`font-semibold ${theme.textPrimary}`}>Projects</h2>
+        <div className={`w-14 lg:w-48 xl:w-64 border-r ${theme.border} flex flex-col transition-all`} style={{ background: theme.panelBg }}>
+          <div className="p-2 lg:p-4 border-b" style={{ borderColor: isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.8)' }}>
+            <div className="flex items-center justify-between lg:mb-3">
+              <h2 className={`font-semibold ${theme.textPrimary} hidden lg:block`}>Projects</h2>
               <button
                 onClick={() => setShowNewProjectModal(true)}
                 className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-700/50 text-gray-400 hover:text-gray-200' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-700'}`}
                 title="New Project"
+                aria-label="Create new project"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -598,7 +614,7 @@ export default function DashboardPage({
               <button
                 key={project.id}
                 onClick={() => setSelectedProject(project)}
-                className={`w-full text-left px-3 py-2.5 rounded-lg mb-1 transition-colors ${
+                className={`w-full text-left px-2 lg:px-3 py-2.5 rounded-lg mb-1 transition-colors ${
                   selectedProject?.id === project.id
                     ? isDark
                       ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
@@ -607,15 +623,21 @@ export default function DashboardPage({
                       ? 'text-gray-300 hover:bg-slate-700/50'
                       : 'text-slate-700 hover:bg-slate-100'
                 }`}
+                title={project.name}
               >
-                <div className="flex items-center gap-2">
-                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                  </svg>
-                  <span className="truncate font-medium">{project.name}</span>
+                <div className="flex items-center gap-2 justify-center lg:justify-start">
+                  <div className="relative flex-shrink-0">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                    <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${project.document_count > 0 ? 'bg-sky-500' : isDark ? 'bg-slate-600' : 'bg-slate-300'}`} />
+                  </div>
+                  <span className="truncate font-medium hidden lg:inline">{project.name}</span>
                 </div>
-                <div className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>
-                  {project.document_count} document{project.document_count !== 1 ? 's' : ''}
+                <div className={`hidden lg:flex items-center gap-2 text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-slate-500'}`}>
+                  <span>{project.document_count} doc{project.document_count !== 1 ? 's' : ''}</span>
+                  <span>·</span>
+                  <span>{timeAgo(project.created_at)}</span>
                 </div>
               </button>
             ))}
@@ -657,7 +679,7 @@ export default function DashboardPage({
                     </svg>
                   </button>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -668,7 +690,7 @@ export default function DashboardPage({
                   />
 
                   {/* Group A: Selection-dependent actions */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {isProcessing ? (
                       <button
                         onClick={handleCancelBatchJob}
@@ -756,30 +778,20 @@ export default function DashboardPage({
                   <div className={`w-px h-6 ${isDark ? 'bg-slate-600/50' : 'bg-slate-300'}`} />
 
                   {/* Group C: Primary CTA */}
-                  <button
+                  <Button
+                    variant="primary"
+                    size="md"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="px-4 py-2 text-white rounded-full transition-colors flex items-center gap-2 disabled:opacity-50"
-                    style={{
-                      background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
-                      boxShadow: '0 8px 20px rgba(56, 189, 248, 0.25)',
-                      border: '1px solid rgba(191, 219, 254, 0.3)'
-                    }}
+                    isLoading={isUploading}
+                    leftIcon={!isUploading ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                    ) : undefined}
                   >
-                    {isUploading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                        <span>Uploading...</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        <span>Upload Document</span>
-                      </>
-                    )}
-                  </button>
+                    {isUploading ? 'Uploading...' : 'Upload Document'}
+                  </Button>
                 </div>
               </div>
             </div>
@@ -828,9 +840,9 @@ export default function DashboardPage({
                         />
                       </th>
                       <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Document</th>
-                      <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Type</th>
+                      <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted} hidden xl:table-cell`}>Type</th>
                       <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Status</th>
-                      <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Checks</th>
+                      <th className={`text-left px-4 py-3 text-sm font-medium ${theme.textMuted} hidden xl:table-cell`}>Checks</th>
                       <th className={`text-right px-4 py-3 text-sm font-medium ${theme.textMuted}`}>Actions</th>
                     </tr>
                   </thead>
@@ -870,7 +882,7 @@ export default function DashboardPage({
                           </div>
                         </td>
                         {/* Document Type Column */}
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 hidden xl:table-cell">
                           <DocumentTypeBadge
                             documentType={doc.document_type}
                             confidence={doc.classification_confidence}
@@ -919,7 +931,7 @@ export default function DashboardPage({
                           </div>
                         </td>
                         {/* Checks Column (compact) */}
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 hidden xl:table-cell">
                           {doc.check_summary ? (() => {
                             const total = doc.check_summary.passed + doc.check_summary.failed + doc.check_summary.needs_review;
                             return (
@@ -960,6 +972,7 @@ export default function DashboardPage({
                               }}
                               className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-red-400 hover:bg-red-500/20' : 'text-red-500 hover:bg-red-50'}`}
                               title="Delete Document"
+                              aria-label="Delete document"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1016,16 +1029,14 @@ export default function DashboardPage({
               >
                 Cancel
               </button>
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleCreateProject}
                 disabled={!newProjectName.trim()}
-                className="px-4 py-2 text-sm text-white rounded-lg transition-colors disabled:opacity-50"
-                style={{
-                  background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
-                }}
               >
                 Create Project
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1076,15 +1087,13 @@ export default function DashboardPage({
               >
                 {reprocessAction === 'process' ? 'Skip Processed' : 'Skip Existing'}
               </button>
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => handleReprocessConfirm(true)}
-                className="px-4 py-2 text-sm text-white rounded-lg transition-colors"
-                style={{
-                  background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
-                }}
               >
                 {reprocessAction === 'process' ? 'Reprocess All' : 'Re-run All'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

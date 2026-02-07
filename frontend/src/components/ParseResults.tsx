@@ -4,6 +4,7 @@ import type { Document } from '../types/project';
 import { getChunkColor } from '../utils/boundingBox';
 import { getMarkdownPreview } from '../utils/cleanMarkdown';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
+import { SegmentedControl } from './ui';
 
 // Page type display names and colors
 const PAGE_TYPE_CONFIG: Record<string, { name: string; color: string }> = {
@@ -261,74 +262,38 @@ export default function ParseResults({
 
         {/* Expandable options section */}
         <div className={`overflow-hidden transition-all duration-200 ease-in-out ${optionsExpanded ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`}>
-          <div className={`px-4 pb-3 pt-1 border-t ${theme.border} flex items-center gap-3 flex-wrap`}>
+          <div className={`px-4 pb-3 pt-1 border-t ${theme.border} flex items-center gap-3 flex-wrap`} onClick={(e) => e.stopPropagation()}>
             {/* View mode toggle */}
-            <div className={`flex rounded-lg p-0.5 border ${theme.border}`} style={{ background: isDark ? 'rgba(30, 41, 59, 0.6)' : '#f1f5f9' }}>
-              <button
-                onClick={(e) => { e.stopPropagation(); setViewMode('components'); }}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                  viewMode === 'components'
-                    ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
-                    : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Components
-              </button>
-              {result.page_classifications && result.page_classifications.length > 0 && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setViewMode('pages'); }}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                    viewMode === 'pages'
-                      ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
-                      : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Pages
-                </button>
-              )}
-              <button
-                onClick={(e) => { e.stopPropagation(); setViewMode('markdown'); }}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                  viewMode === 'markdown'
-                    ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
-                    : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Markdown
-              </button>
-            </div>
+            <SegmentedControl
+              options={[
+                { value: 'components', label: 'Components' },
+                ...(result.page_classifications && result.page_classifications.length > 0
+                  ? [{ value: 'pages', label: 'Pages' }]
+                  : []),
+                { value: 'markdown', label: 'Markdown' },
+              ]}
+              value={viewMode}
+              onChange={(val) => setViewMode(val as typeof viewMode)}
+              size="sm"
+            />
 
             {viewMode === 'components' && (
               <>
                 {/* Page vs All toggle */}
-                <div className={`flex rounded-lg p-0.5 border ${theme.border}`} style={{ background: isDark ? 'rgba(30, 41, 59, 0.6)' : '#f1f5f9' }}>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setChunkFilter('page'); }}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                      chunkFilter === 'page'
-                        ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
-                        : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    This Page
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setChunkFilter('all'); }}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                      chunkFilter === 'all'
-                        ? isDark ? 'bg-slate-700 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
-                        : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    All Pages
-                  </button>
-                </div>
+                <SegmentedControl
+                  options={[
+                    { value: 'page', label: 'This Page' },
+                    { value: 'all', label: 'All Pages' },
+                  ]}
+                  value={chunkFilter}
+                  onChange={(val) => setChunkFilter(val as typeof chunkFilter)}
+                  size="sm"
+                />
 
                 {/* Type filter */}
                 <select
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
                   className={`border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 ${
                     isDark
                       ? 'bg-slate-800/60 border-slate-600/50 text-gray-300'
@@ -477,21 +442,24 @@ export default function ParseResults({
                       </button>
                     )}
                   </div>
-                  <p className={`text-sm ${theme.textSecondary} line-clamp-3`}>
-                    {getMarkdownPreview(chunk.markdown, 200)}
-                    {chunk.markdown.length > 200 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onPopupOpen(chunk);
-                        }}
-                        className="text-sky-400 hover:text-sky-300 font-medium ml-1"
-                        title="View full content"
-                      >
-                        ...more
-                      </button>
-                    )}
+                  <p className={`text-sm ${theme.textSecondary} line-clamp-5`}>
+                    {getMarkdownPreview(chunk.markdown, 300)}
                   </p>
+                  {chunk.markdown.length > 300 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPopupOpen(chunk);
+                      }}
+                      className={`text-xs font-medium mt-1 flex items-center gap-1 ${isDark ? 'text-sky-400 hover:text-sky-300' : 'text-sky-600 hover:text-sky-500'}`}
+                      title="View full content"
+                    >
+                      Show more
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -559,12 +527,11 @@ export default function ParseResults({
                 onClick={() => {
                   navigator.clipboard.writeText(popupChunk.markdown);
                 }}
-                className="px-4 py-2 text-white rounded-full transition-colors flex items-center gap-2 text-sm"
-                style={{
-                  background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
-                  boxShadow: '0 8px 20px rgba(56, 189, 248, 0.25)',
-                  border: '1px solid rgba(191, 219, 254, 0.3)'
-                }}
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium border ${
+                  isDark
+                    ? 'bg-slate-800/60 border-slate-700/60 text-slate-200 hover:bg-slate-700/60'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />

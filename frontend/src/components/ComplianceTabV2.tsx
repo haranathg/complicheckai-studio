@@ -8,6 +8,7 @@ import type { DocumentCheckResult, CheckResultItem, CheckResultItemV3, PageClass
 import type { Project, Document } from '../types/project';
 import type { Chunk } from '../types/ade';
 import { downloadDocumentReport, runDocumentChecksV3, getLatestCheckResultsV3 } from '../services/checksService';
+import { Button } from './ui';
 
 // Page type display config
 const PAGE_TYPE_COLORS: Record<string, string> = {
@@ -194,14 +195,20 @@ export default function ComplianceTabV2({
     }
   };
 
-  // Toggle check expansion
-  const toggleCheck = (checkId: string) => {
+  // Toggle check expansion — auto-highlight chunks on PDF when expanding
+  const toggleCheck = (checkId: string, check?: CheckResultItem) => {
     setExpandedChecks(prev => {
       const next = new Set(prev);
       if (next.has(checkId)) {
         next.delete(checkId);
       } else {
         next.add(checkId);
+        // Auto-highlight chunks on the PDF when expanding
+        if (check && check.chunk_ids?.length && onChunkSelect && chunks) {
+          const firstChunk = chunks.find(c => check.chunk_ids.includes(c.id));
+          const pageNumber = firstChunk?.grounding?.page;
+          onChunkSelect(check.chunk_ids, pageNumber !== undefined ? pageNumber + 1 : undefined);
+        }
       }
       return next;
     });
@@ -280,47 +287,36 @@ export default function ComplianceTabV2({
         </div>
         <div className="flex items-center gap-2">
           {results && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={handleExportPdf}
               disabled={isExportingPdf}
-              className={`px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-1.5 ${
-                isDark
-                  ? 'bg-slate-700 hover:bg-slate-600 text-gray-200'
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-              } disabled:opacity-50`}
-            >
-              {isExportingPdf ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-current border-t-transparent" />
-              ) : (
+              isLoading={isExportingPdf}
+              leftIcon={!isExportingPdf ? (
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-              )}
+              ) : undefined}
+            >
               PDF
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={handleRunChecks}
             disabled={isRunning}
-            className="px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-            style={{
-              background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
-            }}
+            isLoading={isRunning}
+            aria-label="Run compliance checks"
+            leftIcon={!isRunning ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            ) : undefined}
           >
-            {isRunning ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                Running...
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                {results ? 'Re-run' : 'Run Checks'}
-              </>
-            )}
-          </button>
+            {isRunning ? 'Running...' : results ? 'Re-run' : 'Run Checks'}
+          </Button>
         </div>
       </div>
 
@@ -551,7 +547,7 @@ export default function ComplianceTabV2({
                   }`}
                 >
                   <button
-                    onClick={() => toggleCheck(uniqueKey as string)}
+                    onClick={() => toggleCheck(uniqueKey as string, check)}
                     className={`w-full px-4 py-3 flex items-center justify-between text-left transition-colors ${
                       isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
                     }`}

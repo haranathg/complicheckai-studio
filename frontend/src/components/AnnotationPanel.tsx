@@ -108,6 +108,9 @@ export default function AnnotationPanel({
       <div
         className={`flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-slate-700/20 transition-colors`}
         onClick={() => setIsExpanded(!isExpanded)}
+        role="button"
+        aria-label="Toggle notes panel"
+        aria-expanded={isExpanded}
       >
         <div className="flex items-center gap-2">
           <svg
@@ -174,6 +177,7 @@ export default function AnnotationPanel({
                 : 'text-sky-600 hover:bg-sky-50'
             }`}
             title="Add note"
+            aria-label="Add note"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

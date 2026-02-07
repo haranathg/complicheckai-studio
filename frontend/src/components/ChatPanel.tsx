@@ -4,7 +4,7 @@ import type { Chunk, ChatMessage, ChunkReference } from '../types/ade';
 import type { Document } from '../types/project';
 import { API_URL } from '../config';
 import { useTheme } from '../contexts/ThemeContext';
-import { SegmentedControl } from './ui';
+import { SegmentedControl, Tooltip } from './ui';
 
 // Document context for multi-document chat
 interface DocumentContext {
@@ -231,6 +231,7 @@ export default function ChatPanel({
           <button
             onClick={clearChat}
             className={`text-sm ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-slate-500 hover:text-slate-700'}`}
+            aria-label="Clear chat history"
           >
             Clear chat
           </button>
@@ -287,7 +288,7 @@ export default function ChatPanel({
                         : 'text-slate-800 border border-slate-200'
                   }`}
                   style={msg.role === 'user'
-                    ? { background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)' }
+                    ? { background: isDark ? '#0284c7' : '#0ea5e9' }
                     : { background: isDark ? 'rgba(2, 6, 23, 0.6)' : 'rgba(248, 250, 252, 0.9)' }
                   }
                 >
@@ -314,24 +315,26 @@ export default function ChatPanel({
                                   <div className="flex flex-wrap gap-1.5">
                                     {chunkRefs.map((chunkRef) => {
                                       const pageNum = chunkRef.page !== undefined ? chunkRef.page + 1 : undefined;
+                                      const chipTooltip = `Page ${pageNum || '?'} — ${chunkRef.type || 'content'}`;
                                       return (
-                                        <button
-                                          key={chunkRef.id}
-                                          onClick={() => onChunkSelect([chunkRef.id], pageNum, docSource.document_id, chunkRef)}
-                                          className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
-                                            isDark
-                                              ? 'bg-slate-800/50 border border-slate-600/50 hover:border-sky-400 hover:bg-sky-900/30'
-                                              : 'bg-slate-100 border border-slate-300 hover:border-sky-500 hover:bg-sky-50'
-                                          }`}
-                                        >
-                                          {pageNum && <span className={isDark ? 'text-gray-500' : 'text-slate-500'}>p.{pageNum}</span>}
-                                          <span className={`capitalize ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>
-                                            {chunkRef.type || 'content'}
-                                          </span>
-                                          <svg className={`w-3 h-3 ${isDark ? 'text-gray-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                          </svg>
-                                        </button>
+                                        <Tooltip key={chunkRef.id} content={chipTooltip} position="top">
+                                          <button
+                                            onClick={() => onChunkSelect([chunkRef.id], pageNum, docSource.document_id, chunkRef)}
+                                            className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                                              isDark
+                                                ? 'bg-slate-800/50 border border-slate-600/50 hover:border-sky-400 hover:bg-sky-900/30'
+                                                : 'bg-slate-100 border border-slate-300 hover:border-sky-500 hover:bg-sky-50'
+                                            }`}
+                                          >
+                                            {pageNum && <span className={isDark ? 'text-gray-500' : 'text-slate-500'}>p.{pageNum}</span>}
+                                            <span className={`capitalize ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>
+                                              {chunkRef.type || 'content'}
+                                            </span>
+                                            <svg className={`w-3 h-3 ${isDark ? 'text-gray-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                            </svg>
+                                          </button>
+                                        </Tooltip>
                                       );
                                     })}
                                   </div>
@@ -350,22 +353,24 @@ export default function ChatPanel({
                           <div className="flex flex-wrap gap-1.5">
                             {relevantChunks.map((chunk) => {
                               const pageNum = chunk.grounding?.page !== undefined ? chunk.grounding.page + 1 : null;
+                              const preview = chunk.markdown?.substring(0, 120).replace(/\n/g, ' ').trim();
                               return (
-                                <button
-                                  key={chunk.id}
-                                  onClick={() => onChunkSelect([chunk.id], pageNum || undefined)}
-                                  className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
-                                    isDark
-                                      ? 'bg-slate-800/50 border border-slate-600/50 hover:border-sky-400 hover:bg-sky-900/30'
-                                      : 'bg-slate-100 border border-slate-300 hover:border-sky-500 hover:bg-sky-50'
-                                  }`}
-                                >
-                                  {pageNum && <span className={isDark ? 'text-gray-500' : 'text-slate-500'}>p.{pageNum}</span>}
-                                  <span className={`capitalize ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>{chunk.type}</span>
-                                  <svg className={`w-3 h-3 ${isDark ? 'text-gray-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                  </svg>
-                                </button>
+                                <Tooltip key={chunk.id} content={preview || `Page ${pageNum || '?'} — ${chunk.type}`} position="top">
+                                  <button
+                                    onClick={() => onChunkSelect([chunk.id], pageNum || undefined)}
+                                    className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
+                                      isDark
+                                        ? 'bg-slate-800/50 border border-slate-600/50 hover:border-sky-400 hover:bg-sky-900/30'
+                                        : 'bg-slate-100 border border-slate-300 hover:border-sky-500 hover:bg-sky-50'
+                                    }`}
+                                  >
+                                    {pageNum && <span className={isDark ? 'text-gray-500' : 'text-slate-500'}>p.{pageNum}</span>}
+                                    <span className={`capitalize ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>{chunk.type}</span>
+                                    <svg className={`w-3 h-3 ${isDark ? 'text-gray-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                  </button>
+                                </Tooltip>
                               );
                             })}
                           </div>
@@ -426,6 +431,7 @@ export default function ChatPanel({
         <button
           onClick={sendMessage}
           disabled={isLoading || !input.trim()}
+          aria-label="Send message"
           className="text-white px-4 py-2.5 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           style={{
             background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',

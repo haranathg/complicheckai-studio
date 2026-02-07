@@ -101,8 +101,8 @@ export default function TabNavigation({ activeTab, onTabChange, disabled, onSett
                   <span 
                     className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
                     style={{
-                      background: 'linear-gradient(90deg, #0ea5e9, #6366f1)',
-                      boxShadow: '0 0 12px rgba(14, 165, 233, 0.5)'
+                      background: '#0ea5e9',
+                      boxShadow: '0 0 8px rgba(14, 165, 233, 0.4)'
                     }}
                   />
                 )}

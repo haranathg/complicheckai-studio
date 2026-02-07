@@ -12,6 +12,7 @@ import type { Project, Document } from './types/project';
 import { useAnnotations } from './hooks/useAnnotations';
 import type { Annotation } from './types/annotation';
 import SaveToProjectDropdown from './components/SaveToProjectDropdown';
+import { Button } from './components/ui';
 import LoginPage from './components/LoginPage';
 import UserMenu from './components/UserMenu';
 import type { ParseResponse, Chunk, TabType, ChatMessage, ChunkReference, BoundingBox } from './types/ade';
@@ -73,10 +74,80 @@ function App() {
   const [pageClassifications, setPageClassifications] = useState<Array<{ page: number; page_type: string; confidence?: number }>>([]);
   // Fullscreen mode for PDF viewer
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Resizable split panel
+  const [panelSplit, setPanelSplit] = useState(() => {
+    const saved = localStorage.getItem('ccai-panel-split');
+    if (saved) return Number(saved);
+    // Default: 40% for smaller screens, 45% for wider
+    return window.innerWidth < 1280 ? 40 : 45;
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isHeaderHidden, setIsHeaderHidden] = useState(false);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const rightPanelScrollRef = useRef<HTMLDivElement>(null);
+  const lastScrollYRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Ref to store pending chunk to highlight after PDF loads (for cross-document navigation)
   const pendingChunkHighlightRef = useRef<{ chunk: Chunk | null; pageNumber?: number } | null>(null);
+
+  // Resizable panel drag handlers
+  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!splitContainerRef.current) return;
+      const rect = splitContainerRef.current.getBoundingClientRect();
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      const clamped = Math.max(30, Math.min(70, pct));
+      setPanelSplit(clamped);
+    };
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      localStorage.setItem('ccai-panel-split', String(panelSplit));
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isDragging, panelSplit]);
+
+  // Auto-hide header on scroll down in right panel
+  useEffect(() => {
+    const el = rightPanelScrollRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const currentY = el.scrollTop;
+      if (currentY > 100 && currentY > lastScrollYRef.current) {
+        setIsHeaderHidden(true);
+      } else if (currentY < lastScrollYRef.current) {
+        setIsHeaderHidden(false);
+      }
+      lastScrollYRef.current = currentY;
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Show header when mouse near top of viewport
+  useEffect(() => {
+    if (!isHeaderHidden) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (e.clientY < 60) setIsHeaderHidden(false);
+    };
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [isHeaderHidden]);
 
   // Check if projects are available and get default project on mount
   useEffect(() => {
@@ -707,7 +778,7 @@ function App() {
   return (
     <div className="h-screen flex flex-col" style={{ background: theme.pageBg }}>
       {/* Header */}
-      <header className={`border-b ${theme.border} px-6 py-3 relative z-50`} style={{ background: theme.headerBg, backdropFilter: 'blur(8px)' }}>
+      <header className={`border-b ${theme.border} px-6 py-3 relative z-50 transition-transform duration-300 ${isHeaderHidden ? '-translate-y-full' : ''}`} style={{ background: theme.headerBg, backdropFilter: 'blur(8px)' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* Back to Dashboard button */}
@@ -715,6 +786,7 @@ function App() {
               onClick={handleBackToDashboard}
               className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-700/50 text-gray-400 hover:text-gray-200' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-700'}`}
               title="Back to Dashboard"
+              aria-label="Back to dashboard"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -753,31 +825,30 @@ function App() {
               />
             )}
             {file && !parseResult && !isLoading && (
-              <button
+              <Button
+                variant="primary"
+                size="md"
                 onClick={handleProcess}
                 disabled={!isPdfReady}
-                className="px-4 py-2 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                style={{
-                  background: 'radial-gradient(circle at top left, #38bdf8, #6366f1 45%, #a855f7 100%)',
-                  boxShadow: '0 8px 20px rgba(56, 189, 248, 0.25)',
-                  border: '1px solid rgba(191, 219, 254, 0.3)'
-                }}
+                leftIcon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                }
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
                 Process
-              </button>
+              </Button>
             )}
             {isLoading && (
-              <button
+              <Button
+                variant="danger"
+                size="md"
                 onClick={handleCancel}
-                className="px-4 py-2 bg-red-600/80 text-white rounded-full hover:bg-red-600 transition-colors flex items-center gap-2 border border-red-500/50"
+                isLoading={true}
               >
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                <span>Cancel</span>
-              </button>
+                Cancel
+              </Button>
             )}
             <UserMenu />
           </div>
@@ -805,9 +876,12 @@ function App() {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden" ref={splitContainerRef} role="main">
         {/* Left Panel - PDF Viewer + Annotation Panel */}
-        <div className={`${isFullscreen ? 'w-full' : 'w-1/2'} ${!isFullscreen ? `border-r ${theme.border}` : ''} overflow-hidden flex flex-col transition-all duration-300`} style={{ background: theme.panelBg }}>
+        <div
+          className={`${isFullscreen ? 'w-full' : ''} overflow-hidden flex flex-col`}
+          style={isFullscreen ? { background: theme.panelBg } : { width: `${panelSplit}%`, background: theme.panelBg }}
+        >
           {file ? (
             <>
               <div className="flex-1 overflow-hidden">
@@ -935,9 +1009,26 @@ function App() {
           )}
         </div>
 
+        {/* Draggable Divider */}
+        {!isFullscreen && (
+          <div
+            className={`w-1 flex-shrink-0 cursor-col-resize relative group transition-colors ${isDragging ? (isDark ? 'bg-sky-500' : 'bg-sky-400') : isDark ? 'bg-slate-800 hover:bg-sky-500/50' : 'bg-slate-200 hover:bg-sky-400/50'}`}
+            onMouseDown={handleDividerMouseDown}
+            onDoubleClick={() => { setPanelSplit(45); localStorage.setItem('ccai-panel-split', '45'); }}
+            title="Drag to resize panels. Double-click to reset."
+          >
+            {/* Grip dots */}
+            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isDragging ? 'opacity-100' : ''}`}>
+              <div className={`w-1 h-1 rounded-full ${isDark ? 'bg-slate-400' : 'bg-slate-500'}`} />
+              <div className={`w-1 h-1 rounded-full ${isDark ? 'bg-slate-400' : 'bg-slate-500'}`} />
+              <div className={`w-1 h-1 rounded-full ${isDark ? 'bg-slate-400' : 'bg-slate-500'}`} />
+            </div>
+          </div>
+        )}
+
         {/* Right Panel - Results (hidden in fullscreen) */}
         {!isFullscreen && (
-        <div className="w-1/2 flex flex-col overflow-hidden" style={{ background: theme.panelBgAlt }}>
+        <div className="flex flex-col overflow-hidden" style={{ width: `${100 - panelSplit}%`, background: theme.panelBgAlt }} role="complementary">
           <TabNavigation
             activeTab={activeTab}
             onTabChange={(tab) => {
@@ -948,7 +1039,7 @@ function App() {
             onSettingsClick={() => setIsSettingsOpen(true)}
           />
 
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-auto" ref={rightPanelScrollRef}>
             {activeTab === 'parse' && (
               <div className="p-4 h-full">
                 <ParseResults
