@@ -9,6 +9,7 @@ import ReviewTab from './components/ReviewTab';
 import AnnotationPanel from './components/AnnotationPanel';
 import DashboardPage from './components/DashboardPage';
 import type { Project, Document } from './types/project';
+import { useAnnotations } from './hooks/useAnnotations';
 import type { Annotation } from './types/annotation';
 import SaveToProjectDropdown from './components/SaveToProjectDropdown';
 import LoginPage from './components/LoginPage';
@@ -19,7 +20,6 @@ import { useAuth } from './contexts/AuthContext';
 import { getDefaultModelForParser } from './components/ModelSelector';
 import { getParserType, getModelForParser } from './components/ParserSelector';
 import { uploadDocument, checkProjectsAvailable, getOrCreateDefaultProject, listDocuments, getLatestParseResult, getDocumentDownloadUrl } from './services/projectService';
-import { listDocumentAnnotations, listProjectAnnotations } from './services/annotationService';
 import { getPageClassifications } from './services/checksService';
 import { useTheme, getThemeStyles } from './contexts/ThemeContext';
 import cognaifyLogo from './assets/Cognaify-logo-white-bg.png';
@@ -56,7 +56,6 @@ function App() {
   const [projectsAvailable, setProjectsAvailable] = useState<boolean | null>(null);
   const [defaultProject, setDefaultProject] = useState<Project | null>(null);
   const [prefilledChunk, setPrefilledChunk] = useState<Chunk | null>(null);
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selectedAnnotation, setSelectedAnnotation] = useState<Annotation | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   // Chunk type visibility filters (for Parse tab legend)
@@ -102,29 +101,12 @@ function App() {
     init();
   }, []);
 
-  // Fetch annotations when document changes
-  const loadAnnotations = useCallback(async () => {
-    if (!currentProject) {
-      setAnnotations([]);
-      return;
-    }
-    try {
-      if (currentDocument) {
-        const response = await listDocumentAnnotations(currentProject.id, currentDocument.id);
-        setAnnotations(response.annotations);
-      } else {
-        const response = await listProjectAnnotations(currentProject.id);
-        setAnnotations(response.annotations);
-      }
-    } catch (err) {
-      console.error('Failed to load annotations:', err);
-      setAnnotations([]);
-    }
-  }, [currentProject, currentDocument]);
-
-  useEffect(() => {
-    loadAnnotations();
-  }, [loadAnnotations]);
+  // Shared annotation hook - single source of truth for all annotation state
+  const annotationHook = useAnnotations({
+    projectId: currentProject?.id || null,
+    documentId: currentDocument?.id || null,
+    currentPage,
+  });
 
   // Load documents when project changes
   const loadDocuments = useCallback(async () => {
@@ -703,6 +685,7 @@ function App() {
           onOpenDocument={handleOpenDocumentFromDashboard}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onProjectChange={setCurrentProject}
+          initialProject={currentProject}
         />
         {/* Settings Panel - available on dashboard too */}
         <SettingsPanel
@@ -841,7 +824,7 @@ function App() {
                   onPdfReady={handlePdfReady}
                   targetPage={targetPage}
                   onPageChange={setCurrentPage}
-                  annotations={annotations}
+                  annotations={annotationHook.annotations}
                   selectedAnnotation={selectedAnnotation}
                   showChunks={activeTab === 'parse' || activeTab === 'review' || activeTab === 'chat' || activeTab === 'compliance' || focusMode}
                   showAnnotations={activeTab === 'review' && !focusMode && showReviewOverlays}
@@ -927,7 +910,7 @@ function App() {
                       setTargetPage(1);
                     }
                   }}
-                  onAnnotationsChange={loadAnnotations}
+                  annotationHook={annotationHook}
                   file={file}
                   chunks={parseResult?.chunks}
                 />
@@ -1003,6 +986,7 @@ function App() {
                 currentProject={currentProject}
                 currentDocument={currentDocument}
                 currentPage={currentPage}
+                annotationHook={annotationHook}
                 onAnnotationSelect={(annotation) => {
                   // Enter focus mode to show only this annotation
                   setFocusMode(true);

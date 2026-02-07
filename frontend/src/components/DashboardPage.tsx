@@ -21,12 +21,14 @@ interface DashboardPageProps {
   onOpenDocument: (project: Project, documentId: string) => void;
   onOpenSettings: () => void;
   onProjectChange?: (project: Project | null) => void;
+  initialProject?: Project | null;
 }
 
 export default function DashboardPage({
   onOpenDocument,
   onOpenSettings,
   onProjectChange,
+  initialProject,
 }: DashboardPageProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
@@ -94,12 +96,13 @@ export default function DashboardPage({
         setIsLoading(true);
         const response = await listProjects();
         setProjects(response.projects);
-        // Auto-select first project - the loadDocuments effect will handle loading docs
-        if (response.projects.length > 0) {
-          const firstProject = response.projects[0];
-          setSelectedProject(firstProject);
-          // Note: Don't load documents here - the useEffect with loadDocuments will handle it
-          // This prevents duplicate requests and race conditions
+        // If we have an initialProject (e.g. navigating back), try to match it
+        if (initialProject && response.projects.some(p => p.id === initialProject.id)) {
+          const matched = response.projects.find(p => p.id === initialProject.id);
+          setSelectedProject(matched || response.projects[0]);
+        } else if (response.projects.length > 0) {
+          // Auto-select first project - the loadDocuments effect will handle loading docs
+          setSelectedProject(response.projects[0]);
         }
       } catch (err) {
         console.error('Failed to load projects:', err);
@@ -655,7 +658,7 @@ export default function DashboardPage({
                     </svg>
                   </button>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -664,70 +667,76 @@ export default function DashboardPage({
                     className="hidden"
                     multiple
                   />
-                  {/* Selection indicator */}
-                  {selectedDocIds.size > 0 && (
-                    <span className={`text-sm ${theme.textMuted}`}>
-                      {selectedDocIds.size} selected
-                    </span>
-                  )}
-                  {/* Process Button / Cancel Processing Button */}
-                  {isProcessing ? (
-                    <button
-                      onClick={handleCancelBatchJob}
-                      className="px-4 py-2 rounded-full transition-colors flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white"
-                      title="Cancel processing"
-                    >
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                      <span>Cancel</span>
-                      {activeBatchJob && (
-                        <span className="text-xs opacity-80">
-                          ({activeBatchJob.completed_documents}/{activeBatchJob.total_documents})
-                        </span>
-                      )}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleProcessSelected()}
-                      disabled={selectedDocIds.size === 0}
-                      className={`px-4 py-2 rounded-full transition-colors flex items-center gap-2 disabled:opacity-50 border ${
-                        isDark
-                          ? 'bg-transparent border-slate-600 text-slate-300 hover:bg-slate-700/50 hover:border-slate-500'
-                          : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
-                      }`}
-                      title={selectedDocIds.size === 0 ? 'Select documents to process' : `Process ${selectedDocIds.size} selected document(s)`}
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      <span>Process</span>
-                    </button>
-                  )}
-                  {/* Run Checks Button */}
-                  <button
-                    onClick={() => handleRunChecksSelected()}
-                    disabled={isRunningBatchCheck || selectedDocIds.size === 0}
-                    className={`px-4 py-2 rounded-full transition-colors flex items-center gap-2 disabled:opacity-50 border ${
-                      isDark
-                        ? 'bg-transparent border-slate-600 text-slate-300 hover:bg-slate-700/50 hover:border-slate-500'
-                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
-                    }`}
-                    title={selectedDocIds.size === 0 ? 'Select documents to run checks' : `Run checks on ${selectedDocIds.size} selected document(s)`}
-                  >
-                    {isRunningBatchCheck ? (
-                      <>
+
+                  {/* Group A: Selection-dependent actions */}
+                  <div className="flex items-center gap-2">
+                    {isProcessing ? (
+                      <button
+                        onClick={handleCancelBatchJob}
+                        className="px-4 py-2 rounded-full transition-colors flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white"
+                        title="Cancel processing"
+                      >
                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                        <span>Running...</span>
+                        <span>Cancel</span>
+                        {activeBatchJob && (
+                          <span className="text-xs opacity-80">
+                            ({activeBatchJob.completed_documents}/{activeBatchJob.total_documents})
+                          </span>
+                        )}
+                      </button>
+                    ) : selectedDocIds.size > 0 ? (
+                      <>
+                        <span className={`text-sm ${theme.textMuted}`}>
+                          {selectedDocIds.size} selected
+                        </span>
+                        <button
+                          onClick={() => handleProcessSelected()}
+                          className={`px-4 py-2 rounded-full transition-colors flex items-center gap-2 border ${
+                            isDark
+                              ? 'bg-transparent border-slate-600 text-slate-300 hover:bg-slate-700/50 hover:border-slate-500'
+                              : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
+                          }`}
+                          title={`Process ${selectedDocIds.size} selected document(s)`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          <span>Process</span>
+                        </button>
+                        <button
+                          onClick={() => handleRunChecksSelected()}
+                          disabled={isRunningBatchCheck}
+                          className={`px-4 py-2 rounded-full transition-colors flex items-center gap-2 disabled:opacity-50 border ${
+                            isDark
+                              ? 'bg-transparent border-slate-600 text-slate-300 hover:bg-slate-700/50 hover:border-slate-500'
+                              : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
+                          }`}
+                          title={`Run checks on ${selectedDocIds.size} selected document(s)`}
+                        >
+                          {isRunningBatchCheck ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                              <span>Running...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                              </svg>
+                              <span>Run Checks</span>
+                            </>
+                          )}
+                        </button>
                       </>
                     ) : (
-                      <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                        </svg>
-                        <span>Run Checks</span>
-                      </>
+                      <span className={`text-xs ${theme.textMuted} italic`}>Select documents to process</span>
                     )}
-                  </button>
-                  {/* Review Report Button */}
+                  </div>
+
+                  {/* Divider */}
+                  <div className={`w-px h-6 ${isDark ? 'bg-slate-600/50' : 'bg-slate-300'}`} />
+
+                  {/* Group B: Project actions */}
                   <button
                     onClick={handleDownloadReviewReport}
                     disabled={documents.length === 0}
@@ -743,7 +752,11 @@ export default function DashboardPage({
                     </svg>
                     <span>Report</span>
                   </button>
-                  {/* Upload Button */}
+
+                  {/* Divider */}
+                  <div className={`w-px h-6 ${isDark ? 'bg-slate-600/50' : 'bg-slate-300'}`} />
+
+                  {/* Group C: Primary CTA */}
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}

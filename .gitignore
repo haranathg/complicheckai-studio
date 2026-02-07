@@ -78,3 +78,6 @@ infrastructure/
 
 # Scripts
 check_aws_conflicts.sh
+
+# UI mockups
+ui-mockups/

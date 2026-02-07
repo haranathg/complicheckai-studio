@@ -1,7 +1,7 @@
 /**
  * Shared UI Components - Polished, reusable components for consistent design
  */
-import { forwardRef } from 'react';
+import { forwardRef, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useTheme, getThemeStyles } from '../../contexts/ThemeContext';
 
@@ -516,13 +516,162 @@ export function Progress({ value, max = 100, size = 'md', variant = 'default' }:
         ${isDark ? 'bg-slate-800' : 'bg-slate-200'}
       `}
     >
-      <div 
+      <div
         className={`${sizeClasses[size]} rounded-full transition-all duration-500 ease-out`}
         style={{
           width: `${percentage}%`,
           background: variantGradients[variant],
         }}
       />
+    </div>
+  );
+}
+
+// ============================================================================
+// SegmentedControl - Unified toggle/switch component
+// ============================================================================
+
+interface SegmentedControlOption<T extends string> {
+  value: T;
+  label: string;
+  disabled?: boolean;
+  badge?: string | number;
+}
+
+interface SegmentedControlProps<T extends string> {
+  options: SegmentedControlOption<T>[];
+  value: T;
+  onChange: (value: T) => void;
+  size?: 'sm' | 'md';
+}
+
+export function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  size = 'sm',
+}: SegmentedControlProps<T>) {
+  const { isDark } = useTheme();
+
+  const containerClass = size === 'sm'
+    ? 'rounded-lg p-0.5'
+    : 'rounded-lg p-1';
+
+  const buttonClass = size === 'sm'
+    ? 'px-2.5 py-1 text-xs rounded-md'
+    : 'px-3 py-1.5 text-sm rounded-md';
+
+  return (
+    <div className={`flex items-center ${containerClass} ${isDark ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          onClick={() => !option.disabled && onChange(option.value)}
+          disabled={option.disabled}
+          className={`${buttonClass} font-medium transition-all flex items-center gap-1 ${
+            value === option.value
+              ? isDark
+                ? 'bg-slate-700 text-white shadow-sm'
+                : 'bg-white text-slate-800 shadow-sm'
+              : option.disabled
+                ? isDark ? 'text-slate-600 cursor-not-allowed' : 'text-slate-400 cursor-not-allowed'
+                : isDark
+                  ? 'text-gray-400 hover:text-gray-300'
+                  : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          {option.label}
+          {option.badge !== undefined && (
+            <span className={`text-[10px] px-1 rounded ${
+              isDark ? 'bg-slate-600 text-gray-300' : 'bg-slate-200 text-slate-600'
+            }`}>
+              {option.badge}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// FilterPillGroup - Pill-style filter buttons with optional color coding
+// ============================================================================
+
+interface FilterPillOption<T extends string | number> {
+  value: T;
+  label: string;
+  color?: string;
+  count?: number;
+  icon?: ReactNode;
+}
+
+interface FilterPillGroupProps<T extends string | number> {
+  options: FilterPillOption<T>[];
+  selected: T | null;
+  onChange: (value: T | null) => void;
+  allowDeselect?: boolean;
+  size?: 'sm' | 'md';
+}
+
+export function FilterPillGroup<T extends string | number>({
+  options,
+  selected,
+  onChange,
+  allowDeselect = true,
+  size = 'sm',
+}: FilterPillGroupProps<T>) {
+  const { isDark } = useTheme();
+
+  const handleClick = useCallback((value: T) => {
+    if (selected === value && allowDeselect) {
+      onChange(null);
+    } else {
+      onChange(value);
+    }
+  }, [selected, allowDeselect, onChange]);
+
+  const buttonClass = size === 'sm'
+    ? 'px-2 py-1 text-xs rounded-full'
+    : 'px-3 py-1.5 text-sm rounded-full';
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((option) => {
+        const isActive = selected === option.value;
+        const pillColor = option.color;
+
+        return (
+          <button
+            key={String(option.value)}
+            onClick={() => handleClick(option.value)}
+            className={`${buttonClass} font-medium transition-all flex items-center gap-1 border ${
+              isActive
+                ? pillColor
+                  ? 'text-white border-transparent'
+                  : isDark
+                    ? 'bg-sky-600 text-white border-sky-600'
+                    : 'bg-sky-500 text-white border-sky-500'
+                : isDark
+                  ? 'bg-transparent border-slate-600 text-slate-400 hover:border-slate-500 hover:text-slate-300'
+                  : 'bg-transparent border-slate-300 text-slate-600 hover:border-slate-400 hover:text-slate-700'
+            }`}
+            style={isActive && pillColor ? { backgroundColor: pillColor, borderColor: pillColor } : undefined}
+          >
+            {option.icon}
+            {option.label}
+            {option.count !== undefined && (
+              <span className={`text-[10px] px-1 rounded-full ${
+                isActive
+                  ? 'bg-white/20'
+                  : isDark ? 'bg-slate-700' : 'bg-slate-200'
+              }`}>
+                {option.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

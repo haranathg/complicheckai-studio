@@ -4,6 +4,7 @@ import type { Chunk, ChatMessage, ChunkReference } from '../types/ade';
 import type { Document } from '../types/project';
 import { API_URL } from '../config';
 import { useTheme } from '../contexts/ThemeContext';
+import { SegmentedControl } from './ui';
 
 // Document context for multi-document chat
 interface DocumentContext {
@@ -200,44 +201,19 @@ export default function ChatPanel({
           </h4>
           {/* Scope toggle - only show if multiple documents available */}
           {hasMultipleDocuments && (
-            <div className={`flex items-center rounded-lg p-0.5 ${isDark ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
-              <button
-                onClick={() => {
-                  setChatScope('current');
+            <SegmentedControl
+              options={[
+                { value: 'current', label: 'Current' },
+                { value: 'all', label: 'All Docs', badge: allDocuments?.length || 0 },
+              ]}
+              value={chatScope}
+              onChange={(scope) => {
+                if (scope === 'current') {
                   setDocumentContexts([]); // Clear cached contexts when switching
-                }}
-                className={`px-2.5 py-1 text-xs rounded-md transition-all ${
-                  chatScope === 'current'
-                    ? isDark
-                      ? 'bg-slate-700 text-white shadow-sm'
-                      : 'bg-white text-slate-800 shadow-sm'
-                    : isDark
-                      ? 'text-gray-400 hover:text-gray-300'
-                      : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Current
-              </button>
-              <button
-                onClick={() => setChatScope('all')}
-                className={`px-2.5 py-1 text-xs rounded-md transition-all flex items-center gap-1 ${
-                  chatScope === 'all'
-                    ? isDark
-                      ? 'bg-slate-700 text-white shadow-sm'
-                      : 'bg-white text-slate-800 shadow-sm'
-                    : isDark
-                      ? 'text-gray-400 hover:text-gray-300'
-                      : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                All Docs
-                <span className={`text-[10px] px-1 rounded ${
-                  isDark ? 'bg-slate-600 text-gray-300' : 'bg-slate-200 text-slate-600'
-                }`}>
-                  {allDocuments?.length || 0}
-                </span>
-              </button>
-            </div>
+                }
+                setChatScope(scope);
+              }}
+            />
           )}
           {isLoadingDocs && (
             <div className="flex items-center gap-1.5">

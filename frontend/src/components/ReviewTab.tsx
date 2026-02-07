@@ -1,25 +1,16 @@
 /**
  * Review Tab - Document review with annotations and view modes
+ * Consumes useAnnotations hook for state management (shared with AnnotationPanel)
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 import type { Project, Document } from '../types/project';
 import type { Chunk } from '../types/ade';
 import type { Annotation, AnnotationCreate, AnnotationLevel } from '../types/annotation';
 import { ANNOTATION_COLORS, ANNOTATION_BORDER_COLORS } from '../types/annotation';
-import {
-  listDocumentAnnotations,
-  listProjectAnnotations,
-  createAnnotation,
-  updateAnnotation,
-  deleteAnnotation,
-  resolveAnnotation,
-} from '../services/annotationService';
-import { downloadPDFWithAnnotations } from '../utils/pdfExport';
 import { updateDocumentReview } from '../services/projectService';
-import { Modal, Button } from './ui';
-
-export type ViewMode = 'page' | 'document' | 'project';
+import { Modal, Button, SegmentedControl } from './ui';
+import type { UseAnnotationsReturn, ViewMode } from '../hooks/useAnnotations';
 
 interface ReviewTabProps {
   currentProject: Project | null;
@@ -29,6 +20,7 @@ interface ReviewTabProps {
   onCreateAnnotation?: (position: { page: number; bbox: { left: number; top: number; right: number; bottom: number } }) => void;
   file?: File | null;
   chunks?: Chunk[];
+  annotationHook: UseAnnotationsReturn;
 }
 
 export default function ReviewTab({
@@ -38,19 +30,17 @@ export default function ReviewTab({
   onAnnotationSelect,
   file,
   chunks = [],
+  annotationHook,
 }: ReviewTabProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
 
+  // Local UI state only — no annotation data state
   const [viewMode, setViewMode] = useState<ViewMode>('page');
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [newAnnotation, setNewAnnotation] = useState<Partial<AnnotationCreate>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [isExporting, setIsExporting] = useState(false);
   const [deleteAnnotationId, setDeleteAnnotationId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [reviewStatus, setReviewStatus] = useState<'not_reviewed' | 'needs_info' | 'ok'>('not_reviewed');
@@ -72,123 +62,59 @@ export default function ReviewTab({
     }
   };
 
-  // Load annotations based on view mode
-  const loadAnnotations = useCallback(async () => {
-    if (!currentProject) {
-      setAnnotations([]);
-      return;
-    }
+  // Get filtered annotations from the shared hook
+  const annotations = annotationHook.viewAnnotations(viewMode, filterStatus, currentPage);
+  const { isLoading, error, isExporting } = annotationHook;
 
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      let response;
-      if (viewMode === 'project') {
-        response = await listProjectAnnotations(currentProject.id, {
-          status: filterStatus !== 'all' ? filterStatus : undefined,
-        });
-      } else if (currentDocument) {
-        response = await listDocumentAnnotations(currentProject.id, currentDocument.id, {
-          status: filterStatus !== 'all' ? filterStatus : undefined,
-          page_number: viewMode === 'page' ? currentPage : undefined,
-        });
-      } else {
-        setAnnotations([]);
-        return;
-      }
-
-      setAnnotations(response.annotations);
-    } catch (err) {
-      console.error('Failed to load annotations:', err);
-      setError('Failed to load annotations');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentProject, currentDocument, viewMode, currentPage, filterStatus]);
-
-  useEffect(() => {
-    loadAnnotations();
-  }, [loadAnnotations]);
-
-  // Create new annotation
+  // Create new annotation via hook
   const handleCreateAnnotation = async () => {
     if (!currentProject || !newAnnotation.text) return;
 
-    try {
-      const level = newAnnotation.level || 'page';
-      const annotation = await createAnnotation(currentProject.id, {
-        document_id: currentDocument?.id,
-        level,
-        page_number: level === 'page' ? currentPage : undefined,
-        text: newAnnotation.text,
-        title: newAnnotation.title,
-        annotation_type: newAnnotation.annotation_type || 'comment',
-        priority: newAnnotation.priority || 'normal',
-      });
+    const level = newAnnotation.level || 'page';
+    const result = await annotationHook.create({
+      document_id: currentDocument?.id,
+      level,
+      page_number: level === 'page' ? currentPage : undefined,
+      text: newAnnotation.text,
+      title: newAnnotation.title,
+      annotation_type: newAnnotation.annotation_type || 'comment',
+      priority: newAnnotation.priority || 'normal',
+    });
 
-      setAnnotations(prev => [annotation, ...prev]);
+    if (result) {
       setIsCreating(false);
       setNewAnnotation({});
-    } catch (err) {
-      console.error('Failed to create annotation:', err);
-      setError('Failed to create annotation');
     }
   };
 
-  // Update annotation
+  // Update annotation via hook
   const handleUpdateAnnotation = async (id: string, updates: Partial<Annotation>) => {
-    try {
-      const updated = await updateAnnotation(id, updates);
-      setAnnotations(prev => prev.map(a => a.id === id ? updated : a));
+    const result = await annotationHook.update(id, updates);
+    if (result) {
       setEditingId(null);
-    } catch (err) {
-      console.error('Failed to update annotation:', err);
     }
   };
 
-  // Delete annotation
+  // Delete annotation via hook
   const handleDeleteAnnotation = async (id: string) => {
     setIsDeleting(true);
-    try {
-      await deleteAnnotation(id);
-      setAnnotations(prev => prev.filter(a => a.id !== id));
+    const success = await annotationHook.remove(id);
+    if (success) {
       setDeleteAnnotationId(null);
-    } catch (err) {
-      console.error('Failed to delete annotation:', err);
-    } finally {
-      setIsDeleting(false);
     }
+    setIsDeleting(false);
   };
 
-  // Resolve annotation
+  // Resolve annotation via hook
   const handleResolveAnnotation = async (id: string) => {
-    try {
-      const updated = await resolveAnnotation(id);
-      setAnnotations(prev => prev.map(a => a.id === id ? updated : a));
-    } catch (err) {
-      console.error('Failed to resolve annotation:', err);
-    }
+    await annotationHook.resolve(id);
   };
 
-  // Export PDF with annotations
+  // Export PDF via hook
   const handleExportPDF = async () => {
-    if (!file || annotations.length === 0) return;
-
-    setIsExporting(true);
-    try {
-      const docName = currentDocument?.original_filename || currentDocument?.filename || file.name;
-      const baseName = docName.replace('.pdf', '');
-      const now = new Date();
-      const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-      const filename = `${baseName}_annotated_${timestamp}.pdf`;
-      await downloadPDFWithAnnotations(file, annotations, chunks, filename);
-    } catch (err) {
-      console.error('Failed to export PDF:', err);
-      setError('Failed to export PDF with annotations');
-    } finally {
-      setIsExporting(false);
-    }
+    if (!file || annotationHook.annotations.length === 0) return;
+    const docName = currentDocument?.original_filename || currentDocument?.filename || file.name;
+    await annotationHook.exportPDF(file, chunks, docName);
   };
 
   const getLevelIcon = (level: AnnotationLevel) => {
@@ -224,28 +150,24 @@ export default function ReviewTab({
 
   return (
     <div className="h-full flex flex-col">
-      {/* View mode selector */}
-      <div className={`px-4 py-3 border-b ${theme.border} ${isDark ? 'bg-slate-800/30' : 'bg-slate-50'}`}>
-        <div className="flex items-center justify-between mb-3">
+      {/* Header - Two-row layout */}
+      <div className={`px-4 py-3 border-b ${theme.border} ${isDark ? 'bg-slate-800/30' : 'bg-slate-50'} space-y-2`}>
+        {/* Row 1: View mode toggle | Review status + Add Note */}
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className={`text-sm font-medium ${theme.textSecondary}`}>View:</span>
-            <div className={`flex rounded-lg overflow-hidden border ${theme.border}`}>
-              {(['page', 'document', 'project'] as ViewMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                    viewMode === mode
-                      ? isDark ? 'bg-sky-600 text-white' : 'bg-sky-500 text-white'
-                      : `${theme.textMuted} hover:${theme.textSecondary}`
-                  }`}
-                  disabled={mode === 'page' && !currentDocument}
-                >
-                  {mode === 'page' ? 'Current Page' : mode === 'document' ? 'Document' : 'Project'}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              options={[
+                { value: 'page' as ViewMode, label: 'Current Page', disabled: !currentDocument },
+                { value: 'document' as ViewMode, label: 'Document' },
+                { value: 'project' as ViewMode, label: 'Project' },
+              ]}
+              value={viewMode}
+              onChange={setViewMode}
+            />
+          </div>
 
+          <div className="flex items-center gap-2">
             {/* Review Status Dropdown */}
             {currentDocument && (
               <select
@@ -263,43 +185,6 @@ export default function ReviewTab({
                 <option value="needs_info">Needs Info</option>
                 <option value="ok">OK</option>
               </select>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className={`text-xs px-2 py-1 rounded border ${theme.border} ${isDark ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-700'}`}
-            >
-              <option value="all">All Status</option>
-              <option value="open">Open</option>
-              <option value="resolved">Resolved</option>
-            </select>
-
-{/* Export PDF button */}
-            {file && annotations.length > 0 && (
-              <button
-                onClick={handleExportPDF}
-                disabled={isExporting}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1 ${
-                  isExporting
-                    ? 'opacity-50 cursor-not-allowed'
-                    : isDark
-                      ? 'bg-green-600 hover:bg-green-500 text-white'
-                      : 'bg-green-500 hover:bg-green-600 text-white'
-                }`}
-                title="Export PDF with annotations"
-              >
-                {isExporting ? (
-                  <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent" />
-                ) : (
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                )}
-                Export PDF
-              </button>
             )}
 
             <button
@@ -319,17 +204,56 @@ export default function ReviewTab({
           </div>
         </div>
 
-        {/* Summary stats */}
-        <div className={`flex items-center gap-4 text-xs ${theme.textMuted}`}>
-          <span>{annotations.length} annotation{annotations.length !== 1 ? 's' : ''}</span>
-          <span>{annotations.filter(a => a.status === 'open').length} open</span>
-          <span>{annotations.filter(a => a.status === 'resolved').length} resolved</span>
-          {/* Subtle loading indicator when refreshing with existing annotations */}
-          {isLoading && annotations.length > 0 && (
-            <svg className="animate-spin h-3 w-3 ml-2" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
+        {/* Row 2: Filter | Stats | Export PDF */}
+        <div className="flex items-center justify-between">
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className={`text-xs px-2 py-1 rounded border ${theme.border} ${isDark ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-700'}`}
+          >
+            <option value="all">All Status</option>
+            <option value="open">Open</option>
+            <option value="resolved">Resolved</option>
+          </select>
+
+          {/* Summary stats */}
+          <div className={`flex items-center gap-3 text-xs ${theme.textMuted}`}>
+            <span>{annotations.length} annotation{annotations.length !== 1 ? 's' : ''}</span>
+            <span>{annotationHook.openCount} open</span>
+            <span>{annotationHook.resolvedCount} resolved</span>
+            {isLoading && annotations.length > 0 && (
+              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            )}
+          </div>
+
+          {/* Export PDF button */}
+          {file && annotationHook.annotations.length > 0 ? (
+            <button
+              onClick={handleExportPDF}
+              disabled={isExporting}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1 ${
+                isExporting
+                  ? 'opacity-50 cursor-not-allowed'
+                  : isDark
+                    ? 'bg-green-600 hover:bg-green-500 text-white'
+                    : 'bg-green-500 hover:bg-green-600 text-white'
+              }`}
+              title="Export PDF with annotations"
+            >
+              {isExporting ? (
+                <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent" />
+              ) : (
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              )}
+              Export PDF
+            </button>
+          ) : (
+            <div />
           )}
         </div>
       </div>

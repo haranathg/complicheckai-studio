@@ -1,20 +1,15 @@
 /**
  * AnnotationPanel - Compact annotation panel that sits below the PDF viewer
  * Shows annotations for the current document/page with quick add functionality
+ * Consumes useAnnotations hook for state management (shared with ReviewTab)
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 import type { Project, Document } from '../types/project';
 import type { Chunk } from '../types/ade';
 import type { Annotation, AnnotationLevel } from '../types/annotation';
 import { ANNOTATION_COLORS, ANNOTATION_BORDER_COLORS } from '../types/annotation';
-import {
-  listDocumentAnnotations,
-  createAnnotation,
-  deleteAnnotation,
-  resolveAnnotation,
-} from '../services/annotationService';
-import { downloadPDFWithAnnotations } from '../utils/pdfExport';
+import type { UseAnnotationsReturn } from '../hooks/useAnnotations';
 
 interface AnnotationPanelProps {
   currentProject: Project | null;
@@ -23,7 +18,7 @@ interface AnnotationPanelProps {
   prefilledChunk?: Chunk | null;
   onClearPrefilledChunk?: () => void;
   onAnnotationClick?: (annotation: Annotation) => void;
-  onAnnotationsChange?: () => void;
+  annotationHook: UseAnnotationsReturn;
   file?: File | null;
   chunks?: Chunk[];
 }
@@ -35,20 +30,18 @@ export default function AnnotationPanel({
   prefilledChunk,
   onClearPrefilledChunk,
   onAnnotationClick,
-  onAnnotationsChange,
+  annotationHook,
   file,
   chunks = [],
 }: AnnotationPanelProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
 
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  // Local UI state only
   const [isExpanded, setIsExpanded] = useState(true);
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [noteLevel, setNoteLevel] = useState<AnnotationLevel>('page');
-  const [isExporting, setIsExporting] = useState(false);
 
   // When a prefilled chunk comes in, open the add note form
   useEffect(() => {
@@ -58,76 +51,37 @@ export default function AnnotationPanel({
     }
   }, [prefilledChunk]);
 
-  // Load annotations for current document/page
-  const loadAnnotations = useCallback(async () => {
-    if (!currentProject || !currentDocument) {
-      setAnnotations([]);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const response = await listDocumentAnnotations(currentProject.id, currentDocument.id);
-      setAnnotations(response.annotations);
-    } catch (err) {
-      console.error('Failed to load annotations:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentProject, currentDocument]);
-
-  useEffect(() => {
-    loadAnnotations();
-  }, [loadAnnotations]);
-
-  // Filter annotations for current page
-  const pageAnnotations = annotations.filter(
-    a => a.level === 'page' && a.page_number === currentPage
-  );
-  const docAnnotations = annotations.filter(a => a.level === 'document');
+  // Get annotations from shared hook
+  const pageAnnotations = annotationHook.pageAnnotations(currentPage);
+  const docAnnotations = annotationHook.documentAnnotations;
+  const { isLoading, isExporting } = annotationHook;
 
   const handleAddNote = async () => {
     if (!currentProject || !noteText.trim()) return;
 
-    try {
-      const annotation = await createAnnotation(currentProject.id, {
-        document_id: currentDocument?.id,
-        chunk_id: prefilledChunk?.id,
-        level: noteLevel,
-        page_number: noteLevel === 'page' ? currentPage : undefined,
-        text: noteText,
-        annotation_type: 'comment',
-        priority: 'normal',
-      });
+    const result = await annotationHook.create({
+      document_id: currentDocument?.id,
+      chunk_id: prefilledChunk?.id,
+      level: noteLevel,
+      page_number: noteLevel === 'page' ? currentPage : undefined,
+      text: noteText,
+      annotation_type: 'comment',
+      priority: 'normal',
+    });
 
-      setAnnotations(prev => [annotation, ...prev]);
+    if (result) {
       setNoteText('');
       setIsAddingNote(false);
       onClearPrefilledChunk?.();
-      onAnnotationsChange?.();
-    } catch (err) {
-      console.error('Failed to create annotation:', err);
     }
   };
 
   const handleDeleteAnnotation = async (id: string) => {
-    try {
-      await deleteAnnotation(id);
-      setAnnotations(prev => prev.filter(a => a.id !== id));
-      onAnnotationsChange?.();
-    } catch (err) {
-      console.error('Failed to delete annotation:', err);
-    }
+    await annotationHook.remove(id);
   };
 
   const handleResolveAnnotation = async (id: string) => {
-    try {
-      const updated = await resolveAnnotation(id);
-      setAnnotations(prev => prev.map(a => a.id === id ? updated : a));
-      onAnnotationsChange?.();
-    } catch (err) {
-      console.error('Failed to resolve annotation:', err);
-    }
+    await annotationHook.resolve(id);
   };
 
   const cancelAddNote = () => {
@@ -137,21 +91,9 @@ export default function AnnotationPanel({
   };
 
   const handleExportPDF = async () => {
-    if (!file || annotations.length === 0) return;
-
-    setIsExporting(true);
-    try {
-      const docName = currentDocument?.original_filename || currentDocument?.filename || file.name;
-      const baseName = docName.replace('.pdf', '');
-      const now = new Date();
-      const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-      const filename = `${baseName}_annotated_${timestamp}.pdf`;
-      await downloadPDFWithAnnotations(file, annotations, chunks, filename);
-    } catch (err) {
-      console.error('Failed to export PDF:', err);
-    } finally {
-      setIsExporting(false);
-    }
+    if (!file || annotationHook.annotations.length === 0) return;
+    const docName = currentDocument?.original_filename || currentDocument?.filename || file.name;
+    await annotationHook.exportPDF(file, chunks, docName);
   };
 
   if (!currentProject || !currentDocument) {
@@ -193,7 +135,7 @@ export default function AnnotationPanel({
             </span>
           )}
           {/* Export PDF button - more visible */}
-          {file && annotations.length > 0 && (
+          {file && annotationHook.annotations.length > 0 && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
