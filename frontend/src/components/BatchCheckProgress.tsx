@@ -32,8 +32,10 @@ export default function BatchCheckProgress({
 
         const isTerminal = status.status === 'completed' || status.status === 'completed_with_errors' || status.status === 'failed' || status.status === 'cancelled';
         // Treat runs stuck processing for over 30 minutes as stale
-        const isStale = (status.status === 'processing' || status.status === 'pending') && status.started_at
-          && (Date.now() - new Date(status.started_at).getTime() > 30 * 60 * 1000);
+        // Append Z to treat backend timestamps as UTC
+        const startedAtUtc = status.started_at && !status.started_at.endsWith('Z') ? status.started_at + 'Z' : status.started_at;
+        const isStale = (status.status === 'processing' || status.status === 'pending') && startedAtUtc
+          && (Date.now() - new Date(startedAtUtc).getTime() > 30 * 60 * 1000);
         if (isTerminal || isStale) {
           setIsPolling(false);
           onComplete?.();
@@ -85,8 +87,9 @@ export default function BatchCheckProgress({
     );
   }
 
-  const isStale = (batchRun.status === 'processing' || batchRun.status === 'pending') && batchRun.started_at
-    && (Date.now() - new Date(batchRun.started_at).getTime() > 30 * 60 * 1000);
+  const startedAtUtc = batchRun.started_at && !batchRun.started_at.endsWith('Z') ? batchRun.started_at + 'Z' : batchRun.started_at;
+  const isStale = (batchRun.status === 'processing' || batchRun.status === 'pending') && startedAtUtc
+    && (Date.now() - new Date(startedAtUtc).getTime() > 30 * 60 * 1000);
   const isRunning = (batchRun.status === 'pending' || batchRun.status === 'processing') && !isStale;
   const isComplete = batchRun.status === 'completed' || batchRun.status === 'completed_with_errors';
   const isFailed = batchRun.status === 'failed' || isStale;

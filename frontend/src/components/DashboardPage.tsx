@@ -239,8 +239,10 @@ export default function DashboardPage({
       const activeCheckRun = batchRuns.runs.find(run => {
         if (run.status !== 'processing' && run.status !== 'pending') return false;
         // Skip stale runs: no progress after 5 min, or any run older than 30 min
+        // Append Z to treat backend timestamps as UTC
         if (run.created_at) {
-          const age = Date.now() - new Date(run.created_at).getTime();
+          const ts = run.created_at.endsWith('Z') ? run.created_at : run.created_at + 'Z';
+          const age = Date.now() - new Date(ts).getTime();
           if (age > 30 * 60 * 1000) return false;
           if (age > 5 * 60 * 1000 && run.completed_documents === 0) return false;
         }
