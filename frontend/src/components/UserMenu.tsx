@@ -12,6 +12,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth, type UserRole } from '../contexts/AuthContext';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
+import ChecksHelpModal from './ChecksHelpModal';
 
 // Role badge colors - more refined palette
 const ROLE_COLORS: Record<UserRole, { 
@@ -56,6 +57,7 @@ export default function UserMenu({ compact = false, className = '' }: UserMenuPr
 
   const [isOpen, setIsOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isChecksHelpOpen, setIsChecksHelpOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close menu when clicking outside
@@ -101,6 +103,7 @@ export default function UserMenu({ compact = false, className = '' }: UserMenuPr
   };
 
   return (
+    <>
     <div ref={menuRef} className={`relative ${className}`}>
       {/* User Button */}
       <button
@@ -236,6 +239,27 @@ export default function UserMenu({ compact = false, className = '' }: UserMenuPr
               Account Settings
             </button>
 
+            {/* Checks Reference */}
+            <button
+              className={`
+                w-full flex items-center gap-3 px-4 py-2.5 text-sm
+                transition-colors duration-150
+                ${isDark
+                  ? 'text-slate-300 hover:bg-slate-800/60'
+                  : 'text-slate-700 hover:bg-slate-50'
+                }
+              `}
+              onClick={() => {
+                setIsChecksHelpOpen(true);
+                setIsOpen(false);
+              }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+              Checks Reference
+            </button>
+
             {/* Divider */}
             <div className={`my-1.5 border-t ${theme.border}`} />
 
@@ -265,5 +289,7 @@ export default function UserMenu({ compact = false, className = '' }: UserMenuPr
         </div>
       )}
     </div>
+    <ChecksHelpModal isOpen={isChecksHelpOpen} onClose={() => setIsChecksHelpOpen(false)} />
+    </>
   );
 }

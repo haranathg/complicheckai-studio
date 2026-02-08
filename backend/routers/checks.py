@@ -21,6 +21,18 @@ from routers.compliance import get_bedrock_client, resolve_model_id
 router = APIRouter()
 
 
+@router.get("/config")
+async def get_checks_config():
+    """Return checks configuration for help/documentation."""
+    from services.config_service import get_page_types, get_checks_v3
+    page_types = get_page_types()
+    checks = get_checks_v3()
+    return {
+        "page_types": page_types,
+        "checks": checks,
+    }
+
+
 class RunChecksRequest(BaseModel):
     force_reclassify: bool = False
 
