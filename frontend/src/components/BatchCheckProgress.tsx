@@ -30,7 +30,11 @@ export default function BatchCheckProgress({
         const status = await getBatchRunStatus(batchRunId);
         setBatchRun(status);
 
-        if (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled') {
+        const isTerminal = status.status === 'completed' || status.status === 'completed_with_errors' || status.status === 'failed' || status.status === 'cancelled';
+        // Treat runs stuck processing for over 30 minutes as stale
+        const isStale = (status.status === 'processing' || status.status === 'pending') && status.started_at
+          && (Date.now() - new Date(status.started_at).getTime() > 30 * 60 * 1000);
+        if (isTerminal || isStale) {
           setIsPolling(false);
           onComplete?.();
         }
@@ -81,9 +85,11 @@ export default function BatchCheckProgress({
     );
   }
 
-  const isRunning = batchRun.status === 'pending' || batchRun.status === 'processing';
-  const isComplete = batchRun.status === 'completed';
-  const isFailed = batchRun.status === 'failed';
+  const isStale = (batchRun.status === 'processing' || batchRun.status === 'pending') && batchRun.started_at
+    && (Date.now() - new Date(batchRun.started_at).getTime() > 30 * 60 * 1000);
+  const isRunning = (batchRun.status === 'pending' || batchRun.status === 'processing') && !isStale;
+  const isComplete = batchRun.status === 'completed' || batchRun.status === 'completed_with_errors';
+  const isFailed = batchRun.status === 'failed' || isStale;
 
   return (
     <div className={`

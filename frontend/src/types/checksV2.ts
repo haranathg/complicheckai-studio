@@ -185,7 +185,7 @@ export interface BatchCheckRequest {
 
 export interface BatchCheckRun {
   id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  status: 'pending' | 'processing' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelled';
   progress: {
     total: number;
     completed: number;

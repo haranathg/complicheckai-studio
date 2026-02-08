@@ -236,9 +236,15 @@ export default function DashboardPage({
         return;
       }
 
-      const activeCheckRun = batchRuns.runs.find(
-        run => run.status === 'processing' || run.status === 'pending'
-      );
+      const activeCheckRun = batchRuns.runs.find(run => {
+        if (run.status !== 'processing' && run.status !== 'pending') return false;
+        // Skip stale runs (stuck for over 30 minutes)
+        if (run.created_at) {
+          const age = Date.now() - new Date(run.created_at).getTime();
+          if (age > 30 * 60 * 1000) return false;
+        }
+        return true;
+      });
       if (activeCheckRun) {
         setActiveBatchRunId(activeCheckRun.id);
         setIsRunningBatchCheck(true);
