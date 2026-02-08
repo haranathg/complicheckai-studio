@@ -964,12 +964,12 @@ export default function DashboardPage({
                               }}
                               className={`px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-1.5 ${isDark ? 'text-sky-400 hover:bg-sky-500/20' : 'text-sky-600 hover:bg-sky-50'}`}
                             >
-                              Review
                               {doc.annotations.total > 0 && (
                                 <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-medium ${isDark ? 'bg-sky-500/20 text-sky-400' : 'bg-sky-100 text-sky-700'}`}>
                                   {doc.annotations.total}
                                 </span>
                               )}
+                              Review
                             </button>
                             <button
                               onClick={(e) => {
