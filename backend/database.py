@@ -3,7 +3,7 @@ import os
 from contextlib import contextmanager
 from typing import Generator, Optional
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 
@@ -40,6 +40,19 @@ def init_database(database_url: Optional[str] = None) -> None:
 
     # Create tables if they don't exist
     Base.metadata.create_all(bind=engine)
+
+    # Add missing columns to existing tables (safe to re-run)
+    with engine.connect() as conn:
+        migrations = [
+            "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS document_sources JSON",
+            "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS model VARCHAR(100)",
+        ]
+        for sql in migrations:
+            try:
+                conn.execute(text(sql))
+            except Exception:
+                pass  # Column may already exist on non-PostgreSQL
+        conn.commit()
 
 
 def get_db() -> Generator[Session, None, None]:
