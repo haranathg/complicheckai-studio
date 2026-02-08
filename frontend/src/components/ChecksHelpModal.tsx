@@ -76,6 +76,7 @@ export default function ChecksHelpModal({ isOpen, onClose }: ChecksHelpModalProp
   const [config, setConfig] = useState<ChecksConfigResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedChecks, setExpandedChecks] = useState<Set<string>>(new Set());
 
   // Fetch config when opened
   useEffect(() => {
@@ -320,25 +321,46 @@ export default function ChecksHelpModal({ isOpen, onClose }: ChecksHelpModalProp
                                 Completeness ({completeness.length})
                               </span>
                             </div>
-                            {completeness.map((check, idx) => (
-                              <div
-                                key={check.id}
-                                className={`px-5 py-3 flex items-center justify-between ${
-                                  idx !== completeness.length - 1 ? `border-b ${theme.border}` : ''
-                                } ${isDark ? 'hover:bg-slate-800/20' : 'hover:bg-slate-50/50'}`}
-                              >
-                                <span className={`text-sm ${theme.textPrimary}`}>{check.name}</span>
-                                {check.required ? (
-                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-                                    required
-                                  </span>
-                                ) : (
-                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-500'}`}>
-                                    optional
-                                  </span>
-                                )}
-                              </div>
-                            ))}
+                            {completeness.map((check, idx) => {
+                              const key = `${ptId}-${check.id}`;
+                              const isExpanded = expandedChecks.has(key);
+                              return (
+                                <div
+                                  key={check.id}
+                                  className={`${idx !== completeness.length - 1 ? `border-b ${theme.border}` : ''}`}
+                                >
+                                  <button
+                                    onClick={() => setExpandedChecks(prev => {
+                                      const next = new Set(prev);
+                                      next.has(key) ? next.delete(key) : next.add(key);
+                                      return next;
+                                    })}
+                                    className={`w-full px-5 py-3 flex items-center justify-between text-left ${isDark ? 'hover:bg-slate-800/20' : 'hover:bg-slate-50/50'}`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <svg className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''} ${theme.textMuted}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                      </svg>
+                                      <span className={`text-sm ${theme.textPrimary}`}>{check.name}</span>
+                                    </div>
+                                    {check.required ? (
+                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
+                                        required
+                                      </span>
+                                    ) : (
+                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-500'}`}>
+                                        optional
+                                      </span>
+                                    )}
+                                  </button>
+                                  {isExpanded && (
+                                    <div className={`px-5 pb-3 pl-10 text-xs ${theme.textMuted}`}>
+                                      <p className="italic">{check.prompt}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
 
@@ -350,32 +372,51 @@ export default function ChecksHelpModal({ isOpen, onClose }: ChecksHelpModalProp
                                 Compliance ({compliance.length})
                               </span>
                             </div>
-                            {compliance.map((check, idx) => (
-                              <div
-                                key={check.id}
-                                className={`px-5 py-3 flex items-center justify-between gap-4 ${
-                                  idx !== compliance.length - 1 ? `border-b ${theme.border}` : ''
-                                } ${isDark ? 'hover:bg-slate-800/20' : 'hover:bg-slate-50/50'}`}
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <span className={`text-sm ${theme.textPrimary}`}>{check.name}</span>
-                                  {check.rule_reference && (
-                                    <span className={`ml-2 text-xs ${theme.textMuted}`}>
-                                      ({check.rule_reference})
-                                    </span>
+                            {compliance.map((check, idx) => {
+                              const key = `${ptId}-${check.id}`;
+                              const isExpanded = expandedChecks.has(key);
+                              return (
+                                <div
+                                  key={check.id}
+                                  className={`${idx !== compliance.length - 1 ? `border-b ${theme.border}` : ''}`}
+                                >
+                                  <button
+                                    onClick={() => setExpandedChecks(prev => {
+                                      const next = new Set(prev);
+                                      next.has(key) ? next.delete(key) : next.add(key);
+                                      return next;
+                                    })}
+                                    className={`w-full px-5 py-3 flex items-center justify-between gap-4 text-left ${isDark ? 'hover:bg-slate-800/20' : 'hover:bg-slate-50/50'}`}
+                                  >
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                      <svg className={`w-3 h-3 transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''} ${theme.textMuted}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                      </svg>
+                                      <span className={`text-sm ${theme.textPrimary}`}>{check.name}</span>
+                                      {check.rule_reference && (
+                                        <span className={`text-xs ${theme.textMuted}`}>
+                                          ({check.rule_reference})
+                                        </span>
+                                      )}
+                                    </div>
+                                    {check.required ? (
+                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
+                                        required
+                                      </span>
+                                    ) : (
+                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-500'}`}>
+                                        optional
+                                      </span>
+                                    )}
+                                  </button>
+                                  {isExpanded && (
+                                    <div className={`px-5 pb-3 pl-10 text-xs ${theme.textMuted}`}>
+                                      <p className="italic">{check.prompt}</p>
+                                    </div>
                                   )}
                                 </div>
-                                {check.required ? (
-                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-                                    required
-                                  </span>
-                                ) : (
-                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-500'}`}>
-                                    optional
-                                  </span>
-                                )}
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>
