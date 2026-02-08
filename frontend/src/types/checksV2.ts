@@ -362,6 +362,7 @@ export interface DocumentCheckResultV3 {
 export interface RunChecksV3Request {
   force_reclassify?: boolean;
   use_v3_checks?: boolean;
+  model?: string;
 }
 
 export interface RunChecksV3Response {

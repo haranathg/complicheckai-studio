@@ -46,6 +46,7 @@ class BatchCheckRequest(BaseModel):
 class RunChecksV3Request(BaseModel):
     """Request body for V3 page-level checks."""
     force_reclassify: bool = False
+    model: Optional[str] = None  # Override model (e.g. "bedrock-claude-sonnet-3.5")
 
 
 # Maximum characters per batch for smart batching
@@ -434,7 +435,7 @@ async def run_document_checks_v3(
     settings = db.query(ProjectSettings).filter(
         ProjectSettings.project_id == document.project_id
     ).first()
-    model = settings.compliance_model if settings else "bedrock-claude-sonnet-3.5"
+    model = body.model or (settings.compliance_model if settings else "bedrock-claude-sonnet-3.5")
 
     # Get chunks grouped by page
     chunks = db.query(Chunk).filter(Chunk.parse_result_id == parse_result.id).all()

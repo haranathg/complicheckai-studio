@@ -33,8 +33,10 @@ interface ComplianceTabV2Props {
   project: Project | null;
   document: Document | null;
   chunks?: Chunk[];
+  selectedModel?: string;
   onChunkSelect?: (chunkIds: string[], pageNumber?: number) => void;
   onPageNavigate?: (page: number) => void;
+  onUsageUpdate?: (usage: { input_tokens: number; output_tokens: number; model?: string }) => void;
 }
 
 const STATUS_CONFIG = {
@@ -48,8 +50,10 @@ export default function ComplianceTabV2({
   project: _project,
   document,
   chunks,
+  selectedModel,
   onChunkSelect,
   onPageNavigate,
+  onUsageUpdate,
 }: ComplianceTabV2Props) {
   // Note: project is kept in props for future use (e.g., project-specific check configs)
   void _project;
@@ -101,6 +105,9 @@ export default function ComplianceTabV2({
           }))
           .filter((c: { page: number }) => c.page > 0) as PageClassification[];
         setPageClassifications(mappedClassifications);
+        if (v3Results.usage && onUsageUpdate) {
+          onUsageUpdate(v3Results.usage);
+        }
       } else {
         setResults(null);
         setPageClassifications([]);
@@ -111,7 +118,7 @@ export default function ComplianceTabV2({
     } finally {
       setIsLoading(false);
     }
-  }, [document]);
+  }, [document, onUsageUpdate]);
 
   useEffect(() => {
     loadResults();
@@ -142,7 +149,7 @@ export default function ComplianceTabV2({
     setError(null);
 
     try {
-      const response = await runDocumentChecksV3(document.id, { use_v3_checks: true });
+      const response = await runDocumentChecksV3(document.id, { use_v3_checks: true, model: selectedModel });
       // Map V3 results to display format
       const mapV3ToV2 = (items: CheckResultItemV3[]): CheckResultItem[] =>
         items.map(item => ({
@@ -168,6 +175,9 @@ export default function ComplianceTabV2({
         }))
         .filter((c: { page: number }) => c.page > 0) as PageClassification[];
       setPageClassifications(mappedClassifications);
+      if (response.usage && onUsageUpdate) {
+        onUsageUpdate(response.usage);
+      }
     } catch (err) {
       console.error('Failed to run checks:', err);
       setError('Failed to run checks. Make sure the document has been processed first.');
@@ -651,12 +661,6 @@ export default function ComplianceTabV2({
             )}
           </div>
 
-          {/* Footer with usage info */}
-          {results.usage && (
-            <div className={`mt-3 pt-3 text-xs border-t ${isDark ? 'border-gray-700 text-gray-500' : 'border-gray-200 text-gray-400'}`}>
-              Model: {results.usage.model} | Tokens: {results.usage.input_tokens?.toLocaleString()} in / {results.usage.output_tokens?.toLocaleString()} out
-            </div>
-          )}
         </>
       )}
     </div>

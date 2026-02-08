@@ -150,14 +150,14 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
           <h4 className={`text-sm font-medium ${theme.textSecondary} mb-3`}>Settings</h4>
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <span className={`text-sm ${theme.textMuted} w-24`}>Parser:</span>
+              <span className={`text-sm ${theme.textMuted} w-24`}>Vision:</span>
               <ParserSelector
                 selectedParser={selectedParser}
                 onParserChange={onParserChange}
               />
             </div>
             <div className="flex items-center gap-3">
-              <span className={`text-sm ${theme.textMuted} w-24`}>Chat/Compliance:</span>
+              <span className={`text-sm ${theme.textMuted} w-24`}>AI Model:</span>
               <ModelSelector
                 selectedModel={selectedModel}
                 onModelChange={onModelChange}
@@ -166,7 +166,7 @@ export default function ExtractPanel({ markdown, disabled, selectedModel, onMode
             </div>
           </div>
           <p className={`text-xs ${theme.textSubtle} mt-2`}>
-            Parser: Used for document processing. Chat/Compliance: Model used for Chat and Compliance checks.
+            Vision: AI vision model for document parsing. AI Model: Used for Chat and Compliance checks.
           </p>
 
           {/* Usage Stats */}

@@ -72,6 +72,8 @@ function App() {
   const [focusMode, setFocusMode] = useState(false);
   // Page classifications for V3 page-level types
   const [pageClassifications, setPageClassifications] = useState<Array<{ page: number; page_type: string; confidence?: number }>>([]);
+  // Compliance usage tracking
+  const [complianceUsage, setComplianceUsage] = useState<{ input_tokens: number; output_tokens: number; model?: string } | null>(null);
   // Fullscreen mode for PDF viewer
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Resizable split panel
@@ -1205,7 +1207,9 @@ function App() {
                 project={currentProject}
                 document={currentDocument}
                 chunks={parseResult?.chunks}
+                selectedModel={selectedModel}
                 onPageNavigate={(page) => setTargetPage(page)}
+                onUsageUpdate={setComplianceUsage}
                 onChunkSelect={(chunkIds, pageNumber) => {
                   const chunk = parseResult?.chunks?.find(c => chunkIds.includes(c.id));
                   if (chunk) {
@@ -1251,7 +1255,7 @@ function App() {
           },
           { input_tokens: 0, output_tokens: 0, model: undefined as string | undefined }
         )}
-        complianceUsage={undefined}
+        complianceUsage={complianceUsage || undefined}
         parseCredits={parseResult?.metadata.credit_usage}
         parseUsage={parseResult?.metadata.usage}
         currentProject={currentProject}
