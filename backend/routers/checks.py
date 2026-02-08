@@ -364,6 +364,23 @@ async def get_batch_run_status(batch_run_id: str, db: Session = Depends(get_db))
     }
 
 
+@router.post("/batch-runs/{batch_run_id}/cancel")
+async def cancel_batch_run(batch_run_id: str, db: Session = Depends(get_db)):
+    """Cancel a stuck or running batch check run."""
+    batch_run = db.query(BatchCheckRun).filter(BatchCheckRun.id == batch_run_id).first()
+    if not batch_run:
+        raise HTTPException(status_code=404, detail="Batch run not found")
+
+    if batch_run.status in ('completed', 'completed_with_errors', 'failed', 'cancelled'):
+        return {"message": f"Batch run already in terminal state: {batch_run.status}"}
+
+    from datetime import datetime
+    batch_run.status = "cancelled"
+    batch_run.completed_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Batch run cancelled", "id": batch_run_id}
+
+
 # ============ V3 PAGE-LEVEL CHECKS ============
 
 @router.post("/documents/{document_id}/run-v3")

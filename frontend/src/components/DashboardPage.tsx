@@ -238,10 +238,11 @@ export default function DashboardPage({
 
       const activeCheckRun = batchRuns.runs.find(run => {
         if (run.status !== 'processing' && run.status !== 'pending') return false;
-        // Skip stale runs (stuck for over 30 minutes)
+        // Skip stale runs: no progress after 5 min, or any run older than 30 min
         if (run.created_at) {
           const age = Date.now() - new Date(run.created_at).getTime();
           if (age > 30 * 60 * 1000) return false;
+          if (age > 5 * 60 * 1000 && run.completed_documents === 0) return false;
         }
         return true;
       });

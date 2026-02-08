@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import type { BatchCheckRun, BatchCheckRunSummary } from '../types/checksV2';
-import { getBatchRunStatus, downloadBatchReport } from '../services/checksService';
+import { getBatchRunStatus, downloadBatchReport, cancelBatchCheckRun } from '../services/checksService';
 
 interface BatchCheckProgressProps {
   batchRunId: string;
@@ -119,6 +119,24 @@ export default function BatchCheckProgress({
             Batch Compliance Check
           </span>
         </div>
+        {isRunning && (
+          <button
+            onClick={async () => {
+              try {
+                await cancelBatchCheckRun(batchRunId);
+                setIsPolling(false);
+                onComplete?.();
+              } catch {
+                // Force close even if cancel fails
+                setIsPolling(false);
+                onComplete?.();
+              }
+            }}
+            className={`px-2 py-1 text-xs rounded transition-colors ${isDark ? 'text-red-400 hover:bg-red-500/20' : 'text-red-500 hover:bg-red-50'}`}
+          >
+            Cancel
+          </button>
+        )}
         {onClose && !isRunning && (
           <button
             onClick={onClose}

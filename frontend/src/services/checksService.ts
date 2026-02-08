@@ -70,6 +70,10 @@ export async function getBatchRunStatus(batchRunId: string): Promise<BatchCheckR
   return apiGet<BatchCheckRun>(`/api/checks/batch-runs/${batchRunId}`);
 }
 
+export async function cancelBatchCheckRun(batchRunId: string): Promise<{ message: string }> {
+  return apiPost(`/api/checks/batch-runs/${batchRunId}/cancel`);
+}
+
 // ============ PROJECT SETTINGS ============
 
 export async function getWorkTypeTemplates(): Promise<WorkTypesResponse> {
