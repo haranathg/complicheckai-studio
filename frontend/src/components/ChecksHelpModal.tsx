@@ -145,7 +145,7 @@ export default function ChecksHelpModal({ isOpen, onClose }: ChecksHelpModalProp
 
       {/* Modal container */}
       <div
-        className="fixed inset-0 z-[201] flex items-center justify-center p-4"
+        className="fixed inset-0 z-[201] flex items-start justify-center pt-8 pb-4 px-4 overflow-y-auto"
         onClick={onClose}
       >
         <div
