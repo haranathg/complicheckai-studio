@@ -100,7 +100,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           sub: currentUser.userId,
           email: userAttributes.email || currentUser.signInDetails?.loginId || '',
           name: userAttributes.name,
-          role: (userAttributes['custom:role'] as UserRole) || 'viewer',
+          role: (userAttributes['custom:role'] as UserRole) || 'reviewer',
           emailVerified: userAttributes.email_verified === 'true',
         });
       }
@@ -124,7 +124,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           email: payload.email as string || '',
           name: payload.name as string || '',
           email_verified: String(payload.email_verified || 'false'),
-          'custom:role': payload['custom:role'] as string || 'viewer',
+          'custom:role': payload['custom:role'] as string || 'reviewer',
         };
       }
     } catch (err) {
@@ -166,7 +166,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           sub: currentUser.userId,
           email: userAttributes.email || email,
           name: userAttributes.name,
-          role: (userAttributes['custom:role'] as UserRole) || 'viewer',
+          role: (userAttributes['custom:role'] as UserRole) || 'reviewer',
           emailVerified: userAttributes.email_verified === 'true',
         });
         setIsLoading(false);
@@ -206,7 +206,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           sub: currentUser.userId,
           email: userAttributes.email || pendingSignIn.email,
           name: userAttributes.name,
-          role: (userAttributes['custom:role'] as UserRole) || 'viewer',
+          role: (userAttributes['custom:role'] as UserRole) || 'reviewer',
           emailVerified: userAttributes.email_verified === 'true',
         });
         setPendingSignIn(null);
