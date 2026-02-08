@@ -6,6 +6,7 @@
  * - Detailed check listings grouped by page type and category
  */
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useTheme, getThemeStyles } from '../contexts/ThemeContext';
 import { apiGet } from '../services/apiClient';
 
@@ -135,7 +136,7 @@ export default function ChecksHelpModal({ isOpen, onClose }: ChecksHelpModalProp
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  return (
+  return createPortal(
     <>
       {/* Overlay backdrop */}
       <div
@@ -386,6 +387,7 @@ export default function ChecksHelpModal({ isOpen, onClose }: ChecksHelpModalProp
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
