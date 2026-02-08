@@ -605,7 +605,7 @@ export default function DashboardPage({
         <div className={`w-14 lg:w-48 xl:w-64 border-r ${theme.border} flex flex-col transition-all`} style={{ background: theme.panelBg }}>
           <div className="p-2 lg:p-4 border-b" style={{ borderColor: isDark ? 'rgba(51, 65, 85, 0.4)' : 'rgba(226, 232, 240, 0.8)' }}>
             <div className="flex items-center justify-between lg:mb-3">
-              <h2 className={`font-semibold ${theme.textPrimary} hidden lg:block`}>Projects</h2>
+              <h2 className={`font-semibold ${theme.textPrimary} hidden lg:block`}>Applications</h2>
               <button
                 onClick={() => setShowNewProjectModal(true)}
                 className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-700/50 text-gray-400 hover:text-gray-200' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-700'}`}
