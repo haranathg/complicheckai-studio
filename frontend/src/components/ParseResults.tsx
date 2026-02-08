@@ -35,8 +35,6 @@ interface ParseResultsProps {
   onAddNote?: (chunk: Chunk) => void;
   currentPage?: number;
   documents?: Document[];
-  currentDocument?: Document | null;
-  onDocumentSelect?: (doc: Document) => void;
 }
 
 type ViewMode = 'markdown' | 'components' | 'pages';
@@ -52,8 +50,6 @@ export default function ParseResults({
   onAddNote,
   currentPage = 1,
   documents = [],
-  currentDocument,
-  onDocumentSelect,
 }: ParseResultsProps) {
   const { isDark } = useTheme();
   const theme = getThemeStyles(isDark);
@@ -96,39 +92,10 @@ export default function ParseResults({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [popupChunk, onPopupOpen]);
 
-  // Show document selector even when loading or no result
+  // Show loading or empty state when no result
   if (isLoading || !result) {
     return (
       <div className="h-full flex flex-col">
-        {/* Document selector - always show if documents available */}
-        {processedDocs.length > 0 && onDocumentSelect && (
-          <div className="mb-4">
-            <label className={`block text-sm font-medium mb-2 ${theme.textMuted}`}>
-              Select a document to view
-            </label>
-            <select
-              value={currentDocument?.id || ''}
-              onChange={(e) => {
-                const doc = processedDocs.find(d => d.id === e.target.value);
-                if (doc) onDocumentSelect(doc);
-              }}
-              disabled={isLoading}
-              className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 ${
-                isDark
-                  ? 'bg-slate-800/60 border-slate-600/50 text-gray-300'
-                  : 'bg-white border-slate-300 text-slate-700'
-              } ${isLoading ? 'opacity-50' : ''}`}
-            >
-              <option value="">Select a document...</option>
-              {processedDocs.map(doc => (
-                <option key={doc.id} value={doc.id}>
-                  {doc.original_filename}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
         {/* Loading state */}
         {isLoading ? (
           <div className={`flex flex-col items-center justify-center flex-1 ${theme.textMuted}`}>
@@ -143,7 +110,7 @@ export default function ParseResults({
             </svg>
             <p className={theme.textMuted}>
               {processedDocs.length > 0
-                ? 'Select a processed document above'
+                ? 'Select a processed document from the dropdown above'
                 : 'No processed documents yet'}
             </p>
           </div>
@@ -171,31 +138,6 @@ export default function ParseResults({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Document selector */}
-      {processedDocs.length > 0 && onDocumentSelect && (
-        <div className={`mb-4`}>
-          <select
-            value={currentDocument?.id || ''}
-            onChange={(e) => {
-              const doc = processedDocs.find(d => d.id === e.target.value);
-              if (doc) onDocumentSelect(doc);
-            }}
-            className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 ${
-              isDark
-                ? 'bg-slate-800/60 border-slate-600/50 text-gray-300'
-                : 'bg-white border-slate-300 text-slate-700'
-            }`}
-          >
-            <option value="" disabled>Select a document...</option>
-            {processedDocs.map(doc => (
-              <option key={doc.id} value={doc.id}>
-                {doc.original_filename}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
       {/* Collapsible Document Info header with options */}
       <div className={`rounded-xl mb-4 border ${theme.border}`} style={{ background: isDark ? 'rgba(2, 6, 23, 0.6)' : '#ffffff' }}>
         {/* Header row - always visible */}

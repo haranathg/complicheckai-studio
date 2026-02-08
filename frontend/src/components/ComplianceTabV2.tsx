@@ -34,6 +34,7 @@ interface ComplianceTabV2Props {
   document: Document | null;
   chunks?: Chunk[];
   onChunkSelect?: (chunkIds: string[], pageNumber?: number) => void;
+  onPageNavigate?: (page: number) => void;
 }
 
 const STATUS_CONFIG = {
@@ -48,6 +49,7 @@ export default function ComplianceTabV2({
   document,
   chunks,
   onChunkSelect,
+  onPageNavigate,
 }: ComplianceTabV2Props) {
   // Note: project is kept in props for future use (e.g., project-specific check configs)
   void _project;
@@ -460,7 +462,11 @@ export default function ComplianceTabV2({
                   return (
                     <button
                       key={pc.page}
-                      onClick={() => setPageFilter(isActive ? null : pc.page)}
+                      onClick={() => {
+                        const newPage = isActive ? null : pc.page;
+                        setPageFilter(newPage);
+                        if (newPage && onPageNavigate) onPageNavigate(newPage);
+                      }}
                       className={`px-2 py-0.5 rounded text-xs transition-colors flex items-center gap-1 ${
                         isActive
                           ? 'text-white'

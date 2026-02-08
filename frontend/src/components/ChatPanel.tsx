@@ -5,6 +5,7 @@ import type { Document } from '../types/project';
 import { API_URL } from '../config';
 import { useTheme } from '../contexts/ThemeContext';
 import { SegmentedControl, Tooltip } from './ui';
+import { loadChatSession, saveChatMessages, clearChatSession } from '../services/chatHistoryService';
 
 // Document context for multi-document chat
 interface DocumentContext {
@@ -22,6 +23,7 @@ interface ChatPanelProps {
   messages: ChatMessage[];
   onMessagesChange: (messages: ChatMessage[]) => void;
   selectedModel: string;
+  documentId?: string;
   // Multi-document support
   allDocuments?: Document[];
   currentDocumentId?: string;
@@ -38,6 +40,7 @@ export default function ChatPanel({
   messages,
   onMessagesChange,
   selectedModel,
+  documentId,
   allDocuments,
   currentDocumentId,
   onLoadDocumentContext
@@ -61,6 +64,21 @@ export default function ChatPanel({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Load persisted chat when document changes
+  useEffect(() => {
+    if (!documentId) return;
+    let cancelled = false;
+
+    loadChatSession(documentId).then(savedMessages => {
+      if (cancelled) return;
+      if (savedMessages && savedMessages.length > 0) {
+        onMessagesChange(savedMessages);
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [documentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load all document contexts when switching to "all" scope
   const loadAllDocumentContexts = async () => {
@@ -159,6 +177,10 @@ export default function ChatPanel({
         usage: data.usage
       };
       onMessagesChange([...updatedMessages, assistantMessage]);
+        // Persist the new message pair
+        if (documentId) {
+          saveChatMessages(documentId, [userMessage, assistantMessage]);
+        }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       // Remove the user message if there was an error
@@ -178,6 +200,9 @@ export default function ChatPanel({
   const clearChat = () => {
     onMessagesChange([]);
     setError(null);
+    if (documentId) {
+      clearChatSession(documentId);
+    }
   };
 
   if (disabled) {

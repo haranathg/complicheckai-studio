@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
-from routers import parse, extract, chat, compliance, projects, documents, annotations, batch, checks, reports
+from routers import parse, extract, chat, compliance, projects, documents, annotations, batch, checks, reports, chat_history
 import os
 
 load_dotenv()
@@ -83,6 +83,7 @@ app.add_middleware(
 app.include_router(parse.router, prefix="/api/parse", tags=["parse"])
 app.include_router(extract.router, prefix="/api/extract", tags=["extract"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(chat_history.router, prefix="/api/chat-history", tags=["chat-history"])
 app.include_router(compliance.router, prefix="/api/compliance", tags=["compliance"])
 
 # New project/document management routers

@@ -261,6 +261,8 @@ class ChatMessage(Base):
     role = Column(String(20), nullable=False)  # user, assistant
     content = Column(Text, nullable=False)
     chunk_ids = Column(JSON, nullable=True)  # Referenced chunks
+    document_sources = Column(JSON, nullable=True)  # Multi-doc source references
+    model = Column(String(100), nullable=True)  # Model used for this response
 
     # Usage for this message
     input_tokens = Column(Integer, nullable=True)

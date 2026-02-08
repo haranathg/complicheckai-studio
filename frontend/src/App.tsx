@@ -1029,6 +1029,35 @@ function App() {
         {/* Right Panel - Results (hidden in fullscreen) */}
         {!isFullscreen && (
         <div className="flex flex-col overflow-hidden" style={{ width: `${100 - panelSplit}%`, background: theme.panelBgAlt }} role="complementary">
+          {/* Document selector - above tabs for access from any tab */}
+          {(() => {
+            const processedDocs = documents.filter(d => d.has_cached_result);
+            if (processedDocs.length <= 1) return null;
+            return (
+              <div className={`px-3 pt-2 pb-1 border-b ${theme.border}`} style={{ background: isDark ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.85)' }}>
+                <select
+                  value={currentDocument?.id || ''}
+                  onChange={(e) => {
+                    const doc = processedDocs.find(d => d.id === e.target.value);
+                    if (doc) handleParseDocumentSelect(doc);
+                  }}
+                  className={`w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+                    isDark
+                      ? 'bg-slate-800/60 border-slate-600/50 text-gray-300'
+                      : 'bg-white border-slate-300 text-slate-700'
+                  }`}
+                  aria-label="Select document"
+                >
+                  <option value="" disabled>Select a document...</option>
+                  {processedDocs.map(doc => (
+                    <option key={doc.id} value={doc.id}>
+                      {doc.original_filename}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })()}
           <TabNavigation
             activeTab={activeTab}
             onTabChange={(tab) => {
@@ -1066,8 +1095,6 @@ function App() {
                   }}
                   currentPage={currentPage}
                   documents={documents}
-                  currentDocument={currentDocument}
-                  onDocumentSelect={handleParseDocumentSelect}
                 />
               </div>
             )}
@@ -1119,6 +1146,7 @@ function App() {
                   messages={chatMessages}
                   onMessagesChange={setChatMessages}
                   selectedModel={selectedModel}
+                  documentId={currentDocument?.id}
                   allDocuments={documents}
                   currentDocumentId={currentDocument?.id}
                   onLoadDocumentContext={async (docId: string) => {
@@ -1177,6 +1205,7 @@ function App() {
                 project={currentProject}
                 document={currentDocument}
                 chunks={parseResult?.chunks}
+                onPageNavigate={(page) => setTargetPage(page)}
                 onChunkSelect={(chunkIds, pageNumber) => {
                   const chunk = parseResult?.chunks?.find(c => chunkIds.includes(c.id));
                   if (chunk) {
